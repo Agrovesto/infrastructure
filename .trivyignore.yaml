@@ -1,0 +1,26 @@
+# No vulnerability or secret allowlists. Architecture exceptions only, path-scoped
+# and time-bounded. Review alongside Checkov exceptions in docs/security.md.
+misconfigurations:
+  - id: AVD-AWS-0057
+    paths:
+      - modules/account_bootstrap/main.tf
+      - modules/foundation/main.tf
+      - modules/network/main.tf
+      - modules/dev_host/main.tf
+      - modules/dev_host/backup_monitoring.tf
+      - modules/ecs/main.tf
+      - modules/ecs/admin.tf
+    statement: Account provisioning and runtime IAM include documented service/global-read actions and log-stream wildcards; workload boundary and role/resource scoping constrain the grants.
+    expired_at: 2027-03-01
+  - id: AVD-AWS-0104
+    paths:
+      - modules/dev_host/main.tf
+      - modules/ecs/main.tf
+      - modules/ecs/admin.tf
+    statement: Private hosts/tasks need outbound TCP 443 through NAT for registries, Secrets Manager and external APIs. No unrestricted all-protocol egress is granted.
+    expired_at: 2027-03-01
+  - id: AVD-AWS-0107
+    paths:
+      - modules/edge/main.tf
+    statement: The internet-facing ALB intentionally accepts TLS 443 and an HTTP 80 redirect. Compute and SQL Server never accept public ingress.
+    expired_at: 2027-03-01

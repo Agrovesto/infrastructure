@@ -1,0 +1,10 @@
+# Replace this placeholder with the NEW prod account's ID. No secrets belong here.
+account_id        = "222222222222"
+aws_region        = "eu-west-1"
+project           = "agrovesto"
+github_repository = "Agrovesto/infrastructure"
+# existing_oidc_provider_arn = "arn:aws:iam::222222222222:oidc-provider/token.actions.githubusercontent.com"
+
+# For a NEW domain/zone, uncomment AFTER substituting a domain you control.
+# bootstrap_zone_name = "example.com"
+# Keep null for an existing zone; see docs/dns.md for reference/import options.

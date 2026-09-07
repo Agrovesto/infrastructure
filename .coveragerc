@@ -1,0 +1,12 @@
+[run]
+source = scripts
+relative_files = True
+omit =
+    scripts/tfvars-to-json.py
+[report]
+show_missing = True
+fail_under = 80
+exclude_lines =
+    if __name__ == .__main__.:
+[xml]
+output = coverage.xml
