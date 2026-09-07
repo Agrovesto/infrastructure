@@ -117,7 +117,7 @@ resource "aws_iam_role_policy" "provisioning" {
         Action = [
           "ec2:*", "elasticloadbalancing:*", "ecs:*", "ecr:*", "rds:*", "application-autoscaling:*", "autoscaling:Describe*",
           "s3:*", "kms:*", "logs:*", "cloudwatch:*", "sns:*", "budgets:*", "backup:*", "events:*", "ssm:*", "secretsmanager:*",
-          "acm:*", "route53:*", "amplify:*", "wafv2:*", "cloudtrail:*", "guardduty:*"
+          "acm:*", "route53:*", "amplify:*", "cloudtrail:*", "guardduty:*"
         ]
       },
       {

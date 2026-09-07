@@ -114,7 +114,7 @@ resource "aws_db_instance" "this" {
   storage_type                          = "gp3"
   storage_encrypted                     = true
   kms_key_id                            = var.kms_key_arn
-  multi_az                              = true
+  multi_az                              = false
   publicly_accessible                   = false
   db_subnet_group_name                  = aws_db_subnet_group.this.name
   vpc_security_group_ids                = [aws_security_group.this.id]

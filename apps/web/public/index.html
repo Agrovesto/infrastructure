@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agrovesto</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 2rem; line-height: 1.5; }
+      code { padding: 0.1rem 0.35rem; border-radius: 4px; background: #0001; }
+    </style>
+  </head>
+  <body>
+    <h1>Agrovesto web placeholder</h1>
+    <p>
+      Replace <code>apps/web/public</code> with your real frontend build.
+      Production serves this image on ECS; development frontends usually go through Amplify Hosting.
+    </p>
+    <p>API base (set <code>API_BASE_URL</code> at runtime): <code id="api">http://localhost:8080</code></p>
+    <script>
+      const el = document.getElementById("api");
+      // Prefer a build-time injected value; fall back for local Compose.
+      el.textContent = window.API_BASE_URL || el.textContent;
+    </script>
+  </body>
+</html>

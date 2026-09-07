@@ -1,0 +1,117 @@
+# Copy to terraform.tfvars (gitignored) or convert with scripts/tfvars-to-json.py for GitHub TF_VARS_JSON.
+# Replace every PLACEHOLDER before the first push to the prod branch.
+
+project            = "agrovesto"
+account_id         = "222222222222"          # PLACEHOLDER: real prod AWS account
+peer_account_id    = "111111111111"          # PLACEHOLDER: real dev AWS account
+aws_region         = "eu-west-1"
+availability_zones = ["eu-west-1a", "eu-west-1b"]
+permissions_boundary_arn = "arn:aws:iam::222222222222:policy/agrovesto-bootstrap-prod-workload-boundary"
+zone_name          = "example.com"           # PLACEHOLDER
+# existing_zone_id = "Zxxxxxxxxxxxx"
+alert_emails       = ["ops@example.com"]     # PLACEHOLDER
+monthly_budget_usd = 1500
+
+# ECR: 5 APIs + 2 frontends + sql-admin (required in prod)
+ecr_repositories = [
+  "core",
+  "auth",
+  "trading",
+  "catalog",
+  "notifications",
+  "portal",
+  "admin",
+  "sql-admin",
+]
+
+databases = {
+  core          = "AgrovestoCore"
+  auth          = "AgrovestoAuth"
+  trading       = "AgrovestoTrading"
+  catalog       = "AgrovestoCatalog"
+  notifications = "AgrovestoNotifications"
+}
+
+# Keep false until sql-admin image, API/frontend digests, and SQL init are done
+services_enabled = false
+# sql_admin_image = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/sql-admin@sha256:REPLACE"
+
+# RDS is single-AZ (no Multi-AZ standby). Tune class/storage as needed.
+rds_instance_class        = "db.m6i.large"
+rds_allocated_storage     = 100
+rds_max_allocated_storage = 1000
+
+# Prod images MUST be digest-pinned (@sha256:...). min_count >= 2 enforced.
+# Frontends (portal, admin) have no database_key — no SQL access.
+services = {
+  core = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/core@sha256:REPLACE_64_HEX"
+    hostname     = "api"
+    priority     = 100
+    database_key = "core"
+    cpu          = 256
+    memory       = 512
+    min_count    = 2
+    max_count    = 4
+  }
+  auth = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/auth@sha256:REPLACE_64_HEX"
+    hostname     = "auth"
+    priority     = 110
+    database_key = "auth"
+    cpu          = 256
+    memory       = 512
+    min_count    = 2
+    max_count    = 4
+  }
+  trading = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/trading@sha256:REPLACE_64_HEX"
+    hostname     = "trading"
+    priority     = 120
+    database_key = "trading"
+    cpu          = 256
+    memory       = 512
+    min_count    = 2
+    max_count    = 4
+  }
+  catalog = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/catalog@sha256:REPLACE_64_HEX"
+    hostname     = "catalog"
+    priority     = 130
+    database_key = "catalog"
+    cpu          = 256
+    memory       = 512
+    min_count    = 2
+    max_count    = 4
+  }
+  notifications = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/notifications@sha256:REPLACE_64_HEX"
+    hostname     = "notifications"
+    priority     = 140
+    database_key = "notifications"
+    cpu          = 256
+    memory       = 512
+    min_count    = 2
+    max_count    = 4
+  }
+  portal = {
+    image       = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/portal@sha256:REPLACE_64_HEX"
+    hostname    = "" # apex https://example.com
+    priority    = 200
+    health_path = "/"
+    cpu         = 256
+    memory      = 512
+    min_count   = 2
+    max_count   = 4
+  }
+  admin = {
+    image       = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/admin@sha256:REPLACE_64_HEX"
+    hostname    = "admin"
+    priority    = 210
+    health_path = "/"
+    cpu         = 256
+    memory      = 512
+    min_count   = 2
+    max_count   = 4
+  }
+}

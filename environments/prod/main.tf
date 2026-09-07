@@ -52,16 +52,13 @@ module "dns" {
   aliases          = var.dns_aliases
 }
 module "edge" {
-  source             = "../../modules/edge"
-  name               = local.name
-  vpc_id             = module.network.vpc_id
-  public_subnet_ids  = module.network.public_subnet_ids
-  certificate_arn    = module.dns.certificate_arn
-  access_log_bucket  = module.foundation.access_log_bucket
-  kms_key_arn        = module.foundation.kms_key_arn
-  alerts_topic_arn   = module.foundation.alerts_topic_arn
-  log_retention_days = var.log_retention_days
-  enable_waf         = true
+  source            = "../../modules/edge"
+  name              = local.name
+  vpc_id            = module.network.vpc_id
+  public_subnet_ids = module.network.public_subnet_ids
+  certificate_arn   = module.dns.certificate_arn
+  access_log_bucket = module.foundation.access_log_bucket
+  alerts_topic_arn  = module.foundation.alerts_topic_arn
 }
 module "sql_secrets" {
   source      = "../../modules/sql_secrets"

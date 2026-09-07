@@ -1,0 +1,125 @@
+# Reference stack matching modules/dev_host/runtime.tf for 5 APIs.
+# On the real EC2 host Terraform renders the live file to /opt/agrovesto/compose.yaml.
+# Secrets never live here — env_file paths are populated at runtime.
+
+name: agrovesto-dev
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU20-ubuntu-22.04
+    container_name: agrovesto-dev-mssql
+    restart: unless-stopped
+    user: "10001:0"
+    mem_limit: 5g
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_MEMORY_LIMIT_MB: "4096"
+    env_file:
+      - path: ./env/sql.env
+        required: true
+    volumes:
+      - mssql-data:/var/opt/mssql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 90s
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -N -C -b -Q 'SELECT 1' >/dev/null 2>&1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  core:
+    image: ${CORE_IMAGE:-agrovesto/core:local}
+    restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports: ["8080:8080"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    mem_limit: 512m
+    env_file:
+      - path: ./env/core.env
+        required: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  auth:
+    image: ${AUTH_IMAGE:-agrovesto/auth:local}
+    restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports: ["8081:8080"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    mem_limit: 512m
+    env_file:
+      - path: ./env/auth.env
+        required: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  trading:
+    image: ${TRADING_IMAGE:-agrovesto/trading:local}
+    restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports: ["8082:8080"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    mem_limit: 512m
+    env_file:
+      - path: ./env/trading.env
+        required: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  catalog:
+    image: ${CATALOG_IMAGE:-agrovesto/catalog:local}
+    restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports: ["8083:8080"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    mem_limit: 512m
+    env_file:
+      - path: ./env/catalog.env
+        required: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  notifications:
+    image: ${NOTIFICATIONS_IMAGE:-agrovesto/notifications:local}
+    restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports: ["8084:8080"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    mem_limit: 512m
+    env_file:
+      - path: ./env/notifications.env
+        required: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+volumes:
+  mssql-data:

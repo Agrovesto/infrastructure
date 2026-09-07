@@ -1,0 +1,17 @@
+directory:
+  - .
+framework:
+  - terraform
+  - github_actions
+  - dockerfile
+skip-path:
+  - .venv
+  - .tools
+  - .terraform
+  - reports
+  - node_modules
+compact: true
+quiet: true
+skip-download: true
+download-external-modules: false
+# All checks run. Only documented, resource-local exceptions are allowed.

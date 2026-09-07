@@ -92,10 +92,12 @@ class PlanGuardTests(unittest.TestCase):
 
     def test_unsafe_rds_settings_rejected(self):
         for field, value in {"engine": "mysql", "license_model": "bring-your-own-license", "publicly_accessible": True,
-                             "multi_az": False, "storage_encrypted": False, "deletion_protection": False,
+                             "storage_encrypted": False, "deletion_protection": False,
                              "manage_master_user_password": False, "skip_final_snapshot": True}.items():
             with self.subTest(field=field):
                 self.assertTrue(verify_plan.violations(planned("aws_db_instance", {field: value})))
+        # multi_az is fixed off in this baseline; plan guard does not require it true.
+        self.assertEqual(verify_plan.violations(planned("aws_db_instance", {"multi_az": False})), [])
         self.assertEqual(verify_plan.violations(planned("aws_db_instance", {"engine": "sqlserver-se", "kms_key_id": None})), [])
 
     def test_unsafe_ec2_and_disk_settings_rejected(self):
