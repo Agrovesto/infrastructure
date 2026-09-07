@@ -55,9 +55,7 @@ A service-wide provisioner can still change network/data-plane policies, delete 
 - EC2 requires IMDSv2 with hop limit one, and a Docker firewall rule blocks the metadata IP. Never mount `/var/run/docker.sock`, `/run/agrovesto`, the database disk or host AWS credentials into an API container.
 - SQL encryption is requested by both environments; RDS `rds.force_ssl=1` enforces TLS after any required reboot. Prod must verify the RDS certificate using its actual endpoint and trusted CA; no `TrustServerCertificate=true` shortcut.
 - **Residual plaintext hop:** ALB-to-application HTTP inside the VPC. If your compliance/threat model needs end-to-end TLS, add per-service HTTPS listeners/certificates and health checks deliberately. Do not claim private HTTP is TLS.
-- Public endpoints still need application authentication/authorization, CORS/session controls, abuse protection and secure frontend build configuration. WAF does not replace these.
-
-WAF is mandatory in prod with AWS Common, Known Bad Inputs (including Log4j protection), IP reputation and rate-based rules. Sensitive headers/query strings are redacted in WAF logs; sampled requests are disabled. Validate legitimate uploads/API paths and tune specific rules from evidence. Dev WAF is optional for cost; enabling it is recommended for internet-exposed tests involving sensitive workflows.
+- Public endpoints still need application authentication/authorization, CORS/session controls, abuse protection and secure frontend build configuration. There is **no WAF** in this baseline (cost); application-level controls are required.
 
 ## Data, encryption and secrets
 
@@ -86,7 +84,7 @@ CI has no global `soft-fail`, `continue-on-error`, scanner check allowlist, vuln
 | `CKV2_AWS_57` | API/dev SQL passwords require coordinated SQL+secret rotation; RDS master is separately AWS-managed. |
 | `CKV2_AWS_23` | Amplify frontend A aliases target its service-managed CloudFront distribution; no separately owned CloudFront resource exists in the graph. Verify domain activation before traffic. |
 | `CKV2_AWS_5` | Admin SG is used in the exported one-off `RunTask` network configuration, not an always-running ECS service. |
-| `CKV2_AWS_31`, `76` | Shared conditional WAF resources/indexed association are not resolved by this Checkov graph check. Prod always enables the managed rule groups, association and logging; mock/source tests assert those controls. |
+| `CKV2_AWS_76` | ALB has no WAF association by design (cost). Compensating controls: private backends, TLS-only public listener, header drop, strict desync mitigation, app auth. |
 
 Trivy's time-bounded architecture entries address `AVD-AWS-0057` (documented IAM wildcard/service actions), `AVD-AWS-0104` (NAT HTTPS egress only) and `AVD-AWS-0107` (public ALB ingress only). They are not permission to add broad unrelated rules to those files. Code-owner review and saved-plan guards remain necessary.
 

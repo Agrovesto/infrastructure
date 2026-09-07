@@ -131,7 +131,7 @@ terraform -chdir=environments/dev import -var-file=terraform.tfvars \
 RDS retains 35 days of automatic backups and supports restoration within its actual earliest/latest restorable times. A restore creates a **new DB instance**, not an in-place rewind:
 
 1. Stop/contain writes, choose the approved restore time and record the expected RPO.
-2. Restore through RDS to a **new identifier**, retaining encryption, the isolated subnet group, the DB security group, non-public access and the intended Multi-AZ/edition/class. Confirm snapshot/log availability in AWS; a configured retention period is not proof of completed backups.
+2. Restore through RDS to a **new identifier**, retaining encryption, the isolated subnet group, the DB security group, non-public access and single-AZ (no Multi-AZ standby)/edition/class. Confirm snapshot/log availability in AWS; a configured retention period is not proof of completed backups.
 3. Verify parameters/options, TLS/CA, native-backup role, maintenance/backups, monitoring and master credential management on the restored instance. Add any settings not inherited by the restore.
 4. Keep the old instance for investigation and rollback. Under approved maintenance ownership, back up state, relinquish only the old `module.database.aws_db_instance.this` state address and import the restored instance into it. Set **`rds_identifier`** to the restored name in reviewed prod inputs so Terraform does not rename it back. Do not leave the restored and original instances ambiguously owned by the same state address.
 5. Review the plan: it must not propose another RDS replacement. The normal stateful-resource guard remains in force. Retain old CloudWatch logs before changing identifiers/log group names; those names include the instance identifier.
@@ -232,7 +232,7 @@ Budgets monitor total account spend, not only tagged resources, so orphaned/unma
 
 ## Decommissioning and regional DR
 
-Turning `services_enabled=false` removes production ECS services (retains task definitions/data) or stops dev API containers; it **does not** stop baseline NAT/ALB/RDS/EC2 charges. RDS Multi-AZ is not regional disaster recovery.
+Turning `services_enabled=false` removes production ECS services (retains task definitions/data) or stops dev API containers; it **does not** stop baseline NAT/ALB/RDS/EC2 charges. RDS is single-AZ in this baseline; that is not regional disaster recovery.
 
 Before decommissioning:
 

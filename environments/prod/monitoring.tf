@@ -1,7 +1,7 @@
 resource "aws_cloudwatch_dashboard" "this" {
   dashboard_name = local.name
   dashboard_body = jsonencode({ widgets = [
-    { type = "text", x = 0, y = 0, width = 24, height = 2, properties = { markdown = "# ${local.name}\nPrivate ECS services across two AZs; RDS SQL Server Standard Multi-AZ; TLS, WAF and alarms. All times UTC." } },
+    { type = "text", x = 0, y = 0, width = 24, height = 2, properties = { markdown = "# ${local.name}\nPrivate ECS services across two AZs; single-AZ RDS SQL Server Standard; TLS ALB (no WAF); alarms. All times UTC." } },
     { type = "metric", x = 0, y = 2, width = 12, height = 6, properties = {
       region  = var.aws_region, title = "RDS CPU", period = 300, stat = "Average"
       metrics = [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", module.database.identifier]]

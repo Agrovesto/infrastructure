@@ -84,10 +84,12 @@ class TerraformStructureTests(unittest.TestCase):
         self.assertEqual(rds["license_model"], "license-included")
         self.assertNotIn("db_name", rds)
         self.assertNotIn("password", rds)
-        self.assertTrue(rds["multi_az"] and rds["manage_master_user_password"] and rds["storage_encrypted"])
+        self.assertFalse(rds["multi_az"])
+        self.assertTrue(rds["manage_master_user_password"] and rds["storage_encrypted"])
         self.assertFalse(rds["publicly_accessible"] or rds["skip_final_snapshot"])
         self.assertEqual(rds["backup_retention_period"], 35)
         self.assertTrue(rds["lifecycle"][0]["prevent_destroy"])
+        self.assertNotIn("multi_az", blocks(config(ROOT / "modules/rds_sqlserver"), "variable"))
 
     def test_no_terraform_secret_values_or_remote_exec(self):
         for directory in [*TF_ROOTS, *(ROOT / "modules").iterdir()]:
@@ -126,15 +128,30 @@ class TerraformStructureTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertTrue(resource(directory, kind, name)["lifecycle"][0]["prevent_destroy"])
 
-    def test_scaffold_flags_waf_and_nat_are_environment_specific(self):
+    def test_scaffold_flags_edge_without_waf_and_nat_are_environment_specific(self):
         dev, prod = config(ROOT / "environments/dev"), config(ROOT / "environments/prod")
         self.assertFalse(blocks(dev, "variable")["services_enabled"]["default"])
         self.assertFalse(blocks(prod, "variable")["services_enabled"]["default"])
-        self.assertTrue(blocks(prod, "module")["edge"]["enable_waf"])
+        # Edge keeps the ALB; WAF and Multi-AZ are not used.
+        self.assertNotIn("enable_waf", blocks(prod, "module")["edge"])
+        self.assertNotIn("enable_waf", blocks(dev, "module")["edge"])
+        self.assertNotIn("enable_waf", blocks(prod, "variable"))
+        self.assertNotIn("enable_waf", blocks(dev, "variable"))
+        self.assertNotIn("multi_az", blocks(prod, "module")["database"])
+        self.assertNotIn("rds_multi_az", blocks(prod, "variable"))
+        edge = config(ROOT / "modules/edge")
+        kinds = {next(iter(block)) for block in edge.get("resource", [])}
+        self.assertNotIn("aws_wafv2_web_acl", kinds)
+        self.assertIn("aws_lb", kinds)
         self.assertFalse(blocks(prod, "module")["network"]["single_nat_gateway"])
         self.assertTrue(blocks(dev, "module")["network"]["single_nat_gateway"])
         self.assertIn("frontends", blocks(dev, "module"))
         self.assertNotIn("frontends", blocks(prod, "module"))
+        # Five APIs + two frontends are the default ECR layout.
+        self.assertEqual(set(blocks(dev, "variable")["ecr_repositories"]["default"]),
+                         {"core", "auth", "trading", "catalog", "notifications", "portal", "admin"})
+        self.assertEqual(set(blocks(prod, "variable")["ecr_repositories"]["default"]),
+                         {"core", "auth", "trading", "catalog", "notifications", "portal", "admin", "sql-admin"})
 
     def test_subnets_and_route_tables_isolate_databases(self):
         net = config(ROOT / "modules/network")

@@ -15,9 +15,6 @@ output "arn_suffix" {
 }
 output "security" {
   value = {
-    waf_count          = length(aws_wafv2_web_acl.this)
-    waf_associations   = length(aws_wafv2_web_acl_association.this)
-    waf_log_configs    = length(aws_wafv2_web_acl_logging_configuration.this)
     tls_policy         = aws_lb_listener.https.ssl_policy
     redirect_protocol  = aws_lb_listener.http.default_action[0].redirect[0].protocol
     deletion_protected = aws_lb.this.enable_deletion_protection

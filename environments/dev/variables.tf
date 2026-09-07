@@ -103,7 +103,7 @@ variable "vpc_cidr" {
 variable "ecr_repositories" {
   description = "Repository suffixes. The same names are created in both accounts; only pull is shared. Include sql-admin in prod."
   type        = set(string)
-  default     = ["api", "web", "sql-admin"]
+  default     = ["core", "auth", "trading", "catalog", "notifications", "portal", "admin"]
   validation {
     condition     = length(var.ecr_repositories) > 0 && alltrue([for name in var.ecr_repositories : can(regex("^[a-z][a-z0-9._-]{0,39}$", name))])
     error_message = "Provide one or more lowercase repository names without a slash."
@@ -173,10 +173,6 @@ variable "services" {
     error_message = "Dev host ports must be unique, not 1433, and between 1024 and 65535; reserve at least 128 MiB per API."
   }
 }
-variable "enable_waf" {
-  type    = bool
-  default = false
-}
 variable "accept_sqlserver_eula" {
   description = "Must be explicitly true after accepting the Microsoft SQL Server EULA. Developer edition is NON-PRODUCTION ONLY."
   type        = bool
@@ -184,7 +180,7 @@ variable "accept_sqlserver_eula" {
 }
 variable "instance_type" {
   type    = string
-  default = "t3.large"
+  default = "t3.xlarge"
   validation {
     condition     = contains(["t3.large", "t3.xlarge", "t3.2xlarge", "m6i.large", "m6i.xlarge", "m6i.2xlarge", "m7i.large", "m7i.xlarge"], var.instance_type)
     error_message = "Use a supported x86-64 instance with at least 8 GiB RAM (SQL Server Linux does not support Graviton)."

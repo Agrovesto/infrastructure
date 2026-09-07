@@ -18,6 +18,9 @@ terraform.rc
 .env
 .env.*
 !.env.example
+# Local Compose secrets (keep *.env.example)
+compose/**/env/*.env
+!compose/**/env/*.env.example
 *.pem
 *.key
 *.pfx

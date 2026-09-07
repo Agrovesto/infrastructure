@@ -3,7 +3,7 @@
 Terraform infrastructure for **two separate AWS accounts**:
 
 - **`dev`** — Amplify Hosting frontends; private EC2 running Docker Compose APIs and **Microsoft SQL Server Developer edition**. OS, Docker and APIs share the root disk; SQL data, logs and backup staging use a **second, encrypted EBS disk**.
-- **`prod`** — frontends **and** APIs on private ECS Fargate; **Amazon RDS for Microsoft SQL Server Standard**, license included, Multi-AZ. Each API has its own database and runtime login.
+- **`prod`** — frontends **and** APIs on private ECS Fargate; **Amazon RDS for Microsoft SQL Server Standard**, license included, **single-AZ**. Each API has its own database and runtime login.
 
 Both environments include ECR, Route 53, ACM HTTPS certificates, CloudWatch, budgets, alerts, CloudTrail, GuardDuty and protected storage. No MySQL resources are used.
 
@@ -58,9 +58,9 @@ flowchart TB
     DD --> DV
   end
   subgraph PROD[PROD AWS account]
-    PL[Route 53 + ACM + HTTPS ALB + WAF]
+    PL[Route 53 + ACM + HTTPS ALB]
     PC[Private ECS Fargate\nfrontends + APIs / 2 AZs]
-    PD[RDS SQL Server Standard\nMulti-AZ / isolated subnets]
+    PD[RDS SQL Server Standard\nsingle-AZ / isolated subnets]
     PE[ECR: immutable images]
     PT[Separate prod Terraform state + OIDC role]
     PL --> PC
@@ -79,14 +79,14 @@ flowchart TB
 |---|---|---|
 | Frontends | Configurable Amplify apps/branches, static Hosting ZIP deployment, optional custom domains | ECS services, including containerized SSR frontends |
 | APIs | Docker Compose on one private x86-64 EC2 host | Fargate, at least two tasks per enabled service, autoscaling and rollback |
-| SQL engine | SQL Server 2022 Developer in Linux Docker; **non-production only** | RDS `sqlserver-se`, SQL Server 2022, `license-included` |
+| SQL engine | SQL Server 2022 Developer in Linux Docker; **non-production only** | RDS `sqlserver-se`, SQL Server 2022, `license-included`, **single-AZ** |
 | Per-API isolation | A database and login for each `databases` entry | Same database/login model; frontend tasks have no DB access |
 | Disks | 50 GiB encrypted OS/Docker root + independent 100 GiB encrypted gp3 SQL volume by default | Encrypted gp3 RDS storage, autoscaling ceiling; encrypted Fargate ephemeral storage |
 | Backups | Daily native `.bak` to S3 **and** daily EBS snapshots, 35-day retention | RDS automatic backups/PITR, 35 days; native S3 backup/restore option configured for on-demand use |
 | Network | Two-AZ VPC, one NAT; EC2 in first private app subnet | Two-AZ VPC, one NAT per AZ; private tasks and isolated DB subnets |
-| Internet ingress | ALB 443; port 80 redirects only. No public IP/SSH/SQL port on EC2 | ALB 443 + WAF. No public IPs on tasks/RDS |
+| Internet ingress | ALB 443; port 80 redirects only. No public IP/SSH/SQL port on EC2 | ALB 443 (no WAF). No public IPs on tasks/RDS |
 | Images | KMS-encrypted immutable ECR, scan on push, peer account pull policy | Same; production service images **must use digests** |
-| Observability | Host CPU/memory/both disks/status, container logs, backup heartbeat, API health | ECS/ALB health, RDS CPU/storage/memory/events, WAF and Container Insights |
+| Observability | Host CPU/memory/both disks/status, container logs, backup heartbeat, API health | ECS/ALB health, RDS CPU/storage/memory/events, Container Insights |
 | Governance | Dedicated state, permissions boundary, CloudTrail, GuardDuty, SNS, budget | Same, with a separate account, key, state, role and protected GitHub environment |
 
 There is **no VPC peering or cross-account database access**. ECR sharing is repository-level read access, not shared infrastructure state, shared credentials, replication, or permission to push into the other account.
@@ -101,13 +101,13 @@ modules/
   foundation/            # KMS, audit/access logs, CloudTrail, GuardDuty, SNS and account budget
   network/               # Public/app/isolated subnets, NAT, S3 endpoint and VPC flow logs
   dns/                   # Create/reference/import public zones and records; ACM validation
-  edge/                  # ALB, HTTPS redirect, TLS policy and optional WAF (mandatory in prod)
+  edge/                  # ALB, HTTPS redirect, TLS policy (no WAF)
   ecr/                   # Encrypted repositories, immutable tags, cross-account pull policies
   amplify/               # Dev static frontend Hosting apps, branches and domains
   sql_secrets/           # Per-database secret metadata; no passwords in state
   dev_host/              # EC2, independent DB disk, versioned configuration, SSM, backups
   ecs/                   # Per-service Fargate tasks/roles/routing/scaling; private SQL admin task
-  rds_sqlserver/         # Private Multi-AZ SQL Server Standard, native restore and monitoring
+  rds_sqlserver/         # Private single-AZ SQL Server Standard, native restore and monitoring
   .../versions.tf        # All modules use the same exact provider version
 
 environments/{dev,prod}/  # Independent deployable Terraform roots + examples + mock plan tests
@@ -117,6 +117,8 @@ scripts/ci/               # Branch/account validation, Terraform checks, saved-p
 scripts/run-sql-admin.sh  # One-off private production DB initialization (operator action)
 scripts/publish-amplify.sh
 ops/sql-admin/            # Container build for the production SQL administration program
+compose/                  # Reference + local Docker Compose (dev host Compose is Terraform-rendered)
+apps/                     # Sample api/web Dockerfiles meeting the platform image contract
 tests/                    # Offline Python, repository and workflow tests + shared AWS mocks
 docs/                     # Detailed setup, DNS, security and recovery runbooks
 infrastructure.yml        # Inactive workflow; move locally to .github/workflows/infrastructure.yml
@@ -192,7 +194,7 @@ Edit account IDs, peer IDs, region/AZs, zone names, alert emails and the exact b
 
 At the registrar, set the root domain's authoritative nameservers to the prod zone's four nameservers. Add a `dev` NS delegation in the prod zone to the dev zone's **actual four nameservers**. This NS record can be in prod `dns_records` on its first deployment; start prod before dev, or have the DNS administrator create it and import the record. [DNS ownership/import examples](docs/dns.md) explain both paths.
 
-Leave `services_enabled = false` for initial scaffolding. Set `accept_sqlserver_eula = true` in dev **only after acceptance**. Initially `sql_admin_image = null` is allowed in prod, but it is only a placeholder task definition and is not runnable yet.
+Leave `services_enabled = false` for initial scaffolding. WAF is not used; RDS is single-AZ. Set `accept_sqlserver_eula = true` in dev **only after acceptance**. Initially `sql_admin_image = null` is allowed in prod, but it is only a placeholder task definition and is not runnable yet.
 
 ### 3. Configure GitHub and SonarQube
 
@@ -222,7 +224,7 @@ Repeat for prod. Terraform values are configuration, not credentials. Never put 
 
 Have the repository administrator establish the real `dev` and `prod` branches with this implementation. Merge a reviewed PR into the appropriate branch. Its resulting **push** runs the same checks again and deploys only that account. There is no apply button or `workflow_dispatch` backdoor.
 
-First creation is not instant: RDS SQL Server Multi-AZ may take tens of minutes, and DNS validation may wait for propagation. The role allows a two-hour session; RDS creation has a 90-minute timeout. Confirm DNS first and inspect the workflow/CloudWatch rather than starting concurrent applies.
+First creation is not instant: RDS SQL Server may take tens of minutes, and DNS validation may wait for propagation. The role allows a two-hour session; RDS creation has a 90-minute timeout. Confirm DNS first and inspect the workflow/CloudWatch rather than starting concurrent applies.
 
 ### 5. Publish images, initialize SQL, then enable applications
 
@@ -301,7 +303,7 @@ The backup heartbeat alarm treats failure/missing data as a breach over a daily 
 
 **Budget values are alerts, not estimates or spending limits.** The example thresholds are USD 200/dev and USD 1,500/prod. Use the [AWS Pricing Calculator](https://calculator.aws/) with your actual region, license edition, traffic and data volumes before applying.
 
-Important cost drivers: SQL Server license-included RDS (including Multi-AZ standby), two production NAT gateways, dev NAT/EC2, ALBs, per-service Fargate tasks, public IPv4 addresses, EBS/S3 backups, KMS, WAF, GuardDuty, logs and data transfer. Cross-account image pulls do not copy images automatically and can add transfer/dependency costs. An S3 gateway endpoint reduces S3/NAT traffic; interface endpoints are not included by default.
+Important cost drivers: SQL Server license-included RDS (single-AZ), two production NAT gateways, dev NAT/EC2, ALBs, per-service Fargate tasks, public IPv4 addresses, EBS/S3 backups, KMS, GuardDuty, logs and data transfer. Cross-account image pulls do not copy images automatically and can add transfer/dependency costs. An S3 gateway endpoint reduces S3/NAT traffic; interface endpoints are not included by default.
 
 This baseline deliberately does **not** claim:
 

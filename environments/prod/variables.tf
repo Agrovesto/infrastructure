@@ -103,7 +103,7 @@ variable "vpc_cidr" {
 variable "ecr_repositories" {
   description = "Repository suffixes. The same names are created in both accounts; only pull is shared. Include sql-admin in prod."
   type        = set(string)
-  default     = ["api", "web", "sql-admin"]
+  default     = ["core", "auth", "trading", "catalog", "notifications", "portal", "admin", "sql-admin"]
   validation {
     condition     = contains(var.ecr_repositories, "sql-admin") && alltrue([for name in var.ecr_repositories : can(regex("^[a-z][a-z0-9._-]{0,39}$", name))])
     error_message = "Provide one or more lowercase repository names without a slash."
@@ -191,6 +191,8 @@ variable "sql_admin_image" {
     error_message = "Set sql_admin_image to a scanned, pinned ECR sql-admin digest before enabling prod services."
   }
 }
+
+
 variable "rds_instance_class" {
   type    = string
   default = "db.m6i.large"

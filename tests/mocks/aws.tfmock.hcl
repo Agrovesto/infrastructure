@@ -94,9 +94,6 @@ mock_resource "aws_lb_listener" {
 mock_resource "aws_lb_target_group" {
   defaults = { arn = "arn:aws:elasticloadbalancing:eu-west-1:111111111111:targetgroup/agrovesto-fixture/1234567890123456", arn_suffix = "targetgroup/agrovesto-fixture/1234567890123456" }
 }
-mock_resource "aws_wafv2_web_acl" {
-  defaults = { arn = "arn:aws:wafv2:eu-west-1:111111111111:regional/webacl/agrovesto-fixture/11111111-1111-1111-1111-111111111111" }
-}
 mock_resource "aws_db_instance" {
   defaults = {
     address            = "agrovesto-fixture.abcdef.eu-west-1.rds.amazonaws.com"

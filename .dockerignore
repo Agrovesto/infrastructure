@@ -5,3 +5,5 @@
 !ops/sql-admin/
 !ops/sql-admin/Dockerfile
 !ops/sql-admin/requirements.txt
+!apps/
+!apps/**/*

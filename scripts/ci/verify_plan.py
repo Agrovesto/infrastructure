@@ -35,8 +35,9 @@ def violations(plan: dict) -> list[str]:
             continue
         kind, values, address = resource["type"], resource.get("values", {}), resource["address"]
         if kind == "aws_db_instance":
+            # multi_az is fixed false in modules/rds_sqlserver; not treated as a plan-guard field.
             required = {"engine": "sqlserver-se", "license_model": "license-included", "storage_encrypted": True,
-                        "publicly_accessible": False, "multi_az": True, "deletion_protection": True,
+                        "publicly_accessible": False, "deletion_protection": True,
                         "manage_master_user_password": True, "skip_final_snapshot": False}
             for key, expected in required.items():
                 if key in values and values[key] is not None and values[key] != expected:
