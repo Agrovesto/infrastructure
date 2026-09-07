@@ -165,16 +165,16 @@ Set real account IDs. For **new** DNS zones, set `bootstrap_zone_name` to `dev.y
 Using your authorized SSO profiles, bootstrap each account separately. These are the only normal, human-run Terraform **applies** in the setup procedure; environment applies run through the gated workflow.
 
 ```bash
-aws sso login --profile agrovesto-dev-admin
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev init
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev plan -out=bootstrap.tfplan
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev apply bootstrap.tfplan
+aws sso login --profile agrovesto-dev
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev init
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev plan -out=bootstrap.tfplan
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev apply bootstrap.tfplan
 
 # Export these BEFORE adding the S3 backend block.
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev output -raw bootstrap_backend_hcl > bootstrap/dev/backend.hcl
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev output -raw environment_backend_hcl > environments/dev/backend.hcl
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev output -raw bootstrap_backend_hcl > bootstrap/dev/backend.hcl
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev output -raw environment_backend_hcl > environments/dev/backend.hcl
 cp bootstrap/backend.tf.example bootstrap/dev/backend.tf
-AWS_PROFILE=agrovesto-dev-admin terraform -chdir=bootstrap/dev init -migrate-state -backend-config=backend.hcl
+AWS_PROFILE=agrovesto-dev terraform -chdir=bootstrap/dev init -migrate-state -backend-config=backend.hcl
 ```
 
 Repeat for `prod`, using `agrovesto-prod-admin` and **only** the `bootstrap/prod` directory. Do not change the account of an initialized root or copy one account's state into the other. Confirm state migration before securely removing local state/plan backups; **never commit them**. The generated bootstrap backend block is deliberately ignored by Git.
@@ -210,7 +210,7 @@ Convert your non-secret HCL inputs to JSON if convenient:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -r requirements-dev.txt
+pip3 install -r requirements-dev.txt
 python scripts/tfvars-to-json.py environments/dev/terraform.tfvars > /tmp/dev-inputs.json
 gh variable set TF_VARS_JSON --env dev --body "$(cat /tmp/dev-inputs.json)"
 rm /tmp/dev-inputs.json
