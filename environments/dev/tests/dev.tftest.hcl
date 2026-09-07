@@ -3,17 +3,17 @@ mock_provider "aws" {
   override_during = plan
 }
 variables {
-  account_id               = "111111111111"
-  peer_account_id          = "222222222222"
-  permissions_boundary_arn = "arn:aws:iam::111111111111:policy/agrovesto-bootstrap-dev-workload-boundary"
+  account_id               = "353833416626"
+  peer_account_id          = "353833416626"
+  permissions_boundary_arn = "arn:aws:iam::353833416626:policy/agrovesto-bootstrap-dev-workload-boundary"
   zone_name                = "dev.example.com"
   alert_emails             = ["test@example.com"]
   databases                = { api = "AgrovestoApi", trading = "AgrovestoTrading" }
   accept_sqlserver_eula    = true
   services_enabled         = true
   services = {
-    api     = { image = "111111111111.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "api", priority = 100, host_port = 8080, database_key = "api" }
-    trading = { image = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "trading", priority = 200, host_port = 8081, database_key = "trading" }
+    api     = { image = "353833416626.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "api", priority = 100, host_port = 8080, database_key = "api" }
+    trading = { image = "353833416626.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "trading", priority = 200, host_port = 8081, database_key = "trading" }
   }
   frontends = { portal = {} }
 }
@@ -65,7 +65,7 @@ run "reference_existing_zone" {
 run "reject_same_account" {
   command = plan
   variables {
-    peer_account_id = "111111111111"
+    peer_account_id = "353833416626"
   }
   expect_failures = [var.peer_account_id]
 }
@@ -73,8 +73,8 @@ run "reject_overlapping_ports" {
   command = plan
   variables {
     services = {
-      api   = { image = "111111111111.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "api", priority = 100, host_port = 8080 }
-      other = { image = "111111111111.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "other", priority = 200, host_port = 8080 }
+      api   = { image = "353833416626.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "api", priority = 100, host_port = 8080 }
+      other = { image = "353833416626.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api:test-sha", hostname = "other", priority = 200, host_port = 8080 }
     }
   }
   expect_failures = [var.services]
