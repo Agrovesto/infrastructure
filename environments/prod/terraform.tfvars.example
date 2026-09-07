@@ -1,0 +1,57 @@
+account_id               = "222222222222"
+peer_account_id          = "111111111111"
+aws_region               = "eu-west-1"
+availability_zones       = ["eu-west-1a", "eu-west-1b"]
+permissions_boundary_arn = "arn:aws:iam::222222222222:policy/agrovesto-bootstrap-prod-workload-boundary"
+zone_name                = "example.com"
+alert_emails             = ["platform@example.com", "finance@example.com"]
+monthly_budget_usd       = 1500 # Alert threshold, NOT an estimate or a cost cap.
+
+# Scaffold first: RDS/ALB/NAT/ECR/task definitions, but no ECS services yet.
+services_enabled = false
+sql_admin_image  = null
+# After building/scanning/pushing the admin image and applying its digest:
+# sql_admin_image = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/sql-admin@sha256:REPLACE_WITH_REAL_DIGEST"
+# Run the private admin task, then enable services on the next reviewed push.
+
+rds_instance_class        = "db.m6i.large"
+rds_engine_version        = null # AWS default for 2022/16.0. Pin the resolved output before going live.
+rds_allocated_storage     = 100
+rds_max_allocated_storage = 1000
+
+ecr_repositories = ["api", "web", "sql-admin"]
+databases        = { api = "AgrovestoApi", trading = "AgrovestoTrading" }
+services = {
+  api = {
+    # Example digest is syntactically valid but NOT a real image. Replace before enabling.
+    # May reference either account; retaining release tags in dev protects shared digests.
+    image        = "111111111111.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    hostname     = "api"
+    priority     = 100
+    database_key = "api"
+    cpu          = 512
+    memory       = 1024
+    min_count    = 2
+    max_count    = 6
+    health_path  = "/health"
+    environment  = { APP_ENV = "production" }
+  }
+  trading = {
+    image        = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    hostname     = "trading"
+    priority     = 200
+    database_key = "trading"
+  }
+  portal = {
+    image       = "222222222222.dkr.ecr.eu-west-1.amazonaws.com/agrovesto/web@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    hostname    = "" # Apex example.com, covered by the ACM certificate.
+    priority    = 300
+    health_path = "/"
+    # No database_key: frontend tasks get neither DB network access nor credentials.
+  }
+}
+# Import the registrar's existing zone or use its ID; never create a second
+# authoritative zone and switch nameservers before reproducing existing records.
+# existing_zone_id = "Z0123456789EXAMPLE"
+# Delegate dev to the DEV account zone's FOUR actual nameservers:
+# dns_records = { dev = { name = "dev.example.com", type = "NS", ttl = 300, records = ["...", "...", "...", "..."] } }

@@ -1,0 +1,7 @@
+**
+!scripts/
+!scripts/database.py
+!ops/
+!ops/sql-admin/
+!ops/sql-admin/Dockerfile
+!ops/sql-admin/requirements.txt

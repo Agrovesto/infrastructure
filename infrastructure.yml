@@ -1,0 +1,209 @@
+name: Infrastructure
+
+on:
+  pull_request:
+  push:
+    branches: [dev, prod]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infrastructure-${{ github.event.pull_request.number || github.ref_name }}
+  # Never cancel an in-flight apply; queue subsequent updates for the same ref/PR.
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  AWS_EC2_METADATA_DISABLED: 'true'
+
+jobs:
+  unit:
+    name: Unit tests and shell checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+      - run: make unit
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-coverage
+          path: coverage.xml
+          retention-days: 3
+          if-no-files-found: error
+
+  terraform:
+    name: Terraform (${{ matrix.root }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [bootstrap/dev, bootstrap/prod, environments/dev, environments/prod]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.11.4
+          terraform_wrapper: false
+      - run: terraform fmt -recursive -check -diff
+      - name: Validate and run credential-free provider-mocked plans
+        env:
+          ROOT: ${{ matrix.root }}
+        run: scripts/ci/terraform-checks.sh "$ROOT"
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      # Isolated job: Checkov pins its own boto3 version, unlike runtime/unit deps.
+      - run: pip install checkov==3.2.471
+      - run: scripts/ci/checkov-checks.sh
+
+  trivy:
+    name: Trivy source and SQL admin image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned Trivy
+        run: |
+          scripts/ci/install-trivy.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Vulnerability, secret and infrastructure scans
+        run: trivy fs --config trivy.yaml --scanners vuln,secret,misconfig .
+      - name: Build the SQL administration image (never pushed by PRs)
+        run: docker build --pull --platform linux/amd64 -f ops/sql-admin/Dockerfile -t sql-admin:ci .
+      - name: Scan the built image, including unfixed HIGH/CRITICAL findings
+        run: trivy image --config trivy.yaml --scanners vuln,secret sql-admin:ci
+
+  sonar:
+    name: SonarQube quality gate
+    needs: unit
+    # Fork PRs never get secrets or access to a private Sonar runner. The aggregate
+    # gate below blocks them explicitly rather than pretending this scan passed.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ fromJSON(vars.SONAR_RUNNER_LABELS_JSON || '["ubuntu-24.04"]') }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-coverage
+      - name: Require configured HTTPS SonarQube
+        env:
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          [[ "$SONAR_HOST_URL" == https://* && -n "$SONAR_PROJECT_KEY" && -n "$SONAR_TOKEN" ]] || {
+            echo 'Configure SONAR_HOST_URL (HTTPS), SONAR_PROJECT_KEY and SONAR_TOKEN. Deployment is blocked until SonarQube is ready.' >&2
+            exit 1
+          }
+      - uses: SonarSource/sonarqube-scan-action@1a6d90ebcb0e6a6b1d87e37ba693fe453195ae25 # v5.3.1
+        env:
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ROOT_CERT: ${{ secrets.SONAR_ROOT_CERT }}
+        with:
+          args: >-
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=600
+
+  checks:
+    name: All required checks
+    if: always()
+    needs: [unit, terraform, checkov, trivy, sonar]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to succeed (including Sonar)
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null || {
+            echo 'Tests/scans failed or were skipped. Fork PRs require a reviewed same-repository PR for Sonar analysis. Nothing will deploy.' >&2
+            exit 1
+          }
+
+  deploy:
+    name: Deploy ${{ github.ref_name }} account
+    needs: checks
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/prod')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 135
+    environment:
+      name: ${{ github.ref_name }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DEPLOY_ENV: ${{ github.ref_name }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_KMS_KEY_ARN: ${{ vars.TF_STATE_KMS_KEY_ARN }}
+      TF_VARS_JSON: ${{ vars.TF_VARS_JSON }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.11.4
+          terraform_wrapper: false
+      - name: Validate environment/account inputs before requesting AWS credentials
+        id: inputs
+        run: python3 scripts/ci/write_deploy_config.py
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-duration-seconds: 7200
+          role-session-name: infrastructure-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          unset-current-credentials: true
+      - name: Plan, enforce data protection, apply that exact saved plan
+        env:
+          ROOT: ${{ steps.inputs.outputs.root }}
+          BACKEND: ${{ steps.inputs.outputs.backend }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          plan="$RUNNER_TEMP/infrastructure.tfplan"
+          json_plan="$RUNNER_TEMP/infrastructure.tfplan.json"
+          trap 'rm -f -- "$plan" "$json_plan" "$BACKEND" "$ROOT/ci.auto.tfvars.json"' EXIT
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          terraform -chdir="$ROOT" init -reconfigure -backend-config="$BACKEND" -lockfile=readonly
+          test "$(terraform -chdir="$ROOT" workspace show)" = default
+          terraform -chdir="$ROOT" plan -no-color -lock-timeout=10m -out="$plan"
+          terraform -chdir="$ROOT" show -json "$plan" > "$json_plan"
+          python3 scripts/ci/verify_plan.py "$json_plan"
+          terraform -chdir="$ROOT" apply -no-color -lock-timeout=10m "$plan"
+          # No state/plan artifact upload, no application build/push, no SQL changes here.
