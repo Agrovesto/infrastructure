@@ -7,7 +7,7 @@ name: agrovesto-dev
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-CU20-ubuntu-22.04
-    container_name: agrovesto-dev-mssql
+    container_name: nomaos-dev-mssql
     restart: unless-stopped
     user: "10001:0"
     mem_limit: 5g
@@ -36,8 +36,8 @@ services:
       retries: 5
       start_period: 60s
 
-  core:
-    image: ${CORE_IMAGE:-agrovesto/core:local}
+  onboarding:
+    image: ${ONBOARDING_IMAGE:-agrovesto/onboarding:local}
     restart: unless-stopped
     depends_on:
       mssql:
@@ -48,13 +48,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     mem_limit: 512m
     env_file:
-      - path: ./env/core.env
+      - path: ./env/onboarding.env
         required: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
-  auth:
-    image: ${AUTH_IMAGE:-agrovesto/auth:local}
+  wallet:
+    image: ${WALLET_IMAGE:-agrovesto/wallet:local}
     restart: unless-stopped
     depends_on:
       mssql:
@@ -65,13 +65,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     mem_limit: 512m
     env_file:
-      - path: ./env/auth.env
+      - path: ./env/wallet.env
         required: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
-  trading:
-    image: ${TRADING_IMAGE:-agrovesto/trading:local}
+  input:
+    image: ${INPUT_IMAGE:-agrovesto/input:local}
     restart: unless-stopped
     depends_on:
       mssql:
@@ -82,13 +82,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     mem_limit: 512m
     env_file:
-      - path: ./env/trading.env
+      - path: ./env/input.env
         required: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
-  catalog:
-    image: ${CATALOG_IMAGE:-agrovesto/catalog:local}
+  serviceprovider:
+    image: ${SERVICEPROVIDER_IMAGE:-agrovesto/serviceprovider:local}
     restart: unless-stopped
     depends_on:
       mssql:
@@ -99,13 +99,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     mem_limit: 512m
     env_file:
-      - path: ./env/catalog.env
+      - path: ./env/serviceprovider.env
         required: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
-  notifications:
-    image: ${NOTIFICATIONS_IMAGE:-agrovesto/notifications:local}
+  moneval:
+    image: ${MONEVAL_IMAGE:-agrovesto/moneval:local}
     restart: unless-stopped
     depends_on:
       mssql:
@@ -116,7 +116,7 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     mem_limit: 512m
     env_file:
-      - path: ./env/notifications.env
+      - path: ./env/moneval.env
         required: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

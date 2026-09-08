@@ -147,8 +147,8 @@ resource "aws_db_instance" "this" {
   lifecycle {
     prevent_destroy = true
     precondition {
-      condition     = var.allocated_storage >= 100 && var.max_allocated_storage >= var.allocated_storage
-      error_message = "Use at least 100 GiB and a storage autoscaling ceiling at or above allocated storage."
+      condition     = var.allocated_storage >= 50 && var.max_allocated_storage >= var.allocated_storage
+      error_message = "Use at least 50 GiB and a storage autoscaling ceiling at or above allocated storage."
     }
   }
   depends_on = [aws_cloudwatch_log_group.this, aws_cloudwatch_log_group.enhanced, aws_iam_role_policy_attachment.monitoring]

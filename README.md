@@ -282,6 +282,7 @@ The supplied adapter contract injects:
 | `DB_ENCRYPT` | `true` | `true` |
 | `DB_TRUST_SERVER_CERTIFICATE` | `true` for the private dev self-signed server | **`false`**; trust the current AWS RDS CA and verify the endpoint hostname |
 
+
 Your application must translate these names into its SQL driver/connection-string settings. Configure its CA store; the admin image already installs the AWS RDS trust bundle. RDS's forced TLS parameter must be applied; schedule/reboot for any pending-reboot parameter changes and verify encryption from the client.
 
 Runtime logins get `db_datareader`, `db_datawriter`, and database-level `EXECUTE`, **not** `db_owner`, sysadmin or migration DDL. Review stored procedures/ownership chains and tighten grants per API as needed. Granting `EXECUTE` on future procedures means application migrations must also be security-reviewed.
