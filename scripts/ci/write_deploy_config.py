@@ -11,8 +11,8 @@ import sys
 
 def configuration(env: dict[str, str]) -> tuple[str, dict, str]:
     target = env.get("DEPLOY_ENV", "")
-    if target not in {"dev", "prod"}:
-        raise ValueError("Only dev and prod are deployment environments")
+    if target not in {"dev", "main"}:
+        raise ValueError("Only dev and main are deployment environments")
     if env.get("GITHUB_EVENT_NAME") != "push" or env.get("GITHUB_REF") != f"refs/heads/{target}":
         raise ValueError("Deployment requires a push to the matching protected branch")
     account = env.get("AWS_ACCOUNT_ID", "")
@@ -23,7 +23,7 @@ def configuration(env: dict[str, str]) -> tuple[str, dict, str]:
     if not isinstance(values, dict) or values.get("account_id") != account:
         raise ValueError("TF_VARS_JSON account_id must match the GitHub environment's AWS_ACCOUNT_ID")
     if not re.fullmatch(r"\d{12}", values.get("peer_account_id", "")) or values["peer_account_id"] == account:
-        raise ValueError("Dev and prod must use different AWS accounts")
+        raise ValueError("Dev and main must use different AWS accounts")
     if values.get("aws_region", region) != region:
         raise ValueError("Terraform and GitHub AWS regions disagree")
     values["aws_region"] = region

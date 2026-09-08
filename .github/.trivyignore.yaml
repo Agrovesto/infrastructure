@@ -1,6 +1,11 @@
 # No vulnerability or secret allowlists. Architecture exceptions only, path-scoped
 # and time-bounded. Review alongside Checkov exceptions in docs/security.md.
 misconfigurations:
+  - id: AVD-AWS-0053
+    paths:
+      - modules/edge/main.tf
+    statement: The edge ALB is intentionally internet-facing. It redirects HTTP to HTTPS; compute and database resources remain private and security-group restricted.
+    expired_at: 2027-03-01
   - id: AVD-AWS-0057
     paths:
       - modules/account_bootstrap/main.tf
