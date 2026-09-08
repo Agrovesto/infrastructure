@@ -11,14 +11,14 @@ from scripts.ci import verify_plan, write_deploy_config, verify_checkov_report
 
 
 def ci_env(environment="dev"):
-    account = "111111111111" if environment == "dev" else "222222222222"
-    peer = "222222222222" if environment == "dev" else "111111111111"
+    account = "353833416626" if environment == "dev" else "221434544570"
+    peer = "221434544570" if environment == "dev" else "353833416626"
     return {
         "DEPLOY_ENV": environment, "GITHUB_EVENT_NAME": "push", "GITHUB_REF": f"refs/heads/{environment}",
         "AWS_ACCOUNT_ID": account, "AWS_REGION": "eu-west-1",
         "AWS_ROLE_ARN": f"arn:aws:iam::{account}:role/agrovesto-bootstrap-{environment}-deploy",
         "TF_STATE_BUCKET": f"agrovesto-tfstate-{account}-eu-west-1",
-        "TF_STATE_KMS_KEY_ARN": f"arn:aws:kms:eu-west-1:{account}:key/11111111-1111-1111-1111-111111111111",
+        "TF_STATE_KMS_KEY_ARN": f"arn:aws:kms:eu-west-1:{account}:key/-353833416626",
         "TF_VARS_JSON": json.dumps({"account_id": account, "peer_account_id": peer,
                                     "permissions_boundary_arn": f"arn:aws:iam::{account}:policy/agrovesto-bootstrap-{environment}-workload-boundary"}),
     }
@@ -47,13 +47,13 @@ class AccountIsolationTests(unittest.TestCase):
     def test_invalid_or_cross_account_configuration_rejected(self):
         for changes in [
             {"AWS_ACCOUNT_ID": "123"}, {"AWS_REGION": "region\nkey=evil"}, {"TF_VARS_JSON": "[]"},
-            {"AWS_ACCOUNT_ID": "222222222222"}, {"AWS_ROLE_ARN": "arn:aws:iam::222222222222:role/prod"},
-            {"TF_STATE_BUCKET": "agrovesto-tfstate-222222222222-eu-west-1"},
-            {"TF_STATE_KMS_KEY_ARN": "arn:aws:kms:eu-west-1:222222222222:key/11111111-1111-1111-1111-111111111111"},
+            {"AWS_ACCOUNT_ID": "221434544570"}, {"AWS_ROLE_ARN": "arn:aws:iam::221434544570:role/prod"},
+            {"TF_STATE_BUCKET": "agrovesto-tfstate-221434544570-eu-west-1"},
+            {"TF_STATE_KMS_KEY_ARN": "arn:aws:kms:eu-west-1:221434544570:key/353833416626"},
         ]:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 write_deploy_config.configuration(dict(ci_env(), **changes))
-        for changes in [{"peer_account_id": "111111111111"}, {"peer_account_id": "bad"}, {"aws_region": "us-east-1"}, {"project": "bad\nname"}, {"permissions_boundary_arn": "wrong"}]:
+        for changes in [{"peer_account_id": "353833416626"}, {"peer_account_id": "bad"}, {"aws_region": "us-east-1"}, {"project": "bad\nname"}, {"permissions_boundary_arn": "wrong"}]:
             env = ci_env()
             values = dict(json.loads(env["TF_VARS_JSON"]), **changes)
             env["TF_VARS_JSON"] = json.dumps(values)

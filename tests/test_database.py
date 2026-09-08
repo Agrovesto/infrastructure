@@ -12,8 +12,8 @@ from unittest.mock import Mock, patch
 from botocore.exceptions import ClientError
 from scripts import database as db
 
-ADMIN = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:admin-AbCdEf"
-APP = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:api-AbCdEf"
+ADMIN = "arn:aws:secretsmanager:eu-west-1:353833416626:secret:admin-AbCdEf"
+APP = "arn:aws:secretsmanager:eu-west-1:353833416626:secret:api-AbCdEf"
 PASSWORD = "Fixture-Only-Aa1!not-a-real-credential"
 
 
@@ -23,7 +23,7 @@ def config(environment="dev"):
         "db_host": "private.example.com", "admin_secret_arn": ADMIN,
         "databases": {"api": {"name": "AgrovestoApi", "secret_arn": APP}},
         "services": {"api": {"database_key": "api", "secrets": {}}},
-        "backup_bucket": "fixture-backups", "kms_key_arn": "arn:aws:kms:eu-west-1:111111111111:key/fixture",
+        "backup_bucket": "fixture-backups", "kms_key_arn": "arn:aws:kms:eu-west-1:353833416626:key/fixture",
     }
     if environment == "dev":
         value["sql_container"] = "agrovesto-dev-mssql"

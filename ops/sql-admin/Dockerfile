@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # A signed Microsoft package repository (not curl | sh). RDS CA certificates are
 # installed in the OS trust store so production sqlcmd never needs -C.
-RUN apt-get update \
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc -o /tmp/microsoft.asc \
     && gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg /tmp/microsoft.asc \
