@@ -14,11 +14,11 @@ on:
 permissions:
   contents: read
 
-# Prevent concurrent Terraform operations against the same environment.
-# We do NOT cancel an active run because Terraform may already be holding
-# a state lock or performing an infrastructure operation.
 concurrency:
   group: infrastructure-${{ github.event.pull_request.number || github.ref_name }}
+
+  # Never cancel an in-flight Terraform operation.
+  # Queue subsequent updates for the same PR/branch.
   cancel-in-progress: false
 
 env:
@@ -40,15 +40,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@a26af69be951a213d4953c4e4e4022e16d87065 # v5.6.0
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
 
       - name: Install test dependencies
         run: |
@@ -60,7 +60,7 @@ jobs:
           make unit
 
       - name: Upload coverage
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: python-coverage
           path: coverage.xml
@@ -80,15 +80,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@a26af69be951a213d4953c4e4e4022e16d87065 # v5.6.0
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
 
       - name: Install Checkov
         run: |
@@ -112,7 +112,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           persist-credentials: false
 
@@ -153,6 +153,7 @@ jobs:
     name: SonarQube quality gate
     needs:
       - unit
+
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
@@ -166,13 +167,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download Python coverage
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@v4.3.0
         with:
           name: python-coverage
 
@@ -198,7 +199,7 @@ jobs:
           }
 
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@1a6d90ebcb0e6a6b1d87e37ba693fe453195ae25 # v5.3.1
+        uses: SonarSource/sonarqube-scan-action@v5.3.1
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -214,17 +215,21 @@ jobs:
   # TERRAFORM PR PLAN
   #
   # PR -> dev
-  #     uses GitHub Environment: dev-plan
+  #   GitHub Environment: dev-plan
+  #   Terraform root: environments/dev
   #
   # PR -> main
-  #     uses GitHub Environment: prod-plan
+  #   GitHub Environment: prod-plan
+  #   Terraform root: environments/prod
   #
-  # These environments MUST contain PLAN-ONLY AWS roles.
-  # They must NOT contain the deployment/apply role.
+  # IMPORTANT:
+  # The AWS role used here must be PLAN-ONLY.
+  # It must not have terraform apply/destroy permissions.
   # ============================================================
 
   terraform-plan:
     name: Terraform plan (${{ github.base_ref }})
+
     if: github.event_name == 'pull_request'
 
     environment:
@@ -242,7 +247,7 @@ jobs:
 
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ vars.AWS_REGION }}
-      AWS_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+      AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
 
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_KMS_KEY_ARN: ${{ vars.TF_STATE_KMS_KEY_ARN }}
@@ -250,12 +255,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
           terraform_version: 1.11.4
           terraform_wrapper: false
@@ -269,21 +274,24 @@ jobs:
         run: |
           python3 scripts/ci/write_deploy_config.py
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+      - name: Configure AWS plan credentials
+        uses: aws-actions/configure-aws-credentials@v4.3.1
         with:
-          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_PLAN_ROLE_ARN }}
           role-duration-seconds: 3600
           role-session-name: infrastructure-plan-${{ github.run_id }}
-          aws-region: ${{ vars.AWS_REGION }}
-          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
           unset-current-credentials: true
 
       - name: Verify AWS identity
         run: |
+          set -euo pipefail
+
           ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 
-          echo "AWS account: $ACCOUNT"
+          echo "Expected AWS account: $AWS_ACCOUNT_ID"
+          echo "Actual AWS account:   $ACCOUNT"
 
           test "$ACCOUNT" = "$AWS_ACCOUNT_ID"
 
@@ -299,6 +307,9 @@ jobs:
 
           trap 'rm -f -- "$plan" "$BACKEND" "$ROOT/ci.auto.tfvars.json"' EXIT
 
+          echo "Environment: $DEPLOY_ENV"
+          echo "Terraform root: $ROOT"
+
           terraform -chdir="$ROOT" init \
             -reconfigure \
             -backend-config="$BACKEND" \
@@ -312,24 +323,26 @@ jobs:
             -out="$plan"
 
           echo ""
-          echo "Terraform plan generated successfully."
-          echo "Target environment: $DEPLOY_ENV"
-          echo "Terraform root: $ROOT"
+          echo "Terraform plan completed successfully."
 
 
   # ============================================================
   # AGGREGATE PR GATE
   #
-  # Required:
-  #   Unit
-  #   SonarQube
-  #   Checkov
-  #   Trivy
-  #   Terraform
+  # Every PR to dev/main must pass:
+  #
+  #   1. Unit tests
+  #   2. SonarQube
+  #   3. Checkov
+  #   4. Trivy
+  #   5. Terraform plan
+  #
+  # This job should be configured as a required branch-protection check.
   # ============================================================
 
   pr-checks:
     name: All required PR checks
+
     if: always() && github.event_name == 'pull_request'
 
     needs:
@@ -343,18 +356,17 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Verify required checks
+      - name: Verify all required checks
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
+          set -euo pipefail
+
           echo "$RESULTS"
 
           echo "$RESULTS" |
             jq -e '
-              all(
-                .[];
-                .result == "success"
-              )
+              all(.[]; .result == "success")
             ' > /dev/null || {
               echo "One or more required PR checks failed or were skipped."
               echo "Merge is blocked."
@@ -367,10 +379,17 @@ jobs:
   # ============================================================
   # DEPLOY INFRASTRUCTURE
   #
-  # push dev  -> dev environment
-  # push main -> prod environment
+  # push dev
+  #   -> GitHub Environment: dev
+  #   -> environments/dev
   #
-  # One job handles both environments.
+  # push main
+  #   -> GitHub Environment: prod
+  #   -> environments/prod
+  #
+  # No application build.
+  # No application deployment.
+  # Infrastructure only.
   # ============================================================
 
   deploy:
@@ -406,12 +425,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4.2.2
         with:
           persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
           terraform_version: 1.11.4
           terraform_wrapper: false
@@ -420,23 +439,25 @@ jobs:
         run: |
           terraform fmt -recursive -check -diff
 
-      - name: Validate environment/account configuration
+      - name: Validate environment and account inputs
         id: inputs
         run: |
           python3 scripts/ci/write_deploy_config.py
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        uses: aws-actions/configure-aws-credentials@v4.3.1
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           role-duration-seconds: 7200
           role-session-name: infrastructure-${{ env.DEPLOY_ENV }}-${{ github.run_id }}
-          aws-region: ${{ vars.AWS_REGION }}
-          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
           unset-current-credentials: true
 
-      - name: Verify AWS account
+      - name: Verify AWS identity
         run: |
+          set -euo pipefail
+
           ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 
           echo "Expected AWS account: $AWS_ACCOUNT_ID"
@@ -460,6 +481,8 @@ jobs:
           echo "Environment: $DEPLOY_ENV"
           echo "Terraform root: $ROOT"
 
+          echo "Initializing Terraform..."
+
           terraform -chdir="$ROOT" init \
             -reconfigure \
             -backend-config="$BACKEND" \
@@ -474,7 +497,7 @@ jobs:
             -lock-timeout=10m \
             -out="$plan"
 
-          echo "Validating Terraform plan..."
+          echo "Validating saved Terraform plan..."
 
           terraform -chdir="$ROOT" show \
             -json \
