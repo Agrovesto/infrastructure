@@ -1,3 +1,0 @@
-# Rename to CODEOWNERS and replace this with an existing team with repository write access.
-# Require code-owner approvals in BOTH protected branches. Protect ALL IaC and CI code.
-* @YOUR_ORGANIZATION/platform-team
