@@ -59,7 +59,7 @@ module "ec2" {
   root_volume_size_gb   = var.root_volume_size_gb
   mssql_volume_size_gb  = var.mssql_volume_size_gb
   domain_name           = var.domain_name
-  wallet                = var.wallet
+  apis                  = var.apis
   backup_bucket         = module.backup.bucket_id
   aws_region            = var.aws_region
   tags                  = local.tags

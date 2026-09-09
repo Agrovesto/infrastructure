@@ -57,46 +57,7 @@ variable "domain_name" {
   type = string
 }
 
-variable "wallet" {
-  description = "Map of API containers. Add more keys to run additional APIs."
-  type = map(object({
-    image      = string
-    host_port  = number
-    subdomain  = string
-    env        = optional(map(string), {})
-  }))
-}
-
-variable "input" {
-  description = "Map of API containers. Add more keys to run additional APIs."
-  type = map(object({
-    image      = string
-    host_port  = number
-    subdomain  = string
-    env        = optional(map(string), {})
-  }))
-
-}
-variable "moneval" {
-  description = "Map of API containers. Add more keys to run additional APIs."
-  type = map(object({
-    image      = string
-    host_port  = number
-    subdomain  = string
-    env        = optional(map(string), {})
-  }))
-}
-variable "serviceprovider" {
-  description = "Map of API containers. Add more keys to run additional APIs."
-  type = map(object({
-    image      = string
-    host_port  = number
-    subdomain  = string
-    env        = optional(map(string), {})
-  }))
-}
-
-variable "onboarding" {
+variable "apis" {
   description = "Map of API containers. Add more keys to run additional APIs."
   type = map(object({
     image      = string

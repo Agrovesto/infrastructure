@@ -17,14 +17,14 @@ environments/dev  # composition for this account only
 | Docker on EC2 | 5 APIs, HashiCorp Vault (dev mode), SQL Server 2022 with 5 databases. Bind-mounted to the MSSQL disk. |
 | Route 53 | Hosted zone + A records for every backend/vault hostname → EC2 EIP. Amplify manages frontend CNAMEs via domain association. |
 | S3 | Versioned, encrypted bucket for nightly MSSQL backups (cron on the instance). |
-| EventBridge Scheduler | Start EC2 weekdays 08:00, stop 20:00 (`Africa/Lagos`). |
+| EventBridge Scheduler | Start EC2 07:00, stop 20:00 every day (`Africa/Lagos`). |
 
 Traffic path:
 
 ```
 Internet → Route53
             ├─ www / onboarding  → Amplify
-            └─ auth / api / payments / notify / analytics / vault / mssql
+            └─ wallet / onboarding-api / input / moneval / serviceprovider / vault / mssql
                                  → EIP → nginx (EC2) → docker containers
 ```
 
