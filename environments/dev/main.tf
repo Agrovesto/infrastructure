@@ -59,7 +59,7 @@ module "ec2" {
   root_volume_size_gb   = var.root_volume_size_gb
   mssql_volume_size_gb  = var.mssql_volume_size_gb
   domain_name           = var.domain_name
-  nomaos-dev            = var.nomaos-dev
+  wallet                = var.wallet
   backup_bucket         = module.backup.bucket_id
   aws_region            = var.aws_region
   tags                  = local.tags
@@ -89,9 +89,9 @@ module "scheduler" {
 module "amplify" {
   source = "../../modules/amplify"
 
-  apps                 = var.amplify_apps
-  github_access_token  = var.github_access_token
-  domain_name          = var.domain_name
+  apps                = var.amplify_apps
+  github_access_token = var.github_access_token
+  domain_name         = var.domain_name
   # Route53 CNAMEs are used instead of Amplify domain association so multiple
   # apps can share one parent domain without colliding.
   enable_custom_domain = false

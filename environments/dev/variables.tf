@@ -75,7 +75,7 @@ variable "amplify_apps" {
   }))
 }
 
-variable "nomaos-dev" {
+variable "apis" {
   description = "Backend APIs on the EC2 docker host. Add a key to launch another API."
   type = map(object({
     image     = string

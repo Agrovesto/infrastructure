@@ -9,7 +9,7 @@
 #
 # The resource addresses must match what Terraform will use once the module
 # tree is instantiated, e.g. module.ec2.aws_instance.this
-version: 0.1
+version: 0.3
 resource_usage:
   # ---- EC2 app host -----------------------------------------------------
   # t3.xlarge, Linux. Billed per running hour. The EventBridge scheduler keeps
