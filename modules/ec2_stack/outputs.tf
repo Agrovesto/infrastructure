@@ -10,24 +10,8 @@ output "public_ip" {
   value = var.associate_elastic_ip ? aws_eip.this[0].public_ip : aws_instance.this.public_ip
 }
 
-output "wallet_fqdns" {
-  value = "${wallet-subdomain}.${var.domain_name}"
-}
-
-output "onboarding_fqdns" {
-  value = "${onboarding-subdomain}.${var.domain_name}"
-}
-
-output "input_fqdns" {
-  value = " ${input-subdomain}.${var.domain_name}"
-}
-
-output "moneval_fqdns" {
-  value = "${moneval-subdomain}.${var.domain_name}"
-}
-
-output "serviceprovider_fqdns" {
-  value = "${serviceprovider-subdomain}.${var.domain_name}"
+output "api_fqdns" {
+  value = { for k, api in var.apis : k => "${api.subdomain}.${var.domain_name}" }
 }
 
 output "vault_fqdn" {

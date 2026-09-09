@@ -19,35 +19,10 @@ locals {
 
   nginx_upstreams = concat(
     [
-      {
-        name      = onboarding
-        subdomain = onboarding-subdomain
-        port      = var.onboarding.host_port
-      }
-    ],
-        [
-      {
-        name      = wallet
-        subdomain = wallet-subdomain
-        port      = var.wallet.host_port
-      }
-    ],    [
-      {
-        name      = input
-        subdomain = input-subdomain
-        port      = var.input.host_port
-      }
-    ],    [
-      {
-        name      = moneval
-        subdomain = moneval-subdomain
-        port      = var.moneval.host_port
-      }
-    ],    [
-      {
-        name      = serviceprovider
-        subdomain = serviceprovider-subdomain
-        port      = var.serviceprovider.host_port
+      for k, api in var.apis : {
+        name      = k
+        subdomain = api.subdomain
+        port      = api.host_port
       }
     ],
     [

@@ -6,5 +6,4 @@ override.tf
 terraform.tfvars
 .terraform.lock.hcl
 **/.terraform/
-**/environments
 # environments/dev/terraform.tfvars
