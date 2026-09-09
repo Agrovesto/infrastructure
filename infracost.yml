@@ -1,4 +1,4 @@
-version: 0.1
+version: 2.1
 
 projects:
   - path: environments/dev
@@ -6,4 +6,4 @@ projects:
     terraform_var_files:
       - terraform.tfvars
     terraform:
-      usage_file: infracost-usage.yml
+      usage_file: infracos.yml

@@ -199,8 +199,8 @@ jobs:
     needs: terraform-plan
     if: github.event_name == 'pull_request' && env.INFRACOST_API_KEY != ''
     runs-on: ubuntu-latest
-    env:
-      TF_ROOT: ${{ env.TF_WORKING_DIR }}
+    # env:
+    #   TF_ROOT: ${{ env.TF_WORKING_DIR }}
     steps:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
