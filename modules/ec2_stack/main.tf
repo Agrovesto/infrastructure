@@ -1,6 +1,10 @@
 locals {
   docker_compose = templatefile("${path.module}/templates/docker-compose.yml.tftpl", {
-    apis          = var.apis
+    wallet        = var.wallet
+    onboarding    = var.onboarding
+    input         = var.input
+    serviceprovider = var.serviceprovider
+    moneval       = var.moneval
     mssql         = var.mssql
     vault         = var.vault
     backup_bucket = var.backup_bucket

@@ -11,7 +11,23 @@ output "public_ip" {
 }
 
 output "api_fqdns" {
-  value = { for k, api in var.apis : k => "${api.subdomain}.${var.domain_name}" }
+  value = { for k, api in var.onboarding : k => "${api.subdomain}.${var.domain_name}" }
+}
+
+output "api_fqdns" {
+  value = { for k, api in var.wallet : k => "${api.subdomain}.${var.domain_name}" }
+}
+
+output "api_fqdns" {
+  value = { for k, api in var.input : k => "${api.subdomain}.${var.domain_name}" }
+}
+
+output "api_fqdns" {
+  value = { for k, api in var.moneval : k => "${api.subdomain}.${var.domain_name}" }
+}
+
+output "api_fqdns" {
+  value = { for k, api in var.serviceprovider : k => "${api.subdomain}.${var.domain_name}" }
 }
 
 output "vault_fqdn" {

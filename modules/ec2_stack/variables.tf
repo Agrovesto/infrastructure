@@ -16,7 +16,7 @@ variable "instance_profile_name" {
 
 variable "instance_type" {
   type    = string
-  default = "t3.xlarge"
+  default = "t3.medium"
 }
 
 variable "ami_id" {
@@ -40,7 +40,7 @@ variable "root_volume_size_gb" {
 variable "mssql_volume_size_gb" {
   description = "Dedicated MSSQL data disk"
   type        = number
-  default     = 100
+  default     = 50
 }
 
 variable "mssql_volume_device" {
@@ -57,7 +57,46 @@ variable "domain_name" {
   type = string
 }
 
-variable "apis" {
+variable "wallet" {
+  description = "Map of API containers. Add more keys to run additional APIs."
+  type = map(object({
+    image      = string
+    host_port  = number
+    subdomain  = string
+    env        = optional(map(string), {})
+  }))
+}
+
+variable "input" {
+  description = "Map of API containers. Add more keys to run additional APIs."
+  type = map(object({
+    image      = string
+    host_port  = number
+    subdomain  = string
+    env        = optional(map(string), {})
+  }))
+
+}
+variable "moneval" {
+  description = "Map of API containers. Add more keys to run additional APIs."
+  type = map(object({
+    image      = string
+    host_port  = number
+    subdomain  = string
+    env        = optional(map(string), {})
+  }))
+}
+variable "serviceprovider" {
+  description = "Map of API containers. Add more keys to run additional APIs."
+  type = map(object({
+    image      = string
+    host_port  = number
+    subdomain  = string
+    env        = optional(map(string), {})
+  }))
+}
+
+variable "onboarding" {
   description = "Map of API containers. Add more keys to run additional APIs."
   type = map(object({
     image      = string
