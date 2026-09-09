@@ -1,67 +1,57 @@
-# Agrovesto Infrastructure
+# Agrovesto infrastructure (dev)
 
-Terraform-managed cloud infrastructure for **Agrovesto** — a digital agriculture ecosystem connecting smallholder farmers, cooperatives, traders, and financiers across Nigeria.
+Reusable Terraform modules for the **dev** AWS account.
 
-## About
+```
+modules/          # reusable building blocks
+environments/dev  # composition for this account only
+```
 
-Agrovesto builds the data and transactional infrastructure powering Africa's agricultural value chain. The platform (NomaOS) creates GPS-mapped digital farm profiles, enables commodity trading, and unlocks access to finance, inputs, and markets for 20,000+ smallholder farmers across multiple states.
+## What gets created
 
-This repository contains all infrastructure-as-code for our production and staging environments.
+| Piece | Details |
+| --- | --- |
+| Amplify | Two apps (`landing`, `onboarding`) with custom domains. Add a key in `amplify_apps` to create more. |
+| VPC | Single public subnet + IGW (dev). |
+| EC2 | Public subnet, Elastic IP, **nginx** reverse proxy. Root disk (OS + apps) + extra EBS (MSSQL data). |
+| Docker on EC2 | 5 APIs, HashiCorp Vault (dev mode), SQL Server 2022 with 5 databases. Bind-mounted to the MSSQL disk. |
+| Route 53 | Hosted zone + A records for every backend/vault hostname → EC2 EIP. Amplify manages frontend CNAMEs via domain association. |
+| S3 | Versioned, encrypted bucket for nightly MSSQL backups (cron on the instance). |
+| EventBridge Scheduler | Start EC2 weekdays 08:00, stop 20:00 (`Africa/Lagos`). |
 
-## Repository Structure
-   ├── modules/
-│ ├── network/ # VPC, subnets, security groups, NAT
-│ ├── compute/ # EC2 / ECS / Lambda
-│ ├── database/ # RDS, ElastiCache, S3
-│ ├── data/ # Data pipelines, ETL, analytics
-│ ├── api/ # API Gateway, ALB, WAF
-│ └── monitoring/ # CloudWatch, logging, alerting
-├── environments/
-│ ├── dev/
-│ ├── staging/
-│ └── production/
-├── scripts/
-│ ├── bootstrap.sh
-│ └── destroy.sh
-└── .terraform.lock.hcl
+Traffic path:
 
+```
+Internet → Route53
+            ├─ www / onboarding  → Amplify
+            └─ auth / api / payments / notify / analytics / vault / mssql
+                                 → EIP → nginx (EC2) → docker containers
+```
 
-## Prerequisites
+## Adding more resources later
 
-- [Terraform](https://developer.hashicorp.com/terraform) ≥ 1.5
-- AWS CLI (or your cloud provider's CLI)
-- Required provider credentials configured
+- **Another frontend** — add an entry under `amplify_apps` in `terraform.tfvars`.
+- **Another API** — add an entry under `apis` (`image`, `host_port`, `subdomain`). Nginx + DNS follow automatically.
+- **Another MSSQL database** — append to `mssql_databases`.
+- **Another environment** — copy `environments/dev` and change names/CIDRs.
 
-## Getting Started
+## Apply (dev)
 
-# Clone
-git clone git@github.com:agrovesto/infrastructure.git
-cd infrastructure
+```bash
+cd environments/dev
+cp terraform.tfvars.example terraform.tfvars
+# edit domain, GitHub token, SA password, real API images
+terraform init
+terraform plan
+terraform apply
+```
 
-# Initialize
-terraform -chdir=environments/dev init
+Delegate `domain_name` to the `route53_name_servers` output at your registrar.
 
-# Plan
-terraform -chdir=environments/dev plan
+MSSQL SA password must meet SQL Server complexity rules. Vault root token in **dev** is `dev-root-token` (change via user-data / compose when you leave dev-mode).
 
-# Apply
-terraform -chdir=environments/dev apply   
+## Notes
 
-Environments
-Environment	Purpose
-dev	Local development & testing
-staging	Pre-production, integration testing
-production	Live services
-
-Conventions
-One Terraform module per concern (networking, compute, data, etc.)
-Each environment is a standalone root module that composes shared modules
-State is stored remotely (S3 + DynamoDB locking)
-All secrets managed via AWS Secrets Manager / SSM Parameter Store
-Tagging: every resource tagged with Project=Agrovesto, Environment=<env>, ManagedBy=terraform
-Contributing
-Create a feature branch
-Run terraform fmt and terraform validate
-Open a PR with a clear description of the change
-CI runs plan (no apply) on every PR
-
+- APIs listen on the docker network; nginx is the only public HTTP/S listener.
+- Scheduler IAM can start/stop **any** instance in the account (`ec2:StartInstances` on `*`). Tighten the resource ARN if you add prod later.
+- Amplify custom domains require the hosted zone to exist in the same account (this stack creates it by default).
