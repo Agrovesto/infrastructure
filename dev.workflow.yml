@@ -27,6 +27,7 @@ on:
       - "**.tf"
       - "**.tfvars"
       - "**.tftpl"
+      - "**/infracost-usage.yml"
       - ".github/workflows/dev.yml"
       - "checkov.yml"
       - "trivy.yml"
@@ -36,6 +37,7 @@ on:
       - "**.tf"
       - "**.tfvars"
       - "**.tftpl"
+      - "**/infracost-usage.yml"
       - ".github/workflows/dev.yml"
       - "checkov.yml"
       - "trivy.yml"
@@ -248,10 +250,16 @@ jobs:
         with:
           api-key: ${{ env.INFRACOST_API_KEY }}
 
+      # Pass the usage file (runtime/storage assumptions) if one exists under
+      # the project dir. Keys not present in the file fall back to defaults.
       - name: Generate Infracost cost-estimate baseline
         run: |
+          USAGE_FILE="${{ env.TF_ROOT }}/infracost-usage.yml"
+          USAGE_ARGS=()
+          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
           infracost breakdown --path="${{ env.TF_ROOT }}" \
                               --project-name=agrovesto-dev \
+                              "${USAGE_ARGS[@]}" \
                               --format=json \
                               --out-file=/tmp/infracost-base.json
         env:
@@ -264,8 +272,12 @@ jobs:
       - name: Generate Infracost diff
         id: infracost
         run: |
+          USAGE_FILE="${{ env.TF_ROOT }}/infracost-usage.yml"
+          USAGE_ARGS=()
+          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
           infracost diff --path="${{ env.TF_ROOT }}" \
                          --project-name=agrovesto-dev \
+                         "${USAGE_ARGS[@]}" \
                          --format=json \
                          --compare-to=/tmp/infracost-base.json \
                          --out-file=/tmp/infracost.json
