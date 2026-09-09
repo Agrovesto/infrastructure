@@ -1,0 +1,14 @@
+# .checkov.yml
+soft-fail: false
+framework:
+  - terraform
+
+# List of checks to skip specifically for the DEV environment
+skip-check:
+  - CKV_AWS_135 # DEV: Allow EC2 HTTP endpoint without token requirement if older IMDS
+  - CKV_AWS_260 # DEV: Ingress port 80 allow-all for web traffic
+  - CKV_AWS_24  # DEV: Ingress port 22 allow-all (ensure you restrict this later)
+  - CKV_AWS_18  # S3 Access logs (can skip for simple dev backup bucket)
+
+compact: true
+quiet: false
