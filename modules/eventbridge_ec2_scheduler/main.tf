@@ -19,8 +19,6 @@ resource "aws_scheduler_schedule" "start" {
     role_arn = var.scheduler_role_arn
     input    = jsonencode({ InstanceIds = [var.instance_id] })
   }
-
-  tags = var.tags
 }
 
 resource "aws_scheduler_schedule" "stop" {
@@ -39,6 +37,4 @@ resource "aws_scheduler_schedule" "stop" {
     role_arn = var.scheduler_role_arn
     input    = jsonencode({ InstanceIds = [var.instance_id] })
   }
-
-  tags = var.tags
 }
