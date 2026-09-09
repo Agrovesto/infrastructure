@@ -50,6 +50,25 @@ Delegate `domain_name` to the `route53_name_servers` output at your registrar.
 
 MSSQL SA password must meet SQL Server complexity rules. Vault root token in **dev** is `dev-root-token` (change via user-data / compose when you leave dev-mode).
 
+## CI/CD (`.github/workflows/dev.yml`)
+
+All Terraform commands in the pipeline run from `environments/dev`.
+
+- **Pull requests** (to `main`, `dev`, `devops`): Checkov + Trivy scans (SARIF
+  → code scanning) and a read-only `terraform plan` are posted as a PR comment.
+- **Push to `dev`**: applies the dev environment after the same checks.
+- The runner needs AWS OIDC (`AWS_ROLE_ARN` secret). Non-secret required
+  variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) must
+  be supplied to the runner as a `terraform.tfvars`; the MSSQL SA password is
+  injected via the `TF_VAR_MSSQL_SA_PASSWORD` secret. See the
+  `terraform.tfvars.example` for the full list of variables.
+- A ready-to-install **root copy** of the workflow (`.github/workflows/dev.yml`
+  cannot be committed with the current automation token, which lacks
+  `workflows` permission) lives at **`dev.workflow.yml`** in the repo root.
+  Install it with `cp dev.workflow.yml .github/workflows/dev.yml`.
+- Infracost cost estimates on PRs are optional: set an `INFRACOST_API_KEY`
+  secret to enable the `infracost` job (monthly cost-change comment).
+
 ## Notes
 
 - APIs listen on the docker network; nginx is the only public HTTP/S listener.
