@@ -9,11 +9,11 @@ terraform {
   }
 
   # Point this at a backend when ready:
-  # backend "s3" {
-  #   bucket = "agrovesto-tfstate-dev"
-  #   key    = "dev/terraform.tfstate"
-  #   region = "eu-west-1"
-  # }
+   backend "s3" {
+     bucket = "nomaos-tfstate-353833416626-eu-west-1"
+     key    = "dev/bootstrap.tfstate"
+     region = "eu-west-1"
+   }
 }
 
 provider "aws" {

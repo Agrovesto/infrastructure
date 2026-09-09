@@ -1,173 +1,184 @@
+# =============================================================================
+#  Terraform CI/CD Pipeline  (Agrovesto / dev account)
+# =============================================================================
+
 name: "Terraform CI/CD Pipeline"
 
 on:
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
     paths:
       - "**.tf"
       - "**.tfvars"
+      - "**.tftpl"
+      - "**/infracost-usage.yml"
       - ".github/workflows/dev.yml"
+      - "checkov.yml"
+      - "trivy.yml"
   push:
-    branches:
-      - main
+    branches: [main, dev]
     paths:
       - "**.tf"
       - "**.tfvars"
-      - ".github/workflows/terraform-ci-cd.yml"
+      - "**.tftpl"
+      - "**/infracost-usage.yml"
+      - ".github/workflows/dev.yml"
+      - "checkov.yml"
+      - "trivy.yml"
+
+# Only one run per ref at a time; supersede older queued runs on the same PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  id-token: write   # Required for AWS OIDC authentication
-  contents: read    # Required to checkout repository
-  pull-requests: write # Required to comment Terraform plan on PRs
-  security-events: write # Required to upload SARIF security scan results
+  id-token: write            # AWS OIDC authentication
+  contents: read
+  pull-requests: write       # Post Terraform plan + Infracost on PRs
+  security-events: write     # Upload SARIF scan results
 
 env:
-  AWS_REGION: "us-east-1"
+  # The dev account's resources are created in eu-west-1 (see terraform.tfvars).
+  # Region is also used by configure-aws-credentials for the OIDC STS call.
+  AWS_REGION: "eu-west-1"
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   TF_VERSION: "1.6.6"
+  TF_IN_AUTOMATION: "true"
+  TF_WORKING_DIR: "environments/dev"
   TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD }}
+  # Optional: set the INFRACOST_API_KEY secret to enable the Infracost job.
+  # If it is not defined this evaluates to an empty string and the job is skipped.
+  INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
 
 jobs:
   # ==============================================================
   # STAGE 1: LINT & SECURITY SCAN (CHECKOV + TRIVY)
+  # No AWS credentials needed. Scans run from the repo root so the
+  # committed checkov.yml / trivy.yml (with the dev skip-list) are used.
   # ==============================================================
   security-scan:
-    name: "Static & Security Analysis"
+    name: Lint & Security Scan
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout Code"
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: "Setup Terraform"
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: "Terraform Format Check"
-        id: fmt
+      - name: Terraform Format Check
         run: terraform fmt -check -recursive
         continue-on-error: true
 
-      # --- CHECKOV SCAN ---
-      - name: "Run Checkov Security Scan"
+      - name: Checkov IaC Scan
         id: checkov
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12.3122.0 (pinned SHA)
         with:
-          framework: terraform
           output_format: cli,sarif
           output_file_path: console,results.sarif
-          soft_fail: true # Set to false if you want failed checks to block PRs
-          download_external_modules: true
+          soft_fail: true
 
-      - name: "Upload Checkov SARIF to GitHub Security"
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Checkov SARIF
         if: success() || failure()
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
           category: checkov-iac-scan
 
-      # --- TRIVY SCAN ---
-      - name: "Run Trivy Vulnerability & Misconfig Scan"
+      - name: Trivy Misconfiguration Scan
         id: trivy
-        uses: aquasecurity/trivy-action@master
+        if: success() || failure()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (pinned SHA)
         with:
-          scan-type: "config"
-          hide-progress: false
-          format: "table"
-          exit-code: "1" # Change to '1' to fail on critical findings
-          severity: "CRITICAL,HIGH"
+          scan-type: config
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+        continue-on-error: true
 
-      - name: "Run Trivy SARIF Report Generation"
-        uses: aquasecurity/trivy-action@master
-        if: always()
-        with:
-          scan-type: "config"
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH"
-
-      - name: "Upload Trivy SARIF to GitHub Security"
+      - name: Upload Trivy SARIF
+        if: success() || failure()
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
-          sarif_file: "trivy-results.sarif"
+          sarif_file: trivy-results.sarif
           category: trivy-iac-scan
 
   # ==============================================================
-  # STAGE 2: TERRAFORM PLAN & PR DIFF COMMENT (ON PULL REQUEST)
+  # STAGE 2: TERRAFORM PLAN & PR DIFF COMMENT (PULL REQUESTS)
   # ==============================================================
   terraform-plan:
-    name: "Terraform Plan & Diff"
-    needs: [security-scan]
+    name: Terraform Plan & Diff
+    needs: security-scan
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
-      - name: "Checkout Repository"
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: "Configure AWS Credentials (OIDC)"
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      - name: "Setup Terraform"
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: "Terraform Init"
+      - name: Terraform Init
         id: init
-        run: terraform init
+        run: terraform init -no-color
 
-      - name: "Terraform Validate"
+      - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
 
-      - name: "Terraform Plan"
+      - name: Terraform Plan
         id: plan
         run: |
           terraform plan -no-color -out=tfplan \
-          && terraform show -no-color tfplan > tfplan.txt
+            && terraform show -no-color tfplan > tfplan.txt
         continue-on-error: true
 
-      - name: "Publish Plan to Pull Request"
+      - name: Publish Plan to Pull Request
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             let planOutput = "";
-            
             try {
               planOutput = fs.readFileSync('tfplan.txt', 'utf8');
               if (planOutput.length > 60000) {
-                planOutput = planOutput.substring(0, 60000) + "\n... [Output Truncated - Check Job Log for Full Diff]";
+                planOutput = planOutput.substring(0, 60000) +
+                  "\n... [Output Truncated - Check Job Log for Full Diff]";
               }
             } catch (err) {
               planOutput = "Error reading plan file.";
             }
 
-            const output = `### 🚀 **Terraform Plan & Security Check**
-            
-            #### Status Summary:
-            - **Format Check:** \`${{ steps.fmt.outcome }}\`
-            - **Initialization:** \`${{ steps.init.outcome }}\`
-            - **Validation:** \`${{ steps.validate.outcome }}\`
-            - **Plan Status:** \`${{ steps.plan.outcome }}\`
-            
-            <details><summary>📖 Show Terraform Diff / Plan</summary>
-            
-            \`\`\`terraform
-            ${planOutput}
-            \`\`\`
-            
-            </details>
-            
-            *Pushed by: @${{ github.actor }} | Event: \`${{ github.event_name }}\`*`;
+            const summary = [
+              "**Init:** `${{ steps.init.outcome }}`",
+              "**Validate:** `${{ steps.validate.outcome }}`",
+              "**Plan:** `${{ steps.plan.outcome }}`"
+            ].join("  \n");
+
+            const output = `### 🚀 Terraform Plan
+            \n${summary}
+            \n<details><summary>📖 Show Terraform Diff / Plan</summary>
+            \n\`\`\`terraform
+            \n${planOutput}
+            \n\`\`\`
+            \n</details>
+            \n*Pushed by: @${{ github.actor }} | Event: \`${{ github.event_name }}\`*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -176,36 +187,121 @@ jobs:
               body: output
             });
 
-      - name: "Fail if Plan Failed"
+      - name: Fail if Plan Failed
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
   # ==============================================================
-  # STAGE 3: TERRAFORM APPLY (ON PUSH TO MAIN)
+  # STAGE 3 (PR ONLY): INFRACOST COST ESTIMATE
   # ==============================================================
-  terraform-apply:
-    name: "Terraform Apply (Deploy)"
-    needs: [security-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+  infracost:
+    name: Infracost (monthly cost diff)
+    needs: terraform-plan
+    if: github.event_name == 'pull_request' && env.INFRACOST_API_KEY != ''
     runs-on: ubuntu-latest
+    env:
+      TF_ROOT: ${{ env.TF_WORKING_DIR }}
     steps:
-      - name: "Checkout Repository"
-        uses: actions/checkout@v4
-
-      - name: "Configure AWS Credentials (OIDC)"
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      - name: "Setup Terraform"
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: "Terraform Init"
-        run: terraform init
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
 
-      - name: "Terraform Apply"
+      - name: Setup Infracost CLI
+        uses: infracost/actions/setup@d51fc54d23c9ad90f984b884257bd96dc2625067 # v4.1.0 (pinned SHA)
+        with:
+          api-key: ${{ env.INFRACOST_API_KEY }}
+
+      - name: Generate Infracost cost-estimate baseline
+        run: |
+          USAGE_FILE="${{ env.TF_ROOT }}/infracost-usage.yml"
+          USAGE_ARGS=()
+          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
+          infracost breakdown --path="${{ env.TF_ROOT }}" \
+                              --project-name=agrovesto-dev \
+                              "${USAGE_ARGS[@]}" \
+                              --format=json \
+                              --out-file=/tmp/infracost-base.json
+        env:
+          INFRACOST_API_KEY: ${{ env.INFRACOST_API_KEY }}
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Generate Infracost diff
+        id: infracost
+        run: |
+          USAGE_FILE="${{ env.TF_ROOT }}/infracost-usage.yml"
+          USAGE_ARGS=()
+          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
+          infracost diff --path="${{ env.TF_ROOT }}" \
+                         --project-name=agrovesto-dev \
+                         "${USAGE_ARGS[@]}" \
+                         --format=json \
+                         --compare-to=/tmp/infracost-base.json \
+                         --out-file=/tmp/infracost.json
+        continue-on-error: true
+        env:
+          INFRACOST_API_KEY: ${{ env.INFRACOST_API_KEY }}
+
+      - name: Post Infracost PR comment
+        if: always()
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+                                   --repo="${{ github.repository }}" \
+                                   --github-token="${{ github.token }}" \
+                                   --pull-request="${{ github.event.pull_request.number }}" \
+                                   --behavior=update
+        env:
+          INFRACOST_API_KEY: ${{ env.INFRACOST_API_KEY }}
+
+  # ==============================================================
+  # STAGE 4: TERRAFORM APPLY (PUSH TO DEV)
+  # ==============================================================
+  terraform-apply:
+    name: Terraform Apply (dev)
+    needs: security-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init -no-color
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+
+      - name: Terraform Apply
         run: terraform apply -auto-approve -input=false

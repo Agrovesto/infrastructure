@@ -18,13 +18,13 @@ variable "timezone" {
 variable "start_cron" {
   description = "EventBridge Scheduler cron (6 fields) to start the instance"
   type        = string
-  default     = "cron(0 8 ? * MON-FRI *)"
+  default     = "cron(0 7 ? * MON-FRI *)"
 }
 
 variable "stop_cron" {
   description = "EventBridge Scheduler cron (6 fields) to stop the instance"
   type        = string
-  default     = "cron(0 20 ? * MON-FRI *)"
+  default     = "cron(0 20 ? * MON-SUN *)"
 }
 
 variable "enabled" {

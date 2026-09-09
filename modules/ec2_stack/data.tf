@@ -22,32 +22,32 @@ locals {
       {
         name      = onboarding
         subdomain = onboarding-subdomain
-        port      = onboarding.host_port
+        port      = var.onboarding.host_port
       }
     ],
         [
       {
         name      = wallet
         subdomain = wallet-subdomain
-        port      = wallet.host_port
+        port      = var.wallet.host_port
       }
     ],    [
       {
         name      = input
         subdomain = input-subdomain
-        port      = input.host_port
+        port      = var.input.host_port
       }
     ],    [
       {
         name      = moneval
         subdomain = moneval-subdomain
-        port      = moneval.host_port
+        port      = var.moneval.host_port
       }
     ],    [
       {
         name      = serviceprovider
         subdomain = serviceprovider-subdomain
-        port      = serviceprovider.host_port
+        port      = var.serviceprovider.host_port
       }
     ],
     [

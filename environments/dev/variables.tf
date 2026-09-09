@@ -55,7 +55,7 @@ variable "root_volume_size_gb" {
 
 variable "mssql_volume_size_gb" {
   type    = number
-  default = 100
+  default = 50
 }
 
 variable "github_access_token" {
@@ -75,7 +75,7 @@ variable "amplify_apps" {
   }))
 }
 
-variable "apis" {
+variable "nomaos-dev" {
   description = "Backend APIs on the EC2 docker host. Add a key to launch another API."
   type = map(object({
     image     = string
