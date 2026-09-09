@@ -7,7 +7,7 @@ resource "aws_amplify_app" "this" {
 
   access_token = var.github_access_token != "" ? var.github_access_token : null
 
-  enable_branch_auto_build    = each.value.enable_auto_build
+  enable_branch_auto_build    = each.value.enable_branch_auto_build
   enable_branch_auto_deletion = true
 
   environment_variables = each.value.environment_variables

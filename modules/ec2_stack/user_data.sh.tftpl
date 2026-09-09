@@ -85,7 +85,9 @@ aws s3 sync /data/mssql/backup "s3://$BACKUP_BUCKET/mssql/$STAMP/" --region "$AW
 find /data/mssql/backup -type f -mtime +3 -delete || true
 BKP
 chmod +x /opt/agrovesto/scripts/backup-mssql.sh
-echo "0 2 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" > /etc/cron.d/mssql-backup
+# 19:00: the EventBridge scheduler stops the instance 20:00-08:00, so a
+# 02:00 backup would never run. Keep a 1h buffer before the stop.
+echo "0 19 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" > /etc/cron.d/mssql-backup
 
 cd /opt/agrovesto/compose
 docker compose up -d
