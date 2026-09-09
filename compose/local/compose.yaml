@@ -1,0 +1,148 @@
+# Laptop development stack: SQL on localhost:1433, five APIs, two frontends.
+# Do not use this file on the AWS EC2 host (SQL must stay private there).
+
+name: agrovesto-local
+
+x-api: &api
+  build:
+    context: ../..
+    dockerfile: apps/api/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    mssql:
+      condition: service_healthy
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+  mem_limit: 512m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  healthcheck:
+    test:
+      [
+        "CMD-SHELL",
+        "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')\" || exit 1",
+      ]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 15s
+
+x-web: &web
+  build:
+    context: ../..
+    dockerfile: apps/web/Dockerfile
+  restart: unless-stopped
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m,mode=1777
+  mem_limit: 256m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  healthcheck:
+    test:
+      [
+        "CMD-SHELL",
+        "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/')\" || exit 1",
+      ]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU20-ubuntu-22.04
+    container_name: agrovesto-local-mssql
+    restart: unless-stopped
+    user: "10001:0"
+    mem_limit: 4g
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_MEMORY_LIMIT_MB: "3072"
+    env_file:
+      - path: ./env/sql.env
+        required: true
+    volumes:
+      - mssql-data:/var/opt/mssql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 90s
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -N -C -b -Q 'SELECT 1' >/dev/null 2>&1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  core:
+    <<: *api
+    image: ${CORE_IMAGE:-agrovesto/core:local}
+    ports: ["8080:8080"]
+    env_file:
+      - path: ./env/core.env
+        required: true
+
+  auth:
+    <<: *api
+    image: ${AUTH_IMAGE:-agrovesto/auth:local}
+    ports: ["8081:8080"]
+    env_file:
+      - path: ./env/auth.env
+        required: true
+
+  trading:
+    <<: *api
+    image: ${TRADING_IMAGE:-agrovesto/trading:local}
+    ports: ["8082:8080"]
+    env_file:
+      - path: ./env/trading.env
+        required: true
+
+  catalog:
+    <<: *api
+    image: ${CATALOG_IMAGE:-agrovesto/catalog:local}
+    ports: ["8083:8080"]
+    env_file:
+      - path: ./env/catalog.env
+        required: true
+
+  notifications:
+    <<: *api
+    image: ${NOTIFICATIONS_IMAGE:-agrovesto/notifications:local}
+    ports: ["8084:8080"]
+    env_file:
+      - path: ./env/notifications.env
+        required: true
+
+  portal:
+    <<: *web
+    image: ${PORTAL_IMAGE:-agrovesto/portal:local}
+    ports: ["3000:8080"]
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+
+  admin:
+    <<: *web
+    image: ${ADMIN_IMAGE:-agrovesto/admin:local}
+    ports: ["3001:8080"]
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+
+volumes:
+  mssql-data:

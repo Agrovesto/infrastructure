@@ -1,0 +1,5 @@
+# Copy to bootstrap/dev/backend.tf or bootstrap/prod/backend.tf ONLY AFTER the
+# first local apply creates that account's state bucket. Then migrate local state.
+terraform {
+  backend "s3" {}
+}

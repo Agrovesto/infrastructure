@@ -1,0 +1,12 @@
+[Unit]
+Description=Verified native SQL Server backup to encrypted S3
+After=agrovesto.service
+Requires=docker.service
+RequiresMountsFor=/srv/mssql
+
+[Service]
+Type=oneshot
+UMask=0077
+WorkingDirectory=/opt/agrovesto
+ExecStart=/usr/bin/flock -w 1200 /run/agrovesto-runtime.lock /opt/agrovesto/venv/bin/python database.py backup --config runtime.json
+TimeoutStartSec=8h

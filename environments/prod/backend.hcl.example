@@ -1,0 +1,8 @@
+# Prefer the exact output of bootstrap/prod; this is illustrative only.
+bucket              = "agrovesto-tfstate-222222222222-eu-west-1"
+key                 = "prod/terraform.tfstate"
+region              = "eu-west-1"
+encrypt             = true
+kms_key_id          = "arn:aws:kms:eu-west-1:222222222222:alias/agrovesto-bootstrap-prod"
+use_lockfile        = true
+allowed_account_ids = ["222222222222"]

@@ -1,0 +1,17 @@
+exit-code: 1
+ignore-unfixed: false
+severity:
+  - HIGH
+  - CRITICAL
+ignorefile: .trivyignore.yaml
+timeout: 15m
+scan:
+  skip-dirs:
+    - .git
+    - .terraform
+    - '**/.terraform'
+    - .venv
+    - .tools
+    - node_modules
+    - reports
+    - .scannerwork
