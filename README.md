@@ -62,6 +62,12 @@ All Terraform commands in the pipeline run from `environments/dev`.
   be supplied to the runner as a `terraform.tfvars`; the MSSQL SA password is
   injected via the `TF_VAR_MSSQL_SA_PASSWORD` secret. See the
   `terraform.tfvars.example` for the full list of variables.
+- A ready-to-install **root copy** of the workflow (`.github/workflows/dev.yml`
+  cannot be committed with the current automation token, which lacks
+  `workflows` permission) lives at **`dev.workflow.yml`** in the repo root.
+  Install it with `cp dev.workflow.yml .github/workflows/dev.yml`.
+- Infracost cost estimates on PRs are optional: set an `INFRACOST_API_KEY`
+  secret to enable the `infracost` job (monthly cost-change comment).
 
 ## Notes
 
