@@ -1,5 +1,9 @@
+# =============================================================================
+# AWS Amplify — frontends (landing, onboarding, ...)
+# =============================================================================
+
 resource "aws_amplify_app" "this" {
-  for_each = var.apps
+  for_each = var.amplify_apps
 
   name       = each.key
   repository = each.value.repository
@@ -31,11 +35,11 @@ resource "aws_amplify_app" "this" {
           - node_modules/**/*
   EOT
 
-  tags = merge(var.tags, { App = each.key })
+  tags = merge(local.tags, { App = each.key })
 }
 
 resource "aws_amplify_branch" "this" {
-  for_each = var.apps
+  for_each = var.amplify_apps
 
   app_id            = aws_amplify_app.this[each.key].id
   branch_name       = each.value.branch
@@ -43,11 +47,13 @@ resource "aws_amplify_branch" "this" {
   framework         = each.value.framework
   enable_auto_build = each.value.enable_auto_build
 
-  tags = var.tags
+  tags = local.tags
 }
 
+# Off by default: Route53 CNAMEs are used instead of Amplify domain association
+# so multiple apps can share one parent domain without colliding.
 resource "aws_amplify_domain_association" "this" {
-  for_each = var.enable_custom_domain ? var.apps : {}
+  for_each = var.amplify_enable_custom_domain ? var.amplify_apps : {}
 
   app_id      = aws_amplify_app.this[each.key].id
   domain_name = var.domain_name

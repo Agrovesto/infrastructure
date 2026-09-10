@@ -1,7 +1,11 @@
+# =============================================================================
+# Security groups
+# =============================================================================
+
 resource "aws_security_group" "ec2" {
-  name        = "${var.name}-ec2-sg"
+  name        = "${local.name}-ec2-sg"
   description = "Nginx + SSH for public EC2 (APIs, Vault, MSSQL via nginx)"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "HTTP"
@@ -34,5 +38,5 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-ec2-sg" })
+  tags = merge(local.tags, { Name = "${local.name}-ec2-sg" })
 }

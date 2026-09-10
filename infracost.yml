@@ -1,9 +1,9 @@
 version: 2.1
 
 projects:
-  - path: environments/dev
+  - path: .
     name: agrovesto-dev
     terraform_var_files:
-      - terraform.tfvars
+      - terraform.auto.tfvars
     terraform:
-      usage_file: infracos.yml
+      usage_file: infracost-usage.yml

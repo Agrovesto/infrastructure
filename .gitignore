@@ -7,4 +7,6 @@ override.tf
 override.tf.json
 terraform.tfvars
 .terraform.lock.hcl
-environments/dev/tfplan*
+tfplan
+tfplan.txt
+tfplan*

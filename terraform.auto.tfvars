@@ -1,8 +1,10 @@
 # -----------------------------------------------------------------------------
 # Auto-loaded values for CI (GitHub Actions) AND local runs.
 #
-# terraform loads this file automatically (no -var-file flag needed) because
-# of the .auto.tfvars suffix. It must stay SECRET-FREE: it is committed.
+# This is the root module now (formerly environments/dev/dev.auto.tfvars), so
+# terraform picks it up automatically whenever you run terraform from this
+# directory — no -var-file flag needed, because of the .auto.tfvars suffix.
+# It must stay SECRET-FREE: it is committed.
 #
 #   * The MSSQL SA password is NOT here — it is injected via the
 #     TF_VAR_mssql_sa_password environment variable (the GitHub secret

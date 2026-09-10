@@ -1,35 +1,40 @@
-resource "aws_route53_zone" "this" {
-  count = var.create_zone ? 1 : 0
-  name  = var.domain_name
-  tags  = merge(var.tags, { Name = var.domain_name })
-}
+# =============================================================================
+# Route 53 — hosted zone + records
+#
+# A records  : every backend / vault / mssql hostname -> EC2 Elastic IP (nginx)
+# CNAMEs     : every Amplify frontend subdomain -> Amplify default domain
+# =============================================================================
 
-locals {
-  zone_id = var.create_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
+resource "aws_route53_zone" "this" {
+  count = var.create_hosted_zone ? 1 : 0
+
+  name = var.domain_name
+
+  tags = merge(local.tags, { Name = var.domain_name })
 }
 
 resource "aws_route53_record" "a" {
-  for_each = var.a_records
+  for_each = local.a_records
 
   zone_id = local.zone_id
   name    = each.key == "@" ? var.domain_name : "${each.key}.${var.domain_name}"
   type    = "A"
-  ttl     = 300
+  ttl     = var.dns_ttl
   records = [each.value]
 }
 
 resource "aws_route53_record" "cname" {
-  for_each = var.cname_records
+  for_each = local.cname_records
 
   zone_id = local.zone_id
   name    = "${each.key}.${var.domain_name}"
   type    = "CNAME"
-  ttl     = 300
+  ttl     = var.dns_ttl
   records = [each.value]
 }
 
 resource "aws_route53_record" "alias" {
-  for_each = var.alias_records
+  for_each = var.extra_alias_records
 
   zone_id = local.zone_id
   name    = each.key == "@" ? var.domain_name : "${each.key}.${var.domain_name}"

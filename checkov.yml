@@ -1,4 +1,5 @@
-# Used by .github/workflows/dev.yml via `config_file: checkov.yml`.
+# Used by the pipeline (root copy: dev.workflow.yml, installed as
+# .github/workflows/dev.yml) via `config_file: checkov.yml`.
 # NOTE: checkov only auto-discovers a file named `.checkov.yaml` — the
 # workflow must pass this file explicitly.
 framework:

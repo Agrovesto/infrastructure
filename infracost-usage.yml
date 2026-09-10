@@ -1,14 +1,17 @@
-# Infracost usage file for the `dev` environment.
+# Infracost usage file for the `dev` stack (flat root module).
 #
-# Use with:  infracost breakdown --path=environments/dev --usage-file=environments/dev/infracost-usage.yml
+# Use with:  infracost breakdown --path=. --usage-file=infracost-usage.yml
 #
 # Usage values *supplement* the static Terraform config (instance type, EBS
 # sizes, etc. come from code). Only consumption-based figures that Infracost
 # cannot infer belong here. Key names below follow the upstream schema:
 # https://github.com/infracost/infracost/blob/master/infracost-usage-example.yml
 #
-# The resource addresses must match what Terraform will use once the module
-# tree is instantiated, e.g. module.ec2.aws_instance.this
+# The resource addresses must match the Terraform config in this directory.
+# The stack used to live under `environments/dev` + `modules/*`, so the keys
+# were `module.ec2.aws_instance.this` / `module.backup.aws_s3_bucket.this`;
+# with everything flattened into the root module they are now simply
+# `aws_instance.app` / `aws_s3_bucket.backup`.
 version: 0.3
 resource_usage:
   # ---- EC2 app host -----------------------------------------------------
@@ -17,19 +20,19 @@ resource_usage:
   # (Africa/Lagos), so it does NOT run the full 730h month.
   # Working days/month ~21, 12 running hours/day => ~260 hours.
   # Infracost multiplies the on-demand hourly rate by `monthly_hrs`.
-  module.ec2.aws_instance.this:
+  aws_instance.app:
     operating_system: linux          # linux | windows | suse | rhel
     monthly_hrs: 260                 # ~21 working days x 12h (scheduler ON)
     # Burstable CPU (t3) only applies when credit_specification=unlimited:
     # monthly_cpu_credit_hrs: 260
     # vcpu_count: 4                  # t3.xlarge has 4 vCPU
 
-  # ---- Dedicated MSSQL data volume (gp3, 100 GB) -------------------------
+  # ---- Dedicated MSSQL data volume (gp3, 50 GB) --------------------------
   # gp3 storage cost comes from the Terraform config (size/type); gp3 also
   # bills provisioned IOPS/throughput which are attribute-driven. Only
   # magnetic (`standard`) EBS uses monthly_standard_io_requests, so there is
   # nothing extra to model here. Kept as a placeholder for reference.
-  # module.ec2.aws_ebs_volume.mssql:
+  # aws_ebs_volume.mssql:
   #   monthly_standard_io_requests: 0   # only for type=standard (magnetic)
 
   # ---- Elastic IP --------------------------------------------------------
@@ -41,7 +44,7 @@ resource_usage:
   # cron backs up every DB nightly to s3://<bucket>/mssql/<STAMP>/, retained
   # 14 days (bucket lifecycle). Rough dev volume estimate follows; tune to
   # real backups. Infracost uses the nested `standard:` block below.
-  module.backup.aws_s3_bucket.this:
+  aws_s3_bucket.backup:
     standard:
       storage_gb: 20                 # approx. 14 days of nightly DB backups
       monthly_tier_1_requests: 1000  # PUT/COPY/LIST (the nightly aws s3 sync)
