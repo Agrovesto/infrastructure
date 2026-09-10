@@ -34,9 +34,7 @@ concurrency:
 permissions:
   id-token: write            # AWS OIDC authentication
   contents: read
-  actions: read              # codeql-action upload-sarif reads the workflow run
   pull-requests: write       # Post Terraform plan + Infracost on PRs
-  security-events: write     # Upload SARIF scan results
 
 env:
   # The dev account's resources are created in eu-west-1 (see dev.auto.tfvars).
@@ -81,6 +79,15 @@ jobs:
           output_file_path: console,results.sarif
           soft_fail: true
 
+      - name: Store Checkov report (artifact)
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-sarif
+          path: results.sarif
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Upload Checkov SARIF
         # Non-blocking: a code-scanning permission hiccup must never skip the
         # terraform-plan job (needs: security-scan) — scan output stays in the logs.
@@ -97,8 +104,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (pinned SHA)
         with:
           scan-type: config
-          format: sarif
-          output: trivy-results.sarif
+          format: table
           severity: CRITICAL,HIGH
           exit-code: "1"
         continue-on-error: true

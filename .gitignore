@@ -2,9 +2,9 @@
 *.tfstate
 *.tfstate.*
 crash.log
+crash.*.log
 override.tf
+override.tf.json
 terraform.tfvars
 .terraform.lock.hcl
-**/.terraform/
-environments/dev/terraform.tfvars
-environments/dev/tfplan
+environments/dev/tfplan*
