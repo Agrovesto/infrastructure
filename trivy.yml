@@ -1,0 +1,13 @@
+# trivy.yaml
+scan:
+  security-checks:
+    - config
+    - secret
+
+severity:
+  - HIGH
+  - CRITICAL
+
+misconfiguration:
+  scanners:
+    - terraform
