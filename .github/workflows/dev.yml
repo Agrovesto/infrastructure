@@ -32,8 +32,8 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
-  pull-requests: write     
+  id-token: write            
+  pull-requests: write       
 
 env:
   AWS_REGION: "eu-west-1"
@@ -204,15 +204,25 @@ jobs:
     needs: terraform-plan
     if: github.event_name == 'pull_request' && needs.terraform-plan.outputs.infracost_enabled == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
 
       - name: Checkout base branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Verify Terraform directory
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          echo "Terraform directory: ${{ env.TF_WORKING_DIR }}"
+          echo "Contents:"
+          ls -la
+          echo
+          echo "environments:"
+          ls -la environments || true
+          echo
+          echo "Target:"
+          ls -la "${{ env.TF_WORKING_DIR }}"
 
       # THEN: Setup infrastructure
       - name: Setup Infracost CLI
@@ -234,38 +244,66 @@ jobs:
           audience: sts.amazonaws.com
 
       - name: Terraform Init (base branch)
+        working-directory: ${{env.TF_WORKING_DIR}}
         run: terraform init -no-color
 
       - name: Generate Infracost cost-estimate baseline
+        env:
+          TF_WORKING_DIR: ${{ env.TF_WORKING_DIR }}
         run: |
-          USAGE_FILE="${{ env.TF_WORKING_DIR }}/infracost-usage.yml"
+          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
           USAGE_ARGS=()
-          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
-          infracost breakdown --path="${{ env.TF_WORKING_DIR }}" \
-                              --project-name=agrovesto-dev \
-                              "${USAGE_ARGS[@]}" \
-                              --format=json \
-                              --out-file=/tmp/infracost-base.json
+
+          if [ -f "$USAGE_FILE" ]; then
+            USAGE_ARGS+=(--usage-file="$USAGE_FILE")
+          fi
+
+          infracost breakdown \
+            --path="${TF_WORKING_DIR}" \
+            --project-name=agrovesto-dev \
+            "${USAGE_ARGS[@]}" \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
         continue-on-error: true
 
       - name: Checkout PR branch
         uses: actions/checkout@v4
 
-      - name: Terraform Init (PR branch)
-        run: terraform init -no-color
+      - name: Verify Terraform directory
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          echo "Terraform directory: ${{ env.TF_WORKING_DIR }}"
+          echo "Contents:"
+          ls -la
+          echo
+          echo "environments:"
+          ls -la environments || true
+          echo
+          echo "Target:"
+          ls -la "${{ env.TF_WORKING_DIR }}"
+            - name: Terraform Init (PR branch)
+              working-directory: ${{env.TF_WORKING_DIR}}
+              run: terraform init -no-color
 
       - name: Generate Infracost diff
         id: infracost
+        env:
+          TF_WORKING_DIR: ${{ env.TF_WORKING_DIR }}
         run: |
-          USAGE_FILE="${{ env.TF_WORKING_DIR }}/infracost-usage.yml"
+          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
           USAGE_ARGS=()
-          [ -f "$USAGE_FILE" ] && USAGE_ARGS+=(--usage-file="$USAGE_FILE")
-          infracost diff --path="${{ env.TF_WORKING_DIR }}" \
-                         --project-name=agrovesto-dev \
-                         "${USAGE_ARGS[@]}" \
-                         --format=json \
-                         --compare-to=/tmp/infracost-base.json \
-                         --out-file=/tmp/infracost.json
+
+          if [ -f "$USAGE_FILE" ]; then
+            USAGE_ARGS+=(--usage-file="$USAGE_FILE")
+          fi
+
+          infracost diff \
+            --path="${TF_WORKING_DIR}" \
+            --project-name=agrovesto-dev \
+            "${USAGE_ARGS[@]}" \
+            --format=json \
+            --compare-to=/tmp/infracost-base.json \
+            --out-file=/tmp/infracost.json
         continue-on-error: true
 
       - name: Post Infracost PR comment
