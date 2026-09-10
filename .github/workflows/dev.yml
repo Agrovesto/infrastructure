@@ -1,6 +1,19 @@
 # =============================================================================
 # Terraform CI/CD Pipeline
 # Agrovesto / Dev Account.
+#
+# FLAT LAYOUT: the whole stack (Terraform code, .tftpl templates, scan configs
+# and this workflow) lives in the repository ROOT — there is no
+# `environments/dev` or `modules/` tree any more. Every terraform/infracost
+# command below therefore runs from the repo root (TF_WORKING_DIR = ".").
+#
+# INSTALL: this file is the canonical copy of the pipeline. Copy it into place
+# with:
+#
+#     cp dev.workflow.yml .github/workflows/dev.yml
+#
+# (the automation token that manages this repo has no `workflows` permission,
+# so it cannot commit into .github/workflows directly).
 # =============================================================================
 
 name: "Terraform CI/CD Pipeline"
@@ -22,8 +35,9 @@ on:
       - "**.tf"
       - "**.tfvars"
       - "**.tftpl"
-      - "**/infracost-usage.yml"
-      - ".github/workflows/dev.yml"
+      - "infracost-usage.yml"
+      - "infracost.yml"
+      - "dev.workflow.yml"
       - "checkov.yml"
       - "trivy.yml"
 
@@ -38,8 +52,9 @@ on:
       - "**.tf"
       - "**.tfvars"
       - "**.tftpl"
-      - "**/infracost-usage.yml"
-      - ".github/workflows/dev.yml"
+      - "infracost-usage.yml"
+      - "infracost.yml"
+      - "dev.workflow.yml"
       - "checkov.yml"
       - "trivy.yml"
 
@@ -76,7 +91,13 @@ env:
   # Terraform
   TF_VERSION: "1.6.6"
   TF_IN_AUTOMATION: "true"
-  TF_WORKING_DIR: "environments/dev"
+
+  # The stack is the repository root now (was: environments/dev).
+  TF_WORKING_DIR: "."
+
+  # Files that must exist for this to be a valid Terraform root module.
+  TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
+  TF_TEMPLATES: "user_data.sh.tftpl docker-compose.yml.tftpl nginx.conf.tftpl"
 
   # MSSQL
   TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD }}
@@ -139,6 +160,7 @@ jobs:
         uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12.3122.0
 
         with:
+          directory: ${{ env.TF_WORKING_DIR }}
           config_file: checkov.yml
           output_format: cli,sarif
           output_file_path: console,results.sarif
@@ -157,7 +179,7 @@ jobs:
         with:
           name: checkov-sarif
           path: results.sarif
-          retention-days: 14
+          retention-days: 1
           if-no-files-found: ignore
 
 
@@ -214,30 +236,40 @@ jobs:
 
 
       # -----------------------------------------------------------------------
-      # Verify Terraform directory
+      # Verify Terraform root module
       # -----------------------------------------------------------------------
 
-      - name: Verify Terraform Directory
+      - name: Verify Terraform Root Module
         run: |
+
           echo "Workspace:"
           pwd
 
           echo
-          echo "Terraform directory:"
+          echo "Terraform working directory:"
           echo "${{ env.TF_WORKING_DIR }}"
 
           echo
           echo "Repository contents:"
           ls -la
 
-          if [ ! -d "${{ env.TF_WORKING_DIR }}" ]; then
-            echo "::error::${{ env.TF_WORKING_DIR }} does not exist."
-            exit 1
-          fi
+          for file in ${{ env.TF_ROOT_FILES }} ${{ env.TF_TEMPLATES }}; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing '$file' in the Terraform root module."
+              exit 1
+            fi
+          done
 
           echo
-          echo "Terraform directory contents:"
-          ls -la "${{ env.TF_WORKING_DIR }}"
+          echo "Terraform root module verified."
+
+          if [ -f terraform.auto.tfvars ]; then
+            echo
+            echo "terraform.auto.tfvars is present (auto-loaded by terraform)."
+          else
+            echo
+            echo "::warning::No terraform.auto.tfvars found; required variables must come from TF_VAR_* env vars."
+          fi
 
 
       # -----------------------------------------------------------------------
@@ -348,7 +380,7 @@ jobs:
         uses: actions/github-script@v7
 
         env:
-          PLAN_FILE: ${{ github.workspace }}/${{ env.TF_WORKING_DIR }}/tfplan.txt
+          PLAN_FILE: ${{ github.workspace }}/tfplan.txt
 
         with:
 
@@ -368,6 +400,7 @@ jobs:
               );
 
               if (planOutput.length > 60000) {
+
 
                 planOutput =
                   planOutput.substring(0, 60000) +
@@ -480,20 +513,20 @@ jobs:
           echo "${{ github.event.pull_request.base.ref }}"
 
           echo
-          echo "Terraform directory:"
+          echo "Terraform working directory:"
           echo "${{ env.TF_WORKING_DIR }}"
 
-          if [ -d "${{ env.TF_WORKING_DIR }}" ]; then
+          if [ -f versions.tf ] && [ -f variables.tf ]; then
 
             echo "exists=true" >> "$GITHUB_OUTPUT"
 
-            echo "Terraform configuration exists on base branch."
+            echo "Terraform root module exists on base branch."
 
           else
 
             echo "exists=false" >> "$GITHUB_OUTPUT"
 
-            echo "::notice::${{ env.TF_WORKING_DIR }} does not exist on base branch."
+            echo "::notice::No Terraform root module (versions.tf / variables.tf) on base branch."
 
           fi
 
@@ -572,7 +605,7 @@ jobs:
 
         run: |
 
-          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
+          USAGE_FILE="infracost-usage.yml"
 
           USAGE_ARGS=()
 
@@ -605,9 +638,9 @@ jobs:
 
         run: |
 
-          if [ ! -d "${{ env.TF_WORKING_DIR }}" ]; then
+          if [ ! -f versions.tf ] || [ ! -f variables.tf ]; then
 
-            echo "::error::${{ env.TF_WORKING_DIR }} does not exist on the PR branch."
+            echo "::error::No Terraform root module (versions.tf / variables.tf) on the PR branch."
 
             exit 1
 
@@ -640,7 +673,7 @@ jobs:
 
         run: |
 
-          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
+          USAGE_FILE="infracost-usage.yml"
 
           USAGE_ARGS=()
 
@@ -688,8 +721,8 @@ jobs:
         run: |
 
           echo "::notice::Infracost baseline was skipped."
-          echo "::notice::Branch '${{ github.event.pull_request.base.ref }}' does not contain ${{ env.TF_WORKING_DIR }}."
-          echo "::notice::Once the Terraform environment exists on dev, future PRs will produce a cost diff."
+          echo "::notice::Branch '${{ github.event.pull_request.base.ref }}' has no Terraform root module (versions.tf / variables.tf)."
+          echo "::notice::Once the Terraform stack exists on dev, future PRs will produce a cost diff."
 
 
 
@@ -727,23 +760,28 @@ jobs:
 
 
       # -----------------------------------------------------------------------
-      # Verify Terraform directory
+      # Verify Terraform root module
       # -----------------------------------------------------------------------
 
-      - name: Verify Terraform Directory
+      - name: Verify Terraform Root Module
 
         run: |
 
-          if [ ! -d "." ]; then
-            echo "::error::Terraform working directory does not exist."
-            exit 1
-          fi
-
-          echo "Terraform working directory:"
+          echo "Terraform working directory (repo root):"
           pwd
 
           echo
           ls -la
+
+          for file in ${{ env.TF_ROOT_FILES }} ${{ env.TF_TEMPLATES }}; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing '$file' in the Terraform root module."
+              exit 1
+            fi
+          done
+
+          echo
+          echo "Terraform root module verified."
 
 
       # -----------------------------------------------------------------------

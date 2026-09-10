@@ -17,22 +17,22 @@ resource "aws_amplify_app" "this" {
   environment_variables = each.value.environment_variables
 
   build_spec = each.value.build_spec != null ? each.value.build_spec : <<-EOT
-    version: 1
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - npm ci
-        build:
-          commands:
-            - npm run build
-      artifacts:
-        baseDirectory: build
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
+      version: 1
+      frontend:
+        phases:
+          preBuild:
+            commands:
+              - npm ci --cache .npm --prefer-offline --legacy-peer-deps
+          build:
+            commands:
+              - npm run build
+        artifacts:
+          baseDirectory: dist
+          files:
+            - "**/*"
+        cache:
+          paths:
+            - .npm/**/*
   EOT
 
   tags = merge(local.tags, { App = each.key })
