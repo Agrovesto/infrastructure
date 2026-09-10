@@ -12,18 +12,18 @@
 #     so you can override anything here without touching git.
 # -----------------------------------------------------------------------------
 # TODO: set the real root domain (must match the Route53 hosted zone / registrar)
-domain_name = "agrovesto.dev"
+domain_name = "nomaos.com"
 # --- Frontends (Amplify) ---
 amplify_apps = {
   landing = {
     repository = "https://github.com/Agrovesto/landing"
-    branch     = "main"
+    branch     = "dev"
     subdomain  = "www"
     framework  = "React"
   }
   onboarding = {
     repository = "https://github.com/Agrovesto/onboarding"
-    branch     = "main"
+    branch     = "dev"
     subdomain  = "onboarding"
     framework  = "React"
   }
@@ -33,29 +33,29 @@ amplify_apps = {
 apis = {
   wallet = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 3001
+    host_port = 5001
     subdomain = "wallet"
     env       = { NODE_ENV = "development" }
   }
   onboarding = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 3002
+    host_port = 5002
     subdomain = "onboarding-api"
     env       = { NODE_ENV = "development" }
   }
   input = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 3003
+    host_port = 5003
     subdomain = "input"
   }
   moneval = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 3004
+    host_port = 5004
     subdomain = "moneval"
   }
   serviceprovider = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 3005
+    host_port = 5005
     subdomain = "serviceprovider"
   }
 }
