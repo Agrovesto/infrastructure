@@ -60,10 +60,10 @@ variable "domain_name" {
 variable "apis" {
   description = "Map of API containers. Add more keys to run additional APIs."
   type = map(object({
-    image      = string
-    host_port  = number
-    subdomain  = string
-    env        = optional(map(string), {})
+    image     = string
+    host_port = number
+    subdomain = string
+    env       = optional(map(string), {})
   }))
 }
 

@@ -35,14 +35,14 @@ resource "aws_instance" "this" {
   }
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    mssql_device    = var.mssql_volume_device
-    sa_password     = var.mssql.sa_password
-    backup_bucket   = var.backup_bucket
-    aws_region      = var.aws_region
-    docker_compose  = local.docker_compose
-    nginx_conf      = local.nginx_conf
-    init_sql        = local.init_sql
-    db_list         = join(" ", var.mssql.databases)
+    mssql_device   = var.mssql_volume_device
+    sa_password    = var.mssql.sa_password
+    backup_bucket  = var.backup_bucket
+    aws_region     = var.aws_region
+    docker_compose = local.docker_compose
+    nginx_conf     = local.nginx_conf
+    init_sql       = local.init_sql
+    db_list        = join(" ", var.mssql.databases)
   })
 
   metadata_options {

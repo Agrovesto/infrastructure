@@ -37,10 +37,10 @@ resource "aws_amplify_app" "this" {
 resource "aws_amplify_branch" "this" {
   for_each = var.apps
 
-  app_id      = aws_amplify_app.this[each.key].id
-  branch_name = each.value.branch
-  stage       = "DEVELOPMENT"
-  framework   = each.value.framework
+  app_id            = aws_amplify_app.this[each.key].id
+  branch_name       = each.value.branch
+  stage             = "DEVELOPMENT"
+  framework         = each.value.framework
   enable_auto_build = each.value.enable_auto_build
 
   tags = var.tags

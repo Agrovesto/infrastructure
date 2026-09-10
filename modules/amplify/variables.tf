@@ -1,13 +1,13 @@
 variable "apps" {
   description = "Map of Amplify applications to create. Add more keys to grow."
   type = map(object({
-    repository           = string
-    branch               = optional(string, "main")
-    subdomain            = string
-    framework            = optional(string, "React")
-    build_spec           = optional(string)
+    repository            = string
+    branch                = optional(string, "main")
+    subdomain             = string
+    framework             = optional(string, "React")
+    build_spec            = optional(string)
     environment_variables = optional(map(string), {})
-    enable_auto_build    = optional(bool, true)
+    enable_auto_build     = optional(bool, true)
   }))
 }
 
