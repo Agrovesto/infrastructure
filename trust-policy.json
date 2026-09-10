@@ -13,8 +13,9 @@
         },
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
-              "repo:Agrovesto/*",
-              "repo:agrovesto/*"
+            "repo:Agrovesto@101108012/*:ref:refs/heads/main",
+            "repo:Agrovesto@101108012/*:ref:refs/heads/dev",
+            "repo:Agrovesto@101108012/*:pull_request"
           ]
         }
       }

@@ -26,34 +26,26 @@ on:
       - "checkov.yml"
       - "trivy.yml"
 
-# Only one run per ref at a time; supersede older queued runs on the same PR.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  id-token: write            # AWS OIDC authentication
-  contents: read
-  pull-requests: write       # Post Terraform plan + Infracost on PRs
+  id-token: write            
+  pull-requests: write       
 
 env:
-  # The dev account's resources are created in eu-west-1 (see dev.auto.tfvars).
-  # Region is also used by configure-aws-credentials for the OIDC STS call.
+
   AWS_REGION: "eu-west-1"
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   TF_VERSION: "1.6.6"
   TF_IN_AUTOMATION: "true"
   TF_WORKING_DIR: "environments/dev"
   TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD }}
-  # Optional: set the INFRACOST_API_KEY secret to enable the Infracost job.
-  # The key is checked in the terraform-plan job (a job-level `if` cannot read
-  # the env context) and the result is passed on as a job output.
 
 jobs:
   # ==============================================================
-  # STAGE 1: LINT & SECURITY SCAN (CHECKOV + TRIVY)
-  # No AWS credentials needed. Scans run from the repo root so the
-  # committed checkov.yml / trivy.yml (with the dev skip-list) are used.
+  # STAGE 1: LINT & SECURITY SCAN (CHECKOV + TRIVY)  
   # ==============================================================
   security-scan:
     name: Lint & Security Scan
@@ -75,14 +67,12 @@ jobs:
         id: checkov
         uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12.3122.0 (pinned SHA)
         with:
-          config_file: checkov.yml # skip list is NOT auto-discovered (wrong filename for that)
+          config_file: checkov.yml 
           output_format: cli,sarif
           output_file_path: console,results.sarif
           soft_fail: true
 
       - name: Store Checkov report (artifact)
-        # Code scanning requires GitHub Advanced Security (paid on private
-        # repos), so scan results live in the job log + this artifact instead.
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
@@ -109,8 +99,6 @@ jobs:
     name: Terraform Plan & Diff
     needs: security-scan
     if: github.event_name == 'pull_request'
-    # Job-level `if` cannot read the env/secrets contexts, so the Infracost
-    # key check happens in a step below and is exported for the infracost job.
     outputs:
       infracost_enabled: ${{ steps.infracost_gate.outputs.enabled }}
     runs-on: ubuntu-latest
@@ -133,48 +121,10 @@ jobs:
             echo "INFRACOST_API_KEY secret not set — the cost-estimate job will be skipped."
           fi
 
-      - name: Inspect GitHub OIDC claims
-        shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-        run: |
-          set -euo pipefail
-
-          TOKEN_JSON="$(curl -sS \
-            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")"
-
-          TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$TOKEN_JSON")"
-
-          python3 - "$TOKEN" <<'PY'
-          import base64
-          import json
-          import sys
-
-          token = sys.argv[1]
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-
-          claims = json.loads(
-              base64.urlsafe_b64decode(payload).decode("utf-8")
-          )
-
-          for key in ("iss", "aud", "sub", "repository", "ref", "event_name"):
-              print(f"{key}: {claims.get(key)}")
-          PY
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -196,7 +146,6 @@ jobs:
         run: |
           terraform plan -no-color -input=false -out=tfplan \
             && terraform show -no-color tfplan > tfplan.txt
-        continue-on-error: true
 
       - name: Publish Plan to Pull Request
         uses: actions/github-script@v7
@@ -255,6 +204,9 @@ jobs:
     needs: terraform-plan
     if: github.event_name == 'pull_request' && needs.terraform-plan.outputs.infracost_enabled == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -267,6 +219,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false 
 
       - name: Checkout base branch
         uses: actions/checkout@v4
@@ -278,6 +231,9 @@ jobs:
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
+      - name: Terraform Init (base branch)
+        run: terraform init -no-color
+
       - name: Generate Infracost cost-estimate baseline
         run: |
           USAGE_FILE="${{ env.TF_WORKING_DIR }}/infracost-usage.yml"
@@ -288,12 +244,13 @@ jobs:
                               "${USAGE_ARGS[@]}" \
                               --format=json \
                               --out-file=/tmp/infracost-base.json
-        # The base branch may pre-date dev.auto.tfvars and fail on missing
-        # variables; don't fail the whole job for that.
         continue-on-error: true
 
       - name: Checkout PR branch
         uses: actions/checkout@v4
+
+      - name: Terraform Init (PR branch)
+        run: terraform init -no-color
 
       - name: Generate Infracost diff
         id: infracost
@@ -318,6 +275,7 @@ jobs:
                                    --pull-request="${{ github.event.pull_request.number }}" \
                                    --behavior=update
 
+                                   
   # ==============================================================
   # STAGE 4: TERRAFORM APPLY (PUSH TO DEV)
   # ==============================================================
