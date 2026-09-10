@@ -29,6 +29,8 @@ resource "aws_s3_bucket_versioning" "backup" {
   }
 }
 
+# SSE-S3 (AES256) is sufficient for dev backups; use a KMS CMK for prod - mirrors checkov CKV_AWS_145 skip.
+#trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup" {
   bucket = aws_s3_bucket.backup.id
 
@@ -47,6 +49,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
     status = "Enabled"
 
     filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
 
     expiration {
       days = var.backup_retention_days

@@ -35,6 +35,8 @@ data "aws_iam_policy_document" "ec2_assume" {
 }
 
 data "aws_iam_policy_document" "ec2" {
+  #checkov:skip=CKV_AWS_111: ssmmessages/ec2messages and logs:CreateLogGroup offer no resource-level permissions, so Resource "*" is required by AWS
+  #checkov:skip=CKV_AWS_356: ssmmessages/ec2messages and logs:CreateLogGroup offer no resource-level permissions, so Resource "*" is required by AWS
   statement {
     sid       = "MssqlBackupS3"
     actions   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket", "s3:DeleteObject"]
@@ -70,6 +72,6 @@ data "aws_iam_policy_document" "scheduler_assume" {
 data "aws_iam_policy_document" "scheduler" {
   statement {
     actions   = ["ec2:StartInstances", "ec2:StopInstances"]
-    resources = ["*"]
+    resources = [aws_instance.app.arn]
   }
 }

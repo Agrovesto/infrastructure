@@ -2,6 +2,10 @@
 # Security groups
 # =============================================================================
 
+# Dev EC2 needs outbound internet (docker pulls, S3 backups, GitHub) - mirrors checkov CKV_AWS_382 skip.
+# SSH source is var.allowed_ssh_cidrs (restrict in tfvars when ready) - mirrors checkov CKV_AWS_24 skip.
+#trivy:ignore:AVD-AWS-0104
+#trivy:ignore:AVD-AWS-0107
 resource "aws_security_group" "ec2" {
   name        = "${local.name}-ec2-sg"
   description = "Nginx + SSH for public EC2 (APIs, Vault, MSSQL via nginx)"
@@ -32,6 +36,7 @@ resource "aws_security_group" "ec2" {
   }
 
   egress {
+    description = "Unrestricted outbound (docker pulls, S3 backups, GitHub)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
