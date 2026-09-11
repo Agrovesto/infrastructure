@@ -244,6 +244,18 @@ variable "dns_ttl" {
   default = 300
 }
 
+variable "extra_a_records" {
+  description = "Plain A records managed from this zone, e.g. the dev hosts -> dev EC2 Elastic IP (name => ipv4)"
+  type        = map(string)
+  default     = {}
+}
+
+variable "extra_cname_records" {
+  description = "CNAME records managed from this zone, e.g. the dev Amplify frontends (name => target)"
+  type        = map(string)
+  default     = {}
+}
+
 variable "extra_alias_records" {
   description = "Additional alias A records (name => {name, zone_id, evaluate_target_health})"
   type = map(object({

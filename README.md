@@ -23,23 +23,29 @@ environment**; each folder is a self-contained, flat Terraform root module.
 
 | Folder | Account | What it creates | Workflow |
 | --- | --- | --- | --- |
-| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases), S3 backups, EventBridge start/stop scheduler, Route53 zone | `dev.workflow.yml` → applies on push to `dev` |
-| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services in private subnets, 5 ECR repos, RDS SQL Server (Multi-AZ) with the same 5 databases, Route53 aliases | `prod.workflow.yml` → applies on push to `main` |
+| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases), S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `dev.workflow.yml` → applies on push to `dev` |
+| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services in private subnets, 5 ECR repos, RDS SQL Server (Multi-AZ) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `prod.workflow.yml` → applies on push to `main` |
 
 Service names and database names are identical in both accounts (dev naming
 convention): `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`.
 
-| Service | Dev URL | Prod URL |
-| --- | --- | --- |
-| wallet | wallet.nomaos.com | wallet.nomaos.com |
-| onboarding | onboarding-api.nomaos.com | onboarding-api.nomaos.com |
-| input | input.nomaos.com | input.nomaos.com |
-| moneval | moneval.nomaos.com | moneval.nomaos.com |
-| serviceprovider | serviceprovider.nomaos.com | serviceprovider.nomaos.com |
+**DNS is owned by the prod account.** The prod stack creates the zone and all
+records; prod services serve the apex subdomains and dev is served under
+`dev.nomaos.com` (the dev stack creates no Route53 resources itself).
 
-> ⚠️ Both stacks currently manage a hosted zone for the same root domain. Only
-> one zone can be authoritative at the registrar — see `prod/README.md` and
-> the note in `prod/terraform.auto.tfvars` before delegating prod.
+| Service | Dev URL (plan) | Prod URL |
+| --- | --- | --- |
+| wallet | wallet.dev.nomaos.com | wallet.nomaos.com |
+| onboarding | onboarding-api.dev.nomaos.com | onboarding-api.nomaos.com |
+| input | input.dev.nomaos.com | input.nomaos.com |
+| moneval | moneval.dev.nomaos.com | moneval.nomaos.com |
+| serviceprovider | serviceprovider.dev.nomaos.com | serviceprovider.nomaos.com |
+
+Dev's DNS records (dev EC2 Elastic IP, Amplify domains) are variables of the
+prod stack — see the `extra_a_records` / `extra_cname_records` blocks in
+`prod/terraform.auto.tfvars` — so flipping dev infrastructure only ever
+requires a prod apply, from the prod account. Cutover order: apply prod →
+delegate NS at the registrar → apply dev (see `prod/README.md`).
 
 ## Installing the GitHub Actions workflows
 

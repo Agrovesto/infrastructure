@@ -241,6 +241,12 @@ variable "amplify_enable_custom_domain" {
 # Route 53
 # -----------------------------------------------------------------------------
 
+variable "manage_dns" {
+  description = "false = create no Route53 zone/records at all (DNS is managed from the prod account's zone; see prod/terraform.auto.tfvars)"
+  type        = bool
+  default     = true
+}
+
 variable "create_hosted_zone" {
   type    = bool
   default = true

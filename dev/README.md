@@ -18,7 +18,7 @@ dev/
 ├── ec2.tf                   # app host, MSSQL data volume, Elastic IP
 ├── scheduler.tf             # start 08:00 / stop 20:00 (Africa/Lagos)
 ├── amplify.tf               # frontends
-├── route53.tf               # hosted zone + A/CNAME records
+├── route53.tf               # DNS (disabled: manage_dns=false — prod account owns the zone)
 ├── outputs.tf
 ├── terraform.auto.tfvars    # committed, secret-free values (auto-loaded)
 ├── user_data.sh.tftpl       # cloud-init for the EC2 host
@@ -38,16 +38,16 @@ dev/
 | VPC | Single public subnet + IGW (dev). |
 | EC2 | Public subnet, Elastic IP, **nginx** reverse proxy. Root disk (OS + apps) + extra EBS (MSSQL data). |
 | Docker on EC2 | 5 APIs, HashiCorp Vault (dev mode), SQL Server 2022 with 5 databases. Bind-mounted to the MSSQL disk. |
-| Route 53 | Hosted zone + A records for every backend/vault hostname → EC2 EIP. Amplify manages frontend CNAMEs via domain association. |
+| Route 53 | **Managed from the prod account** (`manage_dns = false` here): dev hosts live under `dev.nomaos.com` (e.g. `wallet.dev.nomaos.com` → this host's EIP), created by the prod stack's `extra_a_records` / `extra_cname_records`. |
 | S3 | Versioned, encrypted bucket for nightly MSSQL backups (cron on the instance). |
 | EventBridge Scheduler | Start EC2 07:00, stop 20:00 every day (`Africa/Lagos`). |
 
 Traffic path:
 
 ```
-Internet → Route53
-            ├─ www / onboarding  → Amplify
-            └─ wallet / onboarding-api / input / moneval / serviceprovider / vault / mssql
+Internet → Route53 (zone owned by the PROD account)
+            ├─ landing.dev / onboarding.dev  → Amplify
+            └─ wallet.dev / onboarding-api.dev / input.dev / moneval.dev / serviceprovider.dev / vault.dev / mssql.dev
                                  → EIP → nginx (EC2) → docker containers
 ```
 
@@ -74,7 +74,11 @@ terraform plan
 terraform apply
 ```
 
-Delegate `domain_name` to the `route53_name_servers` output at your registrar.
+DNS does not come from this stack: the prod account owns the zone. After a dev
+apply, hand the `ec2_public_ip` and `frontend_default_domains` outputs to the
+prod stack's `extra_a_records` / `extra_cname_records` (see
+`prod/terraform.auto.tfvars`) so the `*.dev.nomaos.com` records point here —
+then apply prod.
 
 MSSQL SA password must meet SQL Server complexity rules. Vault root token in **dev** is `dev-root-token` (change via user-data / compose when you leave dev-mode).
 
@@ -111,7 +115,7 @@ See `ci-cd-and-costs-quickstart.md` for the full pipeline walkthrough
 
 - APIs listen on the docker network; nginx is the only public HTTP/S listener.
 - Scheduler IAM can start/stop **any** instance in the account (`ec2:StartInstances` on `*`). Tighten the resource ARN if you add prod later.
-- Amplify custom domains require the hosted zone to exist in the same account (this stack creates it by default).
+- Amplify custom domains require the hosted zone in this account, so they stay off (`amplify_enable_custom_domain = false`); prod publishes the frontend CNAMEs instead (`landing.dev.nomaos.com` → Amplify default domain).
 - Resource addresses changed when the tree was flattened (e.g. `aws_instance.app`
   instead of `module.ec2.aws_instance.this`). If you had a pre-existing state
   file, run `terraform state mv` (or import) before the first apply — see the

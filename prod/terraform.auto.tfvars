@@ -1,11 +1,11 @@
 # -----------------------------------------------------------------------------
 # Auto-loaded values for CI (GitHub Actions) AND local runs — PROD.
 # -----------------------------------------------------------------------------
-# TODO: confirm the prod root domain. NOTE: the dev stack currently manages a
-# zone for this same domain in the DEV account — only ONE zone can be
-# authoritative at the registrar. When prod takes over the domain, delegate
-# the registrar NS records to the zone created here (see
-# `route53_name_servers` output) and retire/re-scope the dev zone.
+# The PROD account is authoritative for the root domain: this stack creates the
+# hosted zone and every record in it (prod service aliases AND the dev hosts —
+# dev manages no DNS itself; see the extra_a_records block below).
+# ACTION: delegate the registrar NS records for this domain to the zone created
+# here (see the `route53_name_servers` output).
 domain_name = "nomaos.com"
 
 # --- ECS services (one Fargate service per dev API name) ---------------------
@@ -66,3 +66,22 @@ mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"
 # Flip to true once the instance exists and you want Terraform to create the 5
 # databases automatically (runs a one-off Fargate task via the AWS API).
 # run_db_init = true
+
+# --- Dev DNS records (managed from THIS zone) ---------------------------------
+# Dev runs under the dev.<domain> subdomain and creates no DNS of its own.
+# Fill these from the dev stack outputs after a dev apply:
+#   terraform -chdir=../dev output ec2_public_ip frontend_default_domains
+#
+# extra_a_records = {
+#   "wallet.dev"          = "<dev EC2 Elastic IP>"
+#   "onboarding-api.dev"  = "<dev EC2 Elastic IP>"
+#   "input.dev"           = "<dev EC2 Elastic IP>"
+#   "moneval.dev"         = "<dev EC2 Elastic IP>"
+#   "serviceprovider.dev" = "<dev EC2 Elastic IP>"
+#   "vault.dev"           = "<dev EC2 Elastic IP>"
+#   "mssql.dev"           = "<dev EC2 Elastic IP>"
+# }
+# extra_cname_records = {
+#   "landing.dev"    = "dev.<landing Amplify default domain>"
+#   "onboarding.dev" = "dev.<onboarding Amplify default domain>"
+# }
