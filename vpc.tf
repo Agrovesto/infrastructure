@@ -10,12 +10,22 @@ resource "aws_vpc" "main" {
   tags = merge(local.tags, { Name = "${local.name}-vpc" })
 }
 
+# Deny-all default security group: nothing uses it (the EC2 host has its own
+# SG), so strip its default allow-all-self rules (CKV2_AWS_12).
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.tags, { Name = "${local.name}-default-sg" })
+}
+
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.tags, { Name = "${local.name}-igw" })
 }
 
+# Single public subnet by design (no NAT gateway in dev) - mirrors checkov CKV_AWS_130 skip.
+#trivy:ignore:AVD-AWS-0164
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidrs)
 

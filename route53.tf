@@ -14,6 +14,7 @@ resource "aws_route53_zone" "this" {
 }
 
 resource "aws_route53_record" "a" {
+  #checkov:skip=CKV2_AWS_23: A records point at the EC2 host's Elastic IP via local.ec2_public_ip (checkov cannot trace the IP string to the instance)
   for_each = local.a_records
 
   zone_id = local.zone_id
@@ -34,6 +35,7 @@ resource "aws_route53_record" "cname" {
 }
 
 resource "aws_route53_record" "alias" {
+  #checkov:skip=CKV2_AWS_23: user-supplied alias targets (var.extra_alias_records); attachment is the caller's responsibility
   for_each = var.extra_alias_records
 
   zone_id = local.zone_id

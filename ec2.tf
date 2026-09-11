@@ -6,6 +6,7 @@
 resource "aws_instance" "app" {
   ami                         = local.ami_id
   instance_type               = var.instance_type
+  ebs_optimized               = true
   subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
@@ -55,6 +56,7 @@ resource "aws_volume_attachment" "mssql" {
 }
 
 resource "aws_eip" "app" {
+  #checkov:skip=CKV2_AWS_19: EIP is attached to the EC2 host via aws_eip_association below (checkov does not follow that resource)
   count  = var.associate_elastic_ip ? 1 : 0
   domain = "vpc"
 
