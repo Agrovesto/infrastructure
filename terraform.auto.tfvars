@@ -1,17 +1,5 @@
 # -----------------------------------------------------------------------------
 # Auto-loaded values for CI (GitHub Actions) AND local runs.
-#
-# This is the root module now (formerly environments/dev/dev.auto.tfvars), so
-# terraform picks it up automatically whenever you run terraform from this
-# directory — no -var-file flag needed, because of the .auto.tfvars suffix.
-# It must stay SECRET-FREE: it is committed.
-#
-#   * The MSSQL SA password is NOT here — it is injected via the
-#     TF_VAR_mssql_sa_password environment variable (the GitHub secret
-#     TF_VAR_MSSQL_SA_PASSWORD in CI, or `export TF_VAR_mssql_sa_password=...`
-#     locally).
-#   * Locally, a terraform.tfvars file still takes precedence over this file,
-#     so you can override anything here without touching git.
 # -----------------------------------------------------------------------------
 # TODO: set the real root domain (must match the Route53 hosted zone / registrar)
 domain_name = "nomaos.com"
@@ -20,7 +8,7 @@ amplify_apps = {
   landing = {
     repository = "https://github.com/Agrovesto/landing"
     branch     = "dev"
-    subdomain  = "www"
+    subdomain  = "landing"
     framework  = "React"
   }
   onboarding = {

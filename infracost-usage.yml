@@ -25,7 +25,7 @@ resource_usage:
     monthly_hrs: 260                 # ~21 working days x 12h (scheduler ON)
     # Burstable CPU (t3) only applies when credit_specification=unlimited:
     # monthly_cpu_credit_hrs: 260
-    # vcpu_count: 4                  # t3.xlarge has 4 vCPU
+    # vcpu_count: 4                  # t3.medium has 4 vCPU
 
   # ---- Dedicated MSSQL data volume (gp3, 50 GB) --------------------------
   # gp3 storage cost comes from the Terraform config (size/type); gp3 also
