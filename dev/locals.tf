@@ -29,6 +29,8 @@ locals {
 
   ami_id = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu[0].id
 
+  ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+
   mssql = {
     sa_password = var.mssql_sa_password
     databases   = var.mssql_databases

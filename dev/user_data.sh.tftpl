@@ -95,6 +95,9 @@ chmod +x /opt/agrovesto/scripts/backup-mssql.sh
 echo "0 2 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" > /etc/cron.d/mssql-backup
 
 cd /opt/agrovesto/compose
+# Authenticate to this account's ECR so compose can pull the agrovesto-dev-* API images
+aws ecr get-login-password --region "${aws_region}" \
+| docker login --username AWS --password-stdin "${ecr_registry}"
 docker compose up -d
 
 # wait then init DBs

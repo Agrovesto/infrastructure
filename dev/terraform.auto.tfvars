@@ -11,9 +11,9 @@ manage_dns = false
 # --- Frontends (Amplify) ---
 amplify_apps = {
   landing = {
-    repository = "https://github.com/Agrovesto/landing"
+    repository = "https://github.com/Agrovesto/nomaos-landingpage"
     branch     = "dev"
-    subdomain  = "landing"
+    subdomain  = "dev-agrovesto"
     framework  = "React"
   }
   onboarding = {
@@ -58,3 +58,7 @@ apis = {
   }
 }
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+
+ecr_image_tag_mutability = "MUTABLE" # dev: re-push :latest freely (prod is IMMUTABLE)
+ecr_force_delete         = true      # terraform destroy may empty + delete repos
+ecr_images_to_keep       = 3        # tagged images retained per repo

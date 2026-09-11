@@ -114,6 +114,24 @@ variable "mssql_volume_device" {
   default = "/dev/sdf"
 }
 
+variable "ecr_image_tag_mutability" {
+  description = "MUTABLE in dev so :latest can be re-pushed (prod is IMMUTABLE)"
+  type        = string
+  default     = "MUTABLE"
+}
+
+variable "ecr_force_delete" {
+  description = "Allow terraform destroy to delete repos that still contain images (dev is disposable)"
+  type        = bool
+  default     = true
+}
+
+variable "ecr_images_to_keep" {
+  description = "How many tagged images to retain per repository"
+  type        = number
+  default     = 10
+}
+
 variable "associate_elastic_ip" {
   description = "Attach an Elastic IP to the app host (needed for stable DNS)"
   type        = bool

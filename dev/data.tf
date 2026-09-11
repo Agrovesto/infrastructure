@@ -6,6 +6,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_ami" "ubuntu" {
   count       = var.ami_id == "" ? 1 : 0
   most_recent = true
@@ -54,6 +56,21 @@ data "aws_iam_policy_document" "ec2" {
       "logs:PutLogEvents"
     ]
     resources = ["*"]
+  }
+
+  # Docker login on the EC2 host (user_data) — GetAuthorizationToken has no
+  # resource-level scoping by AWS design (covered by the document-level skips).
+  statement {
+    sid       = "EcrRegistryAuth"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  # Pull-only access to this stack's own API repos (compose's agrovesto-dev-* images).
+  statement {
+    sid       = "EcrPullApis"
+    actions   = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
+    resources = [for repo in values(aws_ecr_repository.apis) : repo.arn]
   }
 }
 

@@ -27,6 +27,7 @@ resource "aws_instance" "app" {
     sa_password    = var.mssql_sa_password
     backup_bucket  = aws_s3_bucket.backup.id
     aws_region     = var.aws_region
+    ecr_registry   = local.ecr_registry
     docker_compose = local.docker_compose
     nginx_conf     = local.nginx_conf
     init_sql       = local.init_sql

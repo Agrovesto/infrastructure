@@ -16,7 +16,7 @@ terraform {
   # bootstrap module (../bootstrap, see its README). Its `next_steps` output
   # replaces PROD_ACCOUNT_ID below with your prod account id.
   backend "s3" {
-    bucket = "nomaos-tfstate-PROD_ACCOUNT_ID-eu-west-1"
+    bucket = "nomaos-tfstate-221434544570-eu-west-1"
     key    = "prod/bootstrap.tfstate"
     region = "eu-west-1"
   }

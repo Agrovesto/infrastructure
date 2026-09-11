@@ -90,6 +90,11 @@ output "vault_url" {
   value = "http://${local.vault_fqdn}"
 }
 
+output "ecr_repository_urls" {
+  description = "Push/pull URLs for the dev API image repos (agrovesto-dev-<svc>). docker-compose pulls from these after the user_data ECR login."
+  value       = { for k, r in aws_ecr_repository.apis : k => r.repository_url }
+}
+
 output "mssql_fqdn" {
   value = local.mssql_fqdn
 }

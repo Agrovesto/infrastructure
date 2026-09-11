@@ -55,7 +55,6 @@ on:
       - "prod/**"
       - "prod.workflow.yml"
 
-
 # =============================================================================
 # CONCURRENCY
 # =============================================================================
@@ -63,7 +62,6 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 
 # =============================================================================
 # GITHUB TOKEN PERMISSIONS
@@ -74,7 +72,6 @@ permissions:
   id-token: write
   pull-requests: write
 
-
 # =============================================================================
 # GLOBAL ENVIRONMENT
 # =============================================================================
@@ -83,7 +80,7 @@ env:
 
   # AWS
   AWS_REGION: "eu-west-1"
-  AWS_ROLE_ARN: ${{ secrets.AWS_PROD_ROLE_ARN }}
+  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
 
   # Terraform
   TF_VERSION: "1.6.6"
@@ -96,14 +93,11 @@ env:
   TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
   TF_TEMPLATES: "" # the prod stack uses no .tftpl templates
 
-
-
 # =============================================================================
 # JOBS
 # =============================================================================
 
 jobs:
-
 
   # ===========================================================================
   # STAGE 1
@@ -125,7 +119,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-
       # -----------------------------------------------------------------------
       # Terraform
       # -----------------------------------------------------------------------
@@ -135,7 +128,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-
       # -----------------------------------------------------------------------
       # Terraform formatting
       # -----------------------------------------------------------------------
@@ -143,7 +135,6 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
         continue-on-error: true
-
 
       # -----------------------------------------------------------------------
       # Checkov
@@ -161,7 +152,6 @@ jobs:
           output_file_path: console,results.sarif
           soft_fail: true
 
-
       # -----------------------------------------------------------------------
       # Store Checkov SARIF
       # -----------------------------------------------------------------------
@@ -176,7 +166,6 @@ jobs:
           path: results.sarif
           retention-days: 14
           if-no-files-found: ignore
-
 
       # -----------------------------------------------------------------------
       # Trivy — vulnerabilities + secrets + misconfiguration
@@ -197,7 +186,6 @@ jobs:
           exit-code: "1"
 
         continue-on-error: true
-
 
       # -----------------------------------------------------------------------
       # Scan summary (git metadata + Checkov + Trivy) -> GitHub job summary
@@ -307,7 +295,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -320,7 +307,6 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
-
 
       # -----------------------------------------------------------------------
       # Verify Terraform root module
@@ -358,7 +344,6 @@ jobs:
             echo "::warning::No terraform.auto.tfvars found; required variables must come from TF_VAR_* env vars."
           fi
 
-
       # -----------------------------------------------------------------------
       # Terraform
       # -----------------------------------------------------------------------
@@ -368,7 +353,6 @@ jobs:
 
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
 
       # -----------------------------------------------------------------------
       # AWS OIDC authentication
@@ -383,14 +367,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-
       # -----------------------------------------------------------------------
       # Verify AWS identity
       # -----------------------------------------------------------------------
 
       - name: Verify AWS Identity
         run: aws sts get-caller-identity
-
 
       # -----------------------------------------------------------------------
       # Terraform Init
@@ -402,7 +384,6 @@ jobs:
 
         run: terraform init -no-color
 
-
       # -----------------------------------------------------------------------
       # Terraform Validate
       # -----------------------------------------------------------------------
@@ -412,7 +393,6 @@ jobs:
         id: validate
 
         run: terraform validate -no-color
-
 
       # -----------------------------------------------------------------------
       # Terraform Plan
@@ -434,7 +414,6 @@ jobs:
 
         continue-on-error: true
 
-
       # -----------------------------------------------------------------------
       # Publish Terraform plan to PR
       # -----------------------------------------------------------------------
@@ -446,7 +425,7 @@ jobs:
         uses: actions/github-script@v7
 
         env:
-          PLAN_FILE: ${{ github.workspace }}/tfplan.txt
+          PLAN_FILE: ${{ github.workspace }}/${{ env.TF_WORKING_DIR }}/tfplan.txt
 
         with:
 
@@ -519,7 +498,6 @@ jobs:
 
             });
 
-
       # -----------------------------------------------------------------------
       # Fail if Terraform Plan failed
       # -----------------------------------------------------------------------
@@ -529,8 +507,6 @@ jobs:
         if: steps.plan.outcome == 'failure'
 
         run: exit 1
-
-
 
   # ===========================================================================
   # STAGE 3
@@ -568,7 +544,6 @@ jobs:
 
         uses: actions/checkout@v4
 
-
       # -----------------------------------------------------------------------
       # Verify Terraform root module
       # -----------------------------------------------------------------------
@@ -593,7 +568,6 @@ jobs:
           echo
           echo "Terraform root module verified."
 
-
       # -----------------------------------------------------------------------
       # Setup Terraform
       # -----------------------------------------------------------------------
@@ -604,7 +578,6 @@ jobs:
 
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
 
       # -----------------------------------------------------------------------
       # AWS OIDC
@@ -619,7 +592,6 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-
       # -----------------------------------------------------------------------
       # Verify AWS identity
       # -----------------------------------------------------------------------
@@ -627,7 +599,6 @@ jobs:
       - name: Verify AWS Identity
 
         run: aws sts get-caller-identity
-
 
       # -----------------------------------------------------------------------
       # Terraform Init
@@ -637,7 +608,6 @@ jobs:
 
         run: terraform init -no-color
 
-
       # -----------------------------------------------------------------------
       # Terraform Validate
       # -----------------------------------------------------------------------
@@ -645,7 +615,6 @@ jobs:
       - name: Terraform Validate
 
         run: terraform validate -no-color
-
 
       # -----------------------------------------------------------------------
       # Terraform Plan
@@ -656,7 +625,6 @@ jobs:
         run: terraform plan \
           -no-color \
           -input=false
-
 
       # -----------------------------------------------------------------------
       # Terraform Apply

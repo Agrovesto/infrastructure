@@ -23,6 +23,7 @@ skip-check:
   - CKV2_AWS_38 # DNSSEC needs KMS + registrar DS records
   - CKV2_AWS_39 # Route53 query logging costs extra
   - CKV2_AWS_62 # Backup bucket has no event consumers
+  - CKV_AWS_136 # ECR uses the AWS-managed aws/ecr KMS key, not a CMK
 
 compact: true
 quiet: false

@@ -22,8 +22,8 @@ services = {
     cpu           = 256
     memory        = 512
     desired_count = 1
-    subdomain     = "wallet"
-    environment   = { NODE_ENV = "production" }
+    subdomain     = "wallet-api"
+    environment   = { ASPNETCORE_ENVIRONMENT = "Production", ASPNETCORE_URLS = "http://+:5001" }
   }
   onboarding = {
     image         = "ealen/echo-server:latest"
@@ -32,7 +32,7 @@ services = {
     memory        = 512
     desired_count = 1
     subdomain     = "onboarding-api"
-    environment   = { NODE_ENV = "production" }
+    environment   = { ASPNETCORE_ENVIRONMENT = "Production", ASPNETCORE_URLS = "http://+:5002" }
   }
   input = {
     image         = "ealen/echo-server:latest"
@@ -40,7 +40,8 @@ services = {
     cpu           = 256
     memory        = 512
     desired_count = 1
-    subdomain     = "input"
+    subdomain     = "input-api"
+    environment   = { ASPNETCORE_ENVIRONMENT = "Production", ASPNETCORE_URLS = "http://+:5003" }
   }
   moneval = {
     image         = "ealen/echo-server:latest"
@@ -48,7 +49,8 @@ services = {
     cpu           = 256
     memory        = 512
     desired_count = 1
-    subdomain     = "moneval"
+    subdomain     = "moneval-api"
+    environment   = { ASPNETCORE_ENVIRONMENT = "Production", ASPNETCORE_URLS = "http://+:5004" }
   }
   serviceprovider = {
     image         = "ealen/echo-server:latest"
@@ -56,12 +58,21 @@ services = {
     cpu           = 256
     memory        = 512
     desired_count = 1
-    subdomain     = "serviceprovider"
+    subdomain     = "serviceprovider-api"
+    environment   = { ASPNETCORE_ENVIRONMENT = "Production", ASPNETCORE_URLS = "http://+:5005" }
   }
 }
 
 # --- RDS SQL Server databases (same names as dev) -----------------------------
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+
+# --- ECR (API image repos) ---------------------------------------------------
+# Repos are created from the `apis` map above (agrovesto-dev-<svc>). Push with
+# `terraform output ecr_repository_urls`; the EC2 host self-authenticates.
+ecr_image_tag_mutability = "MUTABLE" # dev: re-push :latest freely (prod is IMMUTABLE)
+ecr_force_delete         = true      # terraform destroy may empty + delete repos
+ecr_images_to_keep       = 5        # tagged images retained per repo
+
 
 # --- HA mode: SINGLE-AZ for now -------------------------------------------------
 # RDS primary and all ECS tasks run in a single AZ (cost). For go-live HA flip
@@ -86,13 +97,12 @@ single_az_ecs  = true
 #   terraform -chdir=../dev output ec2_public_ip frontend_default_domains
 #
 # extra_a_records = {
-#   "wallet.dev"          = "<dev EC2 Elastic IP>"
-#   "onboarding-api.dev"  = "<dev EC2 Elastic IP>"
-#   "input.dev"           = "<dev EC2 Elastic IP>"
-#   "moneval.dev"         = "<dev EC2 Elastic IP>"
-#   "serviceprovider.dev" = "<dev EC2 Elastic IP>"
-#   "vault.dev"           = "<dev EC2 Elastic IP>"
-#   "mssql.dev"           = "<dev EC2 Elastic IP>"
+#   "dev-wallet-api"          = "<dev EC2 Elastic IP>"
+#   "dev-onboarding-api"      = "<dev EC2 Elastic IP>"
+#   "dev-input.api"           = "<dev EC2 Elastic IP>"
+#   "dev-moneval-api"         = "<dev EC2 Elastic IP>"
+#   "dev-serviceprovider-api" = "<dev EC2 Elastic IP>"
+#   "dev-vault"           = "<dev EC2 Elastic IP>"
 # }
 # extra_cname_records = {
 #   "landing.dev"    = "dev.<landing Amplify default domain>"

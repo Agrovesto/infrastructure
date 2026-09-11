@@ -28,19 +28,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # One egress rule per distinct container port, scoped to the ECS tasks SG.
-  dynamic "egress" {
-    for_each = local.service_ports
-
-    content {
-      description     = "To ECS tasks on port ${egress.value}"
-      from_port       = egress.value
-      to_port         = egress.value
-      protocol        = "tcp"
-      security_groups = [aws_security_group.ecs.id]
-    }
-  }
-
   tags = merge(local.tags, { Name = "${local.name}-alb-sg" })
 }
 
@@ -51,19 +38,6 @@ resource "aws_security_group" "ecs" {
   description = "ECS Fargate tasks: service ports from the ALB only"
   vpc_id      = aws_vpc.main.id
 
-  # One ingress rule per distinct container port, from the ALB only.
-  dynamic "ingress" {
-    for_each = local.service_ports
-
-    content {
-      description     = "From ALB on port ${ingress.value}"
-      from_port       = ingress.value
-      to_port         = ingress.value
-      protocol        = "tcp"
-      security_groups = [aws_security_group.alb.id]
-    }
-  }
-
   egress {
     description = "Unrestricted outbound (ECR image pulls, CloudWatch logs, Secrets Manager, RDS)"
     from_port   = 0
@@ -73,6 +47,32 @@ resource "aws_security_group" "ecs" {
   }
 
   tags = merge(local.tags, { Name = "${local.name}-ecs-sg" })
+}
+
+# ALB -> ECS tasks: one egress rule per distinct service port (services + Vault).
+resource "aws_security_group_rule" "alb_to_ecs" {
+  for_each = toset([for p in local.service_ports : tostring(p)])
+
+  type                     = "egress"
+  description              = "To ECS tasks on port ${each.key}"
+  from_port                = tonumber(each.key)
+  to_port                  = tonumber(each.key)
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.ecs.id
+}
+
+# ECS tasks <- ALB: one ingress rule per distinct service port, ALB only.
+resource "aws_security_group_rule" "ecs_from_alb" {
+  for_each = toset([for p in local.service_ports : tostring(p)])
+
+  type                     = "ingress"
+  description              = "From ALB on port ${each.key}"
+  from_port                = tonumber(each.key)
+  to_port                  = tonumber(each.key)
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs.id
+  source_security_group_id = aws_security_group.alb.id
 }
 
 resource "aws_security_group" "rds" {

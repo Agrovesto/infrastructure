@@ -1,11 +1,11 @@
 # =============================================================================
 # ALB — internet-facing, public subnets, HTTPS (ACM cert), host-header routing
 #
-#   https://wallet.nomaos.com          -> wallet tasks (private subnets)
+#   https://wallet-api.nomaos.com          -> wallet tasks (private subnets)
 #   https://onboarding-api.nomaos.com  -> onboarding tasks
-#   https://input.nomaos.com           -> input tasks
-#   https://moneval.nomaos.com         -> moneval tasks
-#   https://serviceprovider.nomaos.com -> serviceprovider tasks
+#   https://input-api.nomaos.com           -> input tasks
+#   https://moneval-api.nomaos.com         -> moneval tasks
+#   https://serviceprovider-api.nomaos.com -> serviceprovider tasks
 #
 # HTTP (80) only exists to redirect to HTTPS.
 # =============================================================================
