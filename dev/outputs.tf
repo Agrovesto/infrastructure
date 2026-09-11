@@ -51,8 +51,8 @@ output "route53_zone_id" {
 }
 
 output "route53_name_servers" {
-  description = "Delegate the domain to these NS records at the registrar"
-  value       = var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
+  description = "Empty when var.manage_dns = false — the prod account owns the zone and delegation"
+  value       = var.manage_dns && var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
 }
 
 output "dns_fqdns" {

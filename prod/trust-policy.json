@@ -1,0 +1,24 @@
+{
+  "Comment": "Reference trust policy for the GitHub Actions deploy role in the PROD account. Prefer creating the role with the run-once bootstrap/ module instead (it renders this trust automatically); this file stays as the manual reference. Replace PROD_ACCOUNT_ID with the prod AWS account id.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::PROD_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": [
+            "repo:Agrovesto@101108012/*:ref:refs/heads/main",
+            "repo:Agrovesto@101108012/*:pull_request"
+          ]
+        }
+      }
+    }
+  ]
+}

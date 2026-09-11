@@ -1,8 +1,9 @@
-# CI/CD & Infracost Quickstart (dev)
+# CI/CD Quickstart (dev)
 
-The repository is **flat**: Terraform code, `.tftpl` templates, scan configs and
-the pipeline all live in the repository root. There is no `environments/dev`
-directory and no `modules/` directory any more.
+The dev stack is a **flat module in `dev/`**: Terraform code, `.tftpl`
+templates and scan configs all live in that folder. There is no
+`environments/dev` directory and no `modules/` directory; the sibling `prod/`
+folder holds the (separate) production stack.
 
 This repo ships its Terraform CI/CD pipeline as a **root-level copy** —
 `dev.workflow.yml` — because the automation token used to manage the repo has
@@ -24,11 +25,10 @@ Everything below assumes the workflow is installed as
 | --- | --- | --- | --- |
 | 1. Lint & security | `security-scan` | PR + push (`.tf`/`.tfvars`/`.tftpl`/scan-configs changed) | none |
 | 2. Terraform plan | `terraform-plan` | pull requests | AWS OIDC + vars |
-| 3. Cost estimate | `infracost` | pull requests | AWS OIDC + vars + `INFRACOST_API_KEY` |
-| 4. Apply | `terraform-apply` | push to `dev` | AWS OIDC + vars |
+| 3. Apply | `terraform-apply` | push to `dev` | AWS OIDC + vars |
 
-All `terraform`/`infracost` commands run from the **repository root**
-(`TF_WORKING_DIR: "."`), i.e. right next to `versions.tf`, `variables.tf`,
+All `terraform` commands run from the **`dev/` folder**
+(`TF_WORKING_DIR: "dev"`), i.e. right next to `versions.tf`, `variables.tf`,
 `locals.tf`, … There is no `cd environments/dev` step anywhere.
 
 The `terraform-plan` and `terraform-apply` jobs begin with a
@@ -41,25 +41,20 @@ templates is missing, so a bad merge can't turn into a confusing
 
 ## 2. Prerequisites (repo secrets)
 
-The runner talks to AWS via OIDC (no long-lived keys) and to Infracost via an
-API key.
+The runner talks to AWS via OIDC (no long-lived keys).
 
 | Secret | Required | Used for |
 | --- | --- | --- |
-| `AWS_ROLE_ARN` | Yes (plan/apply/infracost) | Role to assume via `configure-aws-credentials` |
-| `TF_VAR_MSSQL_SA_PASSWORD` | Yes (plan/apply) | MSSQL SA password (marked `sensitive` in code) |
-| `INFRACOST_API_KEY` | Only for cost estimates | Runs the `infracost` job; skip → job is skipped |
+| `AWS_ROLE_ARN_DEV` | Yes (plan/apply) | Role to assume via `configure-aws-credentials` |
+| `TF_VAR_MSSQL_SA_PASSWORD_DEV` | Yes (plan/apply) | MSSQL SA password (marked `sensitive` in code) |
 
 > GitHub won't let you read an existing secret back. To set/add one:
 > **Settings → Secrets and variables → Actions**, then **New repository secret**.
->
-> To get an Infracost API key:
-> `infracost auth login` once locally (or https://www.infracost.io/docs/#quick-start),
-> then `infracost configure get api_key`.
+
 
 **AWS OIDC** also needs the repo's GitHub OIDC provider configured in AWS and a
 role with a trust policy scoped to this repo + environment; its ARN is what you
-store in `AWS_ROLE_ARN`. The provider's audience is `sts.amazonaws.com` (already
+store in `AWS_ROLE_ARN_DEV`. The provider's audience is `sts.amazonaws.com` (already
 set in the workflow). A starting point for the trust policy is
 `trust-policy.json` in this directory.
 
@@ -88,66 +83,14 @@ Locally, an (untracked) `terraform.tfvars` still takes precedence over
 
 ---
 
-## 4. Infracost & the usage file
+## 4. Verify end-to-end
 
-`infracost-usage.yml` sits in the repository root next to the Terraform code
-and holds the *consumption* assumptions Infracost can't infer from code (an EC2
-scheduler runtime and S3 backup storage). The workflow passes `--usage-file`
-automatically when the file is present.
-
-Run it locally to preview before relying on it:
-
-```bash
-# from the repo root
-export INFRACOST_API_KEY=...
-infracost breakdown --path=. --usage-file=infracost-usage.yml --format=table
-```
-
-### Usage-file keys changed with the flattening
-
-The stack used to be composed of modules, so every key was prefixed with a
-module path. Everything is in the root module now:
-
-| Old key (modules) | New key (flat root) |
-| --- | --- |
-| `module.ec2.aws_instance.this` | `aws_instance.app` |
-| `module.ec2.aws_ebs_volume.mssql` | `aws_ebs_volume.mssql` |
-| `module.backup.aws_s3_bucket.this` | `aws_s3_bucket.backup` |
-
-### Common usage-file edits
-- **EC2 scheduler**: `aws_instance.app.monthly_hrs` is the big one.
-  The dev host runs ~08:00–20:00 on weekdays (≈260 h/mo) because of the
-  EventBridge scheduler. Set to `730` if you ever run it 24/7.
-- **Backup bucket**: `aws_s3_bucket.backup.standard.storage_gb`
-  reflects nightly MSSQL backups retained 14 days. Adjust to real backup size.
-- EIP & route53 record costs are not usage-file driven — see comments in the
-  usage file and the README "cost recommendations".
-
-### Get an accurate usage file from live usage (optional)
-If you run Infracost somewhere with AWS access, it can scaffold a usage file
-with placeholders, which you then fill in:
-
-```bash
-infracost breakdown --path=. --sync-usage-file --usage-file=infracost-usage.yml
-```
+Open a draft PR that touches a `.tf` file and confirm you see the
+**Terraform Plan** comment (from `terraform-plan`).
 
 ---
 
-## 5. Verify end-to-end
-
-Open a draft PR that touches a `.tf` file and confirm you see, as separate
-comments:
-
-1. **Terraform Plan** (from `terraform-plan`), and
-2. **Infracost monthly cost diff** (from `infracost`, only if the
-   `INFRACOST_API_KEY` secret is set).
-
-If the `infracost` job is skipped because the key is missing, that's expected —
-add the key and re-run.
-
----
-
-## 6. Migrating an existing state file (flattening)
+## 5. Migrating an existing state file (flattening)
 
 Dropping `environments/dev` + `modules/*` changes every resource address. A
 state file created with the old layout must be moved before the next `plan`,
@@ -204,16 +147,14 @@ for existing infrastructure.
 
 ---
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 
 - **`Error: Unsupported argument` / missing required variable** → you haven't
   supplied a required input var; see §3.
 - **`Missing 'versions.tf' in the Terraform root module`** → the flat layout was
   broken (or you checked out a branch that still uses `environments/dev`).
-- **`Could not assume role`** → `AWS_ROLE_ARN` missing, or the OIDC trust policy
+- **`Could not assume role`** → `AWS_ROLE_ARN_DEV` missing, or the OIDC trust policy
   doesn't match this repo/branch. Recheck §2.
-- **Infracost shows `-` for usage-based rows** → no usage-file value matched;
-  confirm the resource address key matches the flat addresses (§4).
 - **`security-scan` formatting step is green but the tree isn't formatted** →
   intentional: `terraform fmt -check` is informational (`continue-on-error`)
   until a `terraform fmt` pass lands. `terraform fmt -recursive` before you

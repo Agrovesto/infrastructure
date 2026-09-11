@@ -1,0 +1,84 @@
+# =============================================================================
+# Locals
+#
+# Same flat-module conventions as the dev stack: naming, tags, AZ selection,
+# rendered config and DNS maps all live here.
+# =============================================================================
+
+locals {
+
+  # ---------------------------------------------------------------------------
+  # Naming (same convention as dev: <project>-<environment>)
+  # ---------------------------------------------------------------------------
+
+  name = "${var.project}-${var.environment}"
+
+  tags = merge(
+    {
+      Project     = var.project
+      Environment = var.environment
+    },
+    var.tags
+  )
+
+  # Public/private/database subnet counts are independent lists; every list is
+  # aligned with the first N AZs of the region.
+  azs = slice(
+    data.aws_availability_zones.available.names,
+    0,
+    max(
+      length(var.public_subnet_cidrs),
+      length(var.private_subnet_cidrs),
+      length(var.database_subnet_cidrs),
+    )
+  )
+
+  # NAT gateways: one per public subnet (HA, prod default) or a single shared one.
+  nat_count = var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)
+
+  # ---------------------------------------------------------------------------
+  # Services / DNS
+  # ---------------------------------------------------------------------------
+
+  # <subdomain>.<domain> for every service (+ Vault), e.g. wallet.nomaos.com
+  service_fqdns = merge(
+    { for k, svc in var.services : k => "${svc.subdomain}.${var.domain_name}" },
+    var.enable_vault ? { vault = "${var.vault_subdomain}.${var.domain_name}" } : {}
+  )
+
+  # Every distinct task port the ALB must reach (service ports + Vault's).
+  service_ports = toset(concat(
+    [for svc in var.services : svc.port],
+    var.enable_vault ? [var.vault_port] : []
+  ))
+
+  zone_id = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
+
+  # Alias records point every service subdomain (and Vault's) at the public ALB.
+  service_alias_records = merge(
+    { for k, svc in var.services : svc.subdomain => {
+      name                   = aws_lb.main.dns_name
+      zone_id                = aws_lb.main.zone_id
+      evaluate_target_health = true
+    } },
+    var.enable_vault ? { (var.vault_subdomain) = {
+      name                   = aws_lb.main.dns_name
+      zone_id                = aws_lb.main.zone_id
+      evaluate_target_health = true
+    } } : {}
+  )
+
+  alias_records = merge(local.service_alias_records, var.extra_alias_records)
+
+  # ---------------------------------------------------------------------------
+  # MSSQL
+  # ---------------------------------------------------------------------------
+
+  # Same SQL the dev stack runs in its bootstrap: create every database if the
+  # instance doesn't have it yet. Consumed by the optional db-init task
+  # (var.run_db_init) and printed in the outputs as a manual runbook.
+  db_init_sql = join(" ", [
+    for db in var.mssql_databases :
+    "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
+  ])
+}

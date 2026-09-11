@@ -27,7 +27,7 @@ locals {
   # EC2 host
   # ---------------------------------------------------------------------------
 
-  ami_id = var.ami_id != "" ? var.ami_id : data.aws_ami.al2023[0].id
+  ami_id = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu[0].id
 
   mssql = {
     sa_password = var.mssql_sa_password
@@ -83,7 +83,8 @@ locals {
   vault_fqdn = "${var.vault.subdomain}.${var.domain_name}"
   mssql_fqdn = "${local.mssql.subdomain}.${var.domain_name}"
 
-  zone_id = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
+  # Empty when DNS is managed from the prod account (var.manage_dns = false).
+  zone_id = var.manage_dns && var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
 
   # All backend + vault names point at the public EC2 (nginx).
   a_records = merge(

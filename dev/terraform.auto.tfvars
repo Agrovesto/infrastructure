@@ -1,8 +1,13 @@
 # -----------------------------------------------------------------------------
 # Auto-loaded values for CI (GitHub Actions) AND local runs.
 # -----------------------------------------------------------------------------
-# TODO: set the real root domain (must match the Route53 hosted zone / registrar)
-domain_name = "nomaos.com"
+# DNS is owned by the PROD account: the prod stack manages the nomaos.com zone
+# and creates this environment's records under the dev.<domain> subdomain
+# (wallet.dev.nomaos.com, ...). Dev therefore serves dev.nomaos.com hostnames
+domain_name = "dev.nomaos.com"
+
+# ...and creates no Route53 zone/records of its own.
+manage_dns = false
 # --- Frontends (Amplify) ---
 amplify_apps = {
   landing = {

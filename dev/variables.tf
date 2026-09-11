@@ -86,7 +86,7 @@ variable "instance_type" {
 }
 
 variable "ami_id" {
-  description = "Leave empty to use the latest Amazon Linux 2023 AMI"
+  description = "Leave empty to use the latest Ubuntu 24.04 LTS (noble) AMI from Canonical"
   type        = string
   default     = ""
 }
@@ -126,7 +126,7 @@ variable "associate_elastic_ip" {
 
 variable "apis" {
   description = "Backend APIs on the EC2 docker host. Add a key to launch another API."
-  type = map(object({
+  type        = map(object({
     image     = string
     host_port = number
     subdomain = string
@@ -169,7 +169,7 @@ variable "mssql_subdomain" {
 # -----------------------------------------------------------------------------
 
 variable "vault" {
-  type = object({
+  type    = object({
     image     = optional(string, "hashicorp/vault:1.15")
     host_port = optional(number, 8200)
     subdomain = optional(string, "vault")
@@ -213,7 +213,7 @@ variable "enable_ec2_scheduler" {
 
 variable "amplify_apps" {
   description = "Amplify frontends. Add another map key to create a new app."
-  type = map(object({
+  type        = map(object({
     repository            = string
     branch                = optional(string, "main")
     subdomain             = string
@@ -240,6 +240,12 @@ variable "amplify_enable_custom_domain" {
 # -----------------------------------------------------------------------------
 # Route 53
 # -----------------------------------------------------------------------------
+
+variable "manage_dns" {
+  description = "false = create no Route53 zone/records at all (DNS is managed from the prod account's zone; see prod/terraform.auto.tfvars)"
+  type        = bool
+  default     = true
+}
 
 variable "create_hosted_zone" {
   type    = bool
@@ -271,10 +277,10 @@ variable "extra_cname_records" {
 
 variable "extra_alias_records" {
   description = "Additional alias A records (name => {name, zone_id, evaluate_target_health})"
-  type = map(object({
+  type        = map(object({
     name                   = string
     zone_id                = string
     evaluate_target_health = optional(bool, false)
   }))
-  default = {}
+  default     = {}
 }
