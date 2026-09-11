@@ -9,7 +9,7 @@ resource "aws_instance" "app" {
   subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   key_name                    = var.key_name != "" ? var.key_name : null
 
   root_block_device {
