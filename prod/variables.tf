@@ -94,6 +94,12 @@ variable "enable_container_insights" {
   default = true
 }
 
+variable "single_az_ecs" {
+  description = "true: run every ECS task in the FIRST private subnet/AZ only (cheap single-AZ mode for now). false: spread tasks across all private subnets/AZs"
+  type        = bool
+  default     = false
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention for service logs and VPC flow logs (prod baseline: 1 year, CKV_AWS_338)"
   type        = number
@@ -191,6 +197,37 @@ variable "run_db_init" {
   description = "After creating RDS, run a one-off Fargate task that creates the databases in var.mssql_databases. Runs from the CI runner via the AWS API, no VPC access needed on the runner."
   type        = bool
   default     = false
+}
+
+# -----------------------------------------------------------------------------
+# HashiCorp Vault (secrets store for the services)
+# -----------------------------------------------------------------------------
+
+variable "enable_vault" {
+  description = "Run the Vault service (Fargate, raft on EFS, KMS auto-unseal) behind the ALB"
+  type        = bool
+  default     = true
+}
+
+variable "vault_secrets_enabled" {
+  description = "true: services read DB creds from Vault (no Secrets Manager injection). Enable AFTER Vault is initialized and the kv paths populated — see vault.tf"
+  type        = bool
+  default     = false
+}
+
+variable "vault_image" {
+  type    = string
+  default = "hashicorp/vault:1.15"
+}
+
+variable "vault_subdomain" {
+  type    = string
+  default = "vault"
+}
+
+variable "vault_port" {
+  type    = number
+  default = 8200
 }
 
 # -----------------------------------------------------------------------------

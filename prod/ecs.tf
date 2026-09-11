@@ -63,10 +63,16 @@ resource "aws_ecs_task_definition" "services" {
           { name = "DB_PORT", value = tostring(var.mssql_port) },
           # Service name == database name (dev convention).
           { name = "DB_NAME", value = each.key }
-        ]
+        ],
+        # Services always know where Vault lives once it exists; they only
+        # *need* it after var.vault_secrets_enabled flips the creds source.
+        var.enable_vault ? [{ name = "VAULT_ADDR", value = "https://${var.vault_subdomain}.${var.domain_name}" }] : []
       )
 
-      secrets = [
+      # Bootstrap mode: DB creds injected from Secrets Manager. Once Vault is
+      # initialized (see vault.tf) set vault_secrets_enabled = true and these
+      # go away — the app reads kv/<service> from Vault instead.
+      secrets = var.vault_secrets_enabled ? [] : [
         { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:username::" },
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:password::" }
       ]
@@ -104,7 +110,8 @@ resource "aws_ecs_service" "services" {
 
   network_configuration {
     # Private subnets only — no public IPs on tasks (CKV_AWS_333 friendly).
-    subnets          = aws_subnet.private[*].id
+    # var.single_az_ecs pins every task to the first AZ (single-AZ for now).
+    subnets          = var.single_az_ecs ? [aws_subnet.private[0].id] : aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }

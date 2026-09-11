@@ -23,7 +23,7 @@ environment**; each folder is a self-contained, flat Terraform root module.
 | Folder | Account | What it creates | Workflow |
 | --- | --- | --- | --- |
 | `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases), S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `dev.workflow.yml` → applies on push to `dev` |
-| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services in private subnets, 5 ECR repos, RDS SQL Server (Multi-AZ) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `prod.workflow.yml` → applies on push to `main` |
+| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services **+ HashiCorp Vault** in private subnets (**single-AZ for now**), 5 ECR repos, RDS SQL Server (single-AZ for now) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `prod.workflow.yml` → applies on push to `main` |
 
 Service names and database names are identical in both accounts (dev naming
 convention): `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`.

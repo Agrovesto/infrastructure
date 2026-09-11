@@ -179,25 +179,117 @@ jobs:
 
 
       # -----------------------------------------------------------------------
-      # Trivy IaC scan
+      # Trivy — vulnerabilities + secrets + misconfiguration
       # -----------------------------------------------------------------------
 
-      - name: Trivy Misconfiguration Scan
+      - name: Trivy Scan (vuln + secret + misconfig)
         id: trivy
 
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
 
         with:
-          scan-type: config
+          scan-type: fs
           scan-ref: prod
           trivy-config: prod/trivy.yml
           format: table
+          output: trivy-report.txt
           severity: CRITICAL,HIGH
           exit-code: "1"
 
         continue-on-error: true
 
 
+      # -----------------------------------------------------------------------
+      # Scan summary (git metadata + Checkov + Trivy) -> GitHub job summary
+      # -----------------------------------------------------------------------
+
+      - name: Build Scan Summary
+        if: always()
+
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        run: |
+          {
+            echo "## Scan Summary"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Repository | `${{ github.repository }}` |"
+            echo "| Branch / ref | `${{ github.ref_name }}` (`${{ github.ref }}`) |"
+            echo "| Commit | `${{ github.sha }}` |"
+            echo "| Trigger | `${{ github.event_name }}` by @${{ github.actor }} |"
+            echo "| Run | [#${{ github.run_number }} of `${{ github.workflow }}`]($RUN_URL) |"
+            echo "| Terraform dir | `${{ env.TF_WORKING_DIR }}` |"
+            echo "| Checkov step | `${{ steps.checkov.outcome }}` |"
+            echo "| Trivy step | `${{ steps.trivy.outcome }}` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          python3 - <<'PYEOF'
+          import collections
+          import json
+          import os
+          import pathlib
+
+          out = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          lines = []
+
+          # ---- Checkov (parsed from the SARIF report) -----------------------
+          sarif = pathlib.Path("results.sarif")
+          if sarif.exists() and sarif.stat().st_size:
+              try:
+                  results = json.loads(sarif.read_text())["runs"][0].get("results", [])
+              except Exception as exc:
+                  results = None
+                  lines.append("### Checkov")
+                  lines.append("")
+                  lines.append("could not parse results.sarif: %s" % exc)
+                  lines.append("")
+              if results is not None:
+                  lines.append("### Checkov")
+                  lines.append("")
+                  if not results:
+                      lines.append("PASS: no failed checks")
+                      lines.append("")
+                  else:
+                      by_level = collections.Counter(r.get("level", "error") for r in results)
+                      by_rule = collections.Counter(r["ruleId"] for r in results)
+                      lines.append("FAIL: %d findings (errors %d, warnings %d, notes %d)" % (
+                          len(results),
+                          by_level.get("error", 0),
+                          by_level.get("warning", 0),
+                          by_level.get("note", 0),
+                      ))
+                      lines.append("")
+                      lines.append("| Rule | Findings |")
+                      lines.append("| --- | --- |")
+                      for rule, count in by_rule.most_common(15):
+                          lines.append("| `%s` | %d |" % (rule, count))
+                      lines.append("")
+          else:
+              lines.append("### Checkov")
+              lines.append("")
+              lines.append("PASS: no SARIF report produced (no findings)")
+              lines.append("")
+
+          # ---- Trivy ----------------------------------------------------------
+          trivy = pathlib.Path("trivy-report.txt")
+          lines.append("### Trivy (vulnerabilities + secrets + misconfig)")
+          lines.append("")
+          if trivy.exists() and trivy.stat().st_size:
+              lines.append("<details><summary>full trivy report</summary>")
+              lines.append("")
+              lines.append("```")
+              lines.append(trivy.read_text(errors="replace")[:20000])
+              lines.append("```")
+              lines.append("</details>")
+          else:
+              lines.append("PASS: no report output (nothing at CRITICAL/HIGH)")
+
+          with out.open("a") as fh:
+              fh.write("\n".join(lines) + "\n")
+          PYEOF
 
   # ===========================================================================
   # STAGE 2

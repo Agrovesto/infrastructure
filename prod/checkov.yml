@@ -21,6 +21,7 @@ skip-check:
   - CKV_AWS_145 # ALB logs bucket uses SSE-S3 (AES256); ELB log delivery does not support CMK
   - CKV_AWS_149 # Secrets Manager secret uses the AWS-managed aws/secretsmanager key, not a CMK
   - CKV_AWS_16  # RDS storage is encrypted with the AWS-managed aws/rds key, not a CMK
+  - CKV_AWS_157 # RDS Multi-AZ is intentionally OFF for now (cost): mssql_multi_az = false; flip true at go-live
   - CKV_AWS_161 # RDS has no custom KMS CMK (AWS-managed key is intentional)
   - CKV_AWS_354 # Performance Insights uses the AWS-managed aws/rds key, not a CMK
   - CKV_AWS_21  # ALB access logs are write-once objects; versioning adds cost without value

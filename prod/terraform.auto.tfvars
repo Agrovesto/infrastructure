@@ -63,6 +63,19 @@ services = {
 # --- RDS SQL Server databases (same names as dev) -----------------------------
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
+# --- HA mode: SINGLE-AZ for now -------------------------------------------------
+# RDS primary and all ECS tasks run in a single AZ (cost). For go-live HA flip
+# these and apply: mssql_multi_az = true, single_az_ecs = false.
+mssql_multi_az = false
+single_az_ecs  = true
+
+# --- Vault ----------------------------------------------------------------------
+# Vault (secrets store) is provisioned by default; services still get DB creds
+# injected from Secrets Manager until Vault is initialized. Bootstrap steps and
+# the switch to vault_secrets_enabled = true are documented in vault.tf.
+# enable_vault           = false   # to remove the Vault service entirely
+# vault_secrets_enabled  = true    # after `vault operator init` + kv bootstrap
+
 # Flip to true once the instance exists and you want Terraform to create the 5
 # databases automatically (runs a one-off Fargate task via the AWS API).
 # run_db_init = true

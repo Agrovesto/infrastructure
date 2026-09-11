@@ -1,8 +1,9 @@
-# trivy.yaml
-scan:
-  security-checks:
-    - config
-    - secret
+# trivy.yml — filesystem scan of the dev/ folder:
+# vulnerabilities (package files, if any), IaC misconfig (Terraform), secrets.
+scanners:
+  - vuln
+  - misconfig
+  - secret
 
 severity:
   - HIGH

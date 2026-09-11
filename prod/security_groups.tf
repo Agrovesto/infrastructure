@@ -30,7 +30,7 @@ resource "aws_security_group" "alb" {
 
   # One egress rule per distinct container port, scoped to the ECS tasks SG.
   dynamic "egress" {
-    for_each = toset([for svc in var.services : svc.port])
+    for_each = local.service_ports
 
     content {
       description     = "To ECS tasks on port ${egress.value}"
@@ -53,7 +53,7 @@ resource "aws_security_group" "ecs" {
 
   # One ingress rule per distinct container port, from the ALB only.
   dynamic "ingress" {
-    for_each = toset([for svc in var.services : svc.port])
+    for_each = local.service_ports
 
     content {
       description     = "From ALB on port ${ingress.value}"
@@ -89,4 +89,23 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.tags, { Name = "${local.name}-rds-sg" })
+}
+
+resource "aws_security_group" "efs" {
+  #checkov:skip=CKV2_AWS_5: attached to the EFS mount targets via aws_efs_mount_target.vault (checkov cannot trace mount-target attachments)
+  count = var.enable_vault ? 1 : 0
+
+  name        = "${local.name}-efs-sg"
+  description = "Vault EFS: NFS from the ECS tasks only"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "NFS from ECS tasks (Vault raft storage)"
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-efs-sg" })
 }

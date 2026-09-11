@@ -25,8 +25,8 @@ data "aws_iam_policy_document" "ecs_execution_assume" {
   }
 }
 
-#checkov:skip=CKV_AWS_356: Secrets Access is scoped to the instance's own master secret; the wildcard on the KMS key covers the AWS-managed aws/secretsmanager key
 data "aws_iam_policy_document" "ecs_execution_secrets" {
+  #checkov:skip=CKV_AWS_356: access is scoped to this instance's own master secret
   statement {
     sid       = "ReadMssqlMasterSecret"
     actions   = ["secretsmanager:GetSecretValue"]
@@ -58,8 +58,8 @@ data "aws_iam_policy_document" "flow_logs_assume" {
   }
 }
 
-#checkov:skip=CKV_AWS_355: flow-log delivery is scoped to this stack's own log group
 data "aws_iam_policy_document" "flow_logs" {
+  #checkov:skip=CKV_AWS_355: delivery is scoped to this stack's own flow-log group
   statement {
     actions = [
       "logs:CreateLogGroup",
@@ -77,8 +77,8 @@ data "aws_iam_policy_document" "flow_logs" {
 
 # --- S3: ALB access logs bucket policy ----------------------------------------
 
-#checkov:skip=CKV_AWS_356: s3:PutObject is scoped to the AWSLogs/<account> prefix of the log bucket; the region-wide SourceArn just anticipates future ALBs
 data "aws_iam_policy_document" "alb_logs" {
+  #checkov:skip=CKV_AWS_356: s3:PutObject is scoped to the AWSLogs/<account> prefix of the log bucket; the region-wide SourceArn just anticipates future ALBs
   # Modern pattern: the ELB log delivery service principal.
   statement {
     sid     = "AllowELBLogDelivery"

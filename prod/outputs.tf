@@ -29,7 +29,25 @@ output "ecs_cluster_name" {
 }
 
 output "ecs_service_names" {
-  value = { for k, s in aws_ecs_service.services : k => s.name }
+  value = merge(
+    { for k, s in aws_ecs_service.services : k => s.name },
+    var.enable_vault ? { vault = aws_ecs_service.vault[0].name } : {}
+  )
+}
+
+# -- Vault ------------------------------------------------------------------------
+
+output "vault_url" {
+  value = var.enable_vault ? "https://${var.vault_subdomain}.${var.domain_name}" : null
+}
+
+output "vault_kms_key_id" {
+  description = "CMK used for Vault auto-unseal and the Vault EFS volume"
+  value       = var.enable_vault ? aws_kms_key.vault.key_id : null
+}
+
+output "vault_efs_file_system_id" {
+  value = var.enable_vault ? aws_efs_file_system.vault[0].id : null
 }
 
 output "ecr_repository_urls" {

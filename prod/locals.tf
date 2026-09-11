@@ -40,19 +40,33 @@ locals {
   # Services / DNS
   # ---------------------------------------------------------------------------
 
-  # <subdomain>.<domain> for every service, e.g. wallet.nomaos.com
-  service_fqdns = { for k, svc in var.services : k => "${svc.subdomain}.${var.domain_name}" }
+  # <subdomain>.<domain> for every service (+ Vault), e.g. wallet.nomaos.com
+  service_fqdns = merge(
+    { for k, svc in var.services : k => "${svc.subdomain}.${var.domain_name}" },
+    var.enable_vault ? { vault = "${var.vault_subdomain}.${var.domain_name}" } : {}
+  )
+
+  # Every distinct task port the ALB must reach (service ports + Vault's).
+  service_ports = toset(concat(
+    [for svc in var.services : svc.port],
+    var.enable_vault ? [var.vault_port] : []
+  ))
 
   zone_id = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
 
-  # Alias records point every service subdomain at the public ALB.
-  service_alias_records = {
-    for k, svc in var.services : svc.subdomain => {
+  # Alias records point every service subdomain (and Vault's) at the public ALB.
+  service_alias_records = merge(
+    { for k, svc in var.services : svc.subdomain => {
       name                   = aws_lb.main.dns_name
       zone_id                = aws_lb.main.zone_id
       evaluate_target_health = true
-    }
-  }
+    } },
+    var.enable_vault ? { (var.vault_subdomain) = {
+      name                   = aws_lb.main.dns_name
+      zone_id                = aws_lb.main.zone_id
+      evaluate_target_health = true
+    } } : {}
+  )
 
   alias_records = merge(local.service_alias_records, var.extra_alias_records)
 
