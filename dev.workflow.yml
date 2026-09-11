@@ -419,7 +419,7 @@ jobs:
         uses: actions/github-script@v7
 
         env:
-          PLAN_FILE: ${{ github.workspace }}/tfplan.txt
+          PLAN_FILE: ${{ github.workspace }}/${{ env.TF_WORKING_DIR }}/tfplan.txt
 
         with:
 
