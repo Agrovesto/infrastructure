@@ -46,6 +46,35 @@ data "aws_iam_policy_document" "rds_monitoring_assume" {
   }
 }
 
+# --- IAM: VPC flow logs --------------------------------------------------------
+
+data "aws_iam_policy_document" "flow_logs_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+#checkov:skip=CKV_AWS_355: flow-log delivery is scoped to this stack's own log group
+data "aws_iam_policy_document" "flow_logs" {
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+    resources = [
+      aws_cloudwatch_log_group.flow_logs.arn,
+      "${aws_cloudwatch_log_group.flow_logs.arn}:*"
+    ]
+  }
+}
+
 # --- S3: ALB access logs bucket policy ----------------------------------------
 
 #checkov:skip=CKV_AWS_356: s3:PutObject is scoped to the AWSLogs/<account> prefix of the log bucket; the region-wide SourceArn just anticipates future ALBs

@@ -95,9 +95,9 @@ variable "enable_container_insights" {
 }
 
 variable "log_retention_days" {
-  description = "CloudWatch log retention for service logs"
+  description = "CloudWatch log retention for service logs and VPC flow logs (prod baseline: 1 year, CKV_AWS_338)"
   type        = number
-  default     = 30
+  default     = 365
 }
 
 # -----------------------------------------------------------------------------

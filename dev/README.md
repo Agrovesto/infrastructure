@@ -24,9 +24,8 @@ dev/
 ├── user_data.sh.tftpl       # cloud-init for the EC2 host
 ├── docker-compose.yml.tftpl # nginx + APIs + Vault + MSSQL
 ├── nginx.conf.tftpl         # one server block per subdomain
-├── infracost-usage.yml      # usage assumptions for cost estimates
 ├── checkov.yml  trivy.yml  trust-policy.json
-└── ci-cd-and-costs-quickstart.md
+└── ci-cd-quickstart.md
 (../dev.workflow.yml is the CI/CD pipeline — see below)
 ```
 
@@ -90,8 +89,6 @@ runs every Terraform command from this folder (`TF_WORKING_DIR: "dev"`).
 - **Pull requests** (to `dev`): Checkov + Trivy scans (SARIF → code scanning)
   and a read-only `terraform plan` posted as a PR comment.
 - **Push to `dev`**: applies the dev stack after the same checks.
-- **Infracost** cost estimates on PRs are optional: set an `INFRACOST_API_KEY`
-  secret to enable the `infracost` job (monthly cost-change comment).
 - The runner needs AWS OIDC (`AWS_ROLE_ARN` secret). Non-secret required
   variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) are
   supplied by the committed `terraform.auto.tfvars`; the MSSQL SA password is
@@ -108,8 +105,8 @@ cp dev.workflow.yml .github/workflows/dev.yml
 > `dev.workflow.yml` (the automation token has no `workflows` permission, so
 > it cannot be updated by CI itself).
 
-See `ci-cd-and-costs-quickstart.md` for the full pipeline walkthrough
-(secrets, variables, Infracost usage file, troubleshooting).
+See `ci-cd-quickstart.md` for the full pipeline walkthrough
+(secrets, variables, troubleshooting).
 
 ## Notes
 

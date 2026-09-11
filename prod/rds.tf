@@ -75,10 +75,13 @@ resource "aws_db_instance" "mssql" {
   final_snapshot_identifier = var.mssql_skip_final_snapshot ? null : "${local.name}-mssql-final-snapshot"
   deletion_protection       = var.deletion_protection
 
-  # Enhanced monitoring + log exports (agent + error logs to CloudWatch).
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
-  enabled_cloudwatch_logs_exports = ["agent", "error"]
+  # Enhanced monitoring + log exports (agent + error logs to CloudWatch) +
+  # Performance Insights (free 7-day retention tier).
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_monitoring.arn
+  enabled_cloudwatch_logs_exports       = ["agent", "error"]
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
 
   auto_minor_version_upgrade = true
   apply_immediately          = false
@@ -94,6 +97,8 @@ resource "aws_db_instance" "mssql" {
 # AWS API, so the CI runner never needs a network path into the VPC.
 # -----------------------------------------------------------------------------
 
+# CloudWatch default encryption is enough here too - mirrors checkov CKV_AWS_158 skip.
+#trivy:ignore:AVD-AWS-0017
 resource "aws_cloudwatch_log_group" "db_init" {
   count = var.run_db_init ? 1 : 0
 

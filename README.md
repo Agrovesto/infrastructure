@@ -7,15 +7,14 @@ environment**; each folder is a self-contained, flat Terraform root module.
 .
 ├── dev/                     # dev account — EC2 + docker (nginx, 5 APIs, Vault, MSSQL on EC2)
 │   ├── *.tf, *.tftpl, terraform.auto.tfvars
-│   ├── checkov.yml  trivy.yml  infracost-usage.yml  trust-policy.json
-│   └── README.md  ci-cd-and-costs-quickstart.md
+│   ├── checkov.yml  trivy.yml  trust-policy.json
+│   └── README.md  ci-cd-quickstart.md
 ├── prod/                    # prod account — ECS/Fargate + ECR + ALB + RDS SQL Server + Route53
 │   ├── *.tf, terraform.auto.tfvars
-│   ├── checkov.yml  trivy.yml  infracost-usage.yml  trust-policy.json
+│   ├── checkov.yml  trivy.yml  trust-policy.json
 │   └── README.md
 ├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
 ├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
-├── infracost.yml            # both projects, for local Infracost runs
 └── .github/workflows/       # installed workflows (managed manually, see below)
 ```
 
@@ -74,10 +73,4 @@ cp prod.workflow.yml .github/workflows/prod.yml   # new: deploys ./prod to the p
 ```bash
 cd dev   # or: cd prod
 terraform init && terraform plan
-```
-
-Infracost across both stacks:
-
-```bash
-infracost breakdown --config-file infracost.yml
 ```

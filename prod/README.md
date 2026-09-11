@@ -26,7 +26,6 @@ prod/
 ├── route53.tf               # hosted zone + alias A records per service
 ├── outputs.tf
 ├── terraform.auto.tfvars    # committed, secret-free values (auto-loaded)
-├── infracost-usage.yml      # usage assumptions for cost estimates
 ├── checkov.yml  trivy.yml  trust-policy.json
 └── README.md
 ```

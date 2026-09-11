@@ -53,6 +53,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
     filter {}
 
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
     expiration {
       days = var.alb_logs_retention_days
     }
