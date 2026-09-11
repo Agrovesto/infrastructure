@@ -93,17 +93,17 @@ KMS auto-unseal needs no operator keys.
 
 ## One-time setup (prod account)
 
-1. **Terraform state bucket** — create `nomaos-tfstate-<prod-account-id>-eu-west-1`
-   (same convention as dev) and replace `PROD_ACCOUNT_ID` in `versions.tf`.
-2. **GitHub OIDC deploy role** — in the prod account create the OIDC provider
-   (`token.actions.githubusercontent.com`) and an IAM role whose trust policy
-   matches `trust-policy.json` (replace `PROD_ACCOUNT_ID`, adjust the repo
-   `sub` pattern if the repo moves). Store the role ARN as the repo secret
-   **`AWS_PROD_ROLE_ARN`**.
-3. **Install the workflow** — `cp prod.workflow.yml .github/workflows/prod.yml`
-   (see the repo-root README).
+Run the **bootstrap module** once from an admin workstation — it creates the
+state bucket, the GitHub OIDC provider and the deploy role, then prints the
+remaining wiring (backend `sed`, `gh secret set AWS_PROD_ROLE_ARN`,
+workflow install):
 
-The prod workflow then plans on PRs to `main` and applies on push to `main`.
+```bash
+cd bootstrap && terraform init && AWS_PROFILE=prod-admin terraform apply
+```
+
+Full runbook + choices: [`../bootstrap/README.md`](../bootstrap/README.md).
+The manual alternative uses the trust template in `trust-policy.json`.
 
 ## First apply & images
 

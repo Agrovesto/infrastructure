@@ -12,9 +12,9 @@ terraform {
     }
   }
 
-  # TODO(prod-account): create the Terraform state bucket in the PROD account
-  # (same convention as dev: nomaos-tfstate-<account-id>-<region>) and replace
-  # PROD_ACCOUNT_ID below before running `terraform init`.
+  # The state bucket for the prod account is created by the run-once
+  # bootstrap module (../bootstrap, see its README). Its `next_steps` output
+  # replaces PROD_ACCOUNT_ID below with your prod account id.
   backend "s3" {
     bucket = "nomaos-tfstate-PROD_ACCOUNT_ID-eu-west-1"
     key    = "prod/bootstrap.tfstate"

@@ -15,6 +15,9 @@ environment**; each folder is a self-contained, flat Terraform root module.
 │   └── README.md
 ├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
 ├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
+├── bootstrap/               # run-once (manual, local state): prod tfstate S3 bucket,
+│   │                        # GitHub OIDC provider + Terraform deploy role -> AWS_PROD_ROLE_ARN
+│   └── README.md
 └── .github/workflows/       # installed workflows (managed manually, see below)
 ```
 
@@ -45,6 +48,22 @@ prod stack — see the `extra_a_records` / `extra_cname_records` blocks in
 `prod/terraform.auto.tfvars` — so flipping dev infrastructure only ever
 requires a prod apply, from the prod account. Cutover order: apply prod →
 delegate NS at the registrar → apply dev (see `prod/README.md`).
+
+## Bootstrapping the prod account (one-time)
+
+The prod pipeline needs two things that can't create themselves: the Terraform
+state bucket and the IAM role GitHub Actions assumes. The run-once
+`bootstrap/` module creates both (plus the GitHub OIDC provider):
+
+```bash
+cd bootstrap && terraform init && AWS_PROFILE=prod-admin terraform apply
+# ...then follow the printed next_steps:
+#   sed -i 's/PROD_ACCOUNT_ID/<prod-acct>/' prod/versions.tf
+#   gh secret set AWS_PROD_ROLE_ARN --body "<deploy-role-arn>"
+```
+
+See `bootstrap/README.md` for the full runbook (policy choices, trust
+patterns, CLI alternative).
 
 ## Installing the GitHub Actions workflows
 
