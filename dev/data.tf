@@ -44,8 +44,8 @@ data "aws_iam_policy_document" "ec2" {
   }
 
   statement {
-    sid = "SsmAndLogs"
-    actions = [
+    sid       = "SsmAndLogs"
+    actions   = [
       "ssm:UpdateInstanceInformation",
       "ssmmessages:*",
       "ec2messages:*",

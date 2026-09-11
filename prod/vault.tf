@@ -183,7 +183,7 @@ resource "aws_ecs_task_definition" "vault" {
         {
           name  = "VAULT_LOCAL_CONFIG"
           value = jsonencode({
-            storage = {
+            storage  = {
               raft = {
                 path    = "/vault/raft"
                 node_id = "${local.name}-vault-1"
@@ -195,7 +195,7 @@ resource "aws_ecs_task_definition" "vault" {
                 tls_disable = true # TLS terminates at the ALB (same pattern as the other services)
               }
             }
-            seal = {
+            seal     = {
               awskms = {
                 region     = var.aws_region
                 kms_key_id = aws_kms_key.vault.key_id
@@ -217,7 +217,7 @@ resource "aws_ecs_task_definition" "vault" {
 
       logConfiguration = {
         logDriver = "awslogs"
-        options = {
+        options   = {
           awslogs-group         = aws_cloudwatch_log_group.vault[0].name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"

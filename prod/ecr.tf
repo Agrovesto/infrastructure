@@ -38,24 +38,24 @@ resource "aws_ecr_lifecycle_policy" "services" {
       {
         rulePriority = 1
         description  = "Expire untagged images after 14 days"
-        selection = {
+        selection    = {
           tagStatus   = "untagged"
           countType   = "sinceImagePushed"
           countUnit   = "days"
           countNumber = 14
         }
-        action = { type = "expire" }
+        action       = { type = "expire" }
       },
       {
         rulePriority = 2
         description  = "Keep the last ${var.ecr_images_to_keep} tagged images"
-        selection = {
-          tagStatus   = "tagged"
+        selection    = {
+          tagStatus      = "tagged"
           tagPatternList = ["*"]
-          countType   = "imageCountMoreThan"
-          countNumber = var.ecr_images_to_keep
+          countType      = "imageCountMoreThan"
+          countNumber    = var.ecr_images_to_keep
         }
-        action = { type = "expire" }
+        action       = { type = "expire" }
       }
     ]
   })

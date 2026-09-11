@@ -77,7 +77,7 @@ variable "single_nat_gateway" {
 
 variable "services" {
   description = "ECS Fargate services behind the ALB. Add a key to launch another service."
-  type = map(object({
+  type        = map(object({
     image             = string
     port              = number
     cpu               = number
@@ -295,10 +295,10 @@ variable "extra_cname_records" {
 
 variable "extra_alias_records" {
   description = "Additional alias A records (name => {name, zone_id, evaluate_target_health})"
-  type = map(object({
+  type        = map(object({
     name                   = string
     zone_id                = string
     evaluate_target_health = optional(bool, false)
   }))
-  default = {}
+  default     = {}
 }

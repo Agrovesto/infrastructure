@@ -61,7 +61,7 @@ data "aws_iam_policy_document" "flow_logs_assume" {
 data "aws_iam_policy_document" "flow_logs" {
   #checkov:skip=CKV_AWS_355: delivery is scoped to this stack's own flow-log group
   statement {
-    actions = [
+    actions   = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",

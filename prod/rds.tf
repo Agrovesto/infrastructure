@@ -32,7 +32,7 @@ resource "aws_secretsmanager_secret" "mssql_master" {
 }
 
 resource "aws_secretsmanager_secret_version" "mssql_master" {
-  secret_id = aws_secretsmanager_secret.mssql_master.id
+  secret_id     = aws_secretsmanager_secret.mssql_master.id
   secret_string = jsonencode({
     username = var.mssql_master_username
     password = random_password.mssql_master.result
@@ -144,7 +144,7 @@ resource "aws_ecs_task_definition" "db_init" {
 
       logConfiguration = {
         logDriver = "awslogs"
-        options = {
+        options   = {
           awslogs-group         = aws_cloudwatch_log_group.db_init[0].name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"

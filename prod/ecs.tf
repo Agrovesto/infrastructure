@@ -79,7 +79,7 @@ resource "aws_ecs_task_definition" "services" {
 
       logConfiguration = {
         logDriver = "awslogs"
-        options = {
+        options   = {
           awslogs-group         = aws_cloudwatch_log_group.services[each.key].name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"

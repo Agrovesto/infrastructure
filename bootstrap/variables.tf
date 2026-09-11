@@ -36,7 +36,7 @@ variable "deploy_role_name" {
 variable "github_sub_patterns" {
   description = "Allowed token.actions.githubusercontent.com:sub patterns for the deploy role (main + PRs; arena branches so pushes from working branches can assume the role during setup — tighten if you like)"
   type        = list(string)
-  default = [
+  default     = [
     "repo:Agrovesto@101108012/*:ref:refs/heads/main",
     "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
     "repo:Agrovesto@101108012/*:pull_request"
