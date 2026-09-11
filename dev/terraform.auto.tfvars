@@ -4,7 +4,7 @@
 # DNS is owned by the PROD account: the prod stack manages the nomaos.com zone
 # and creates this environment's records under the dev.<domain> subdomain
 # (wallet.dev.nomaos.com, ...). Dev therefore serves dev.nomaos.com hostnames
-domain_name = "dev.nomaos.com"
+domain_name = "nomaos.com"
 
 # ...and creates no Route53 zone/records of its own.
 manage_dns = false
@@ -17,9 +17,9 @@ amplify_apps = {
     framework  = "React"
   }
   onboarding = {
-    repository = "https://github.com/Agrovesto/onboarding"
+    repository = "https://github.com/Agrovesto/onboarding-frontend"
     branch     = "dev"
-    subdomain  = "onboarding"
+    subdomain  = "onboarding-dev"
     framework  = "React"
   }
 }
@@ -29,29 +29,32 @@ apis = {
   wallet = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5001
-    subdomain = "wallet"
-    env       = { NODE_ENV = "development" }
+    subdomain = "dev-wallet-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001" }  
   }
   onboarding = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5002
-    subdomain = "onboarding-api"
-    env       = { NODE_ENV = "development" }
+    subdomain = "dev-onboarding-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002" }  
   }
   input = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5003
-    subdomain = "input"
+    subdomain = "dev-input-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003" }
   }
   moneval = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5004
-    subdomain = "moneval"
+    subdomain = "dev-moneval-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004" }
   }
   serviceprovider = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5005
-    subdomain = "serviceprovider"
+    subdomain = "dev-serviceprovider-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005" }
   }
 }
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
