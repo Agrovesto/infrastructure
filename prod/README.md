@@ -95,7 +95,7 @@ KMS auto-unseal needs no operator keys.
 
 Run the **bootstrap module** once from an admin workstation — it creates the
 state bucket, the GitHub OIDC provider and the deploy role, then prints the
-remaining wiring (backend `sed`, `gh secret set AWS_PROD_ROLE_ARN`,
+remaining wiring (backend `sed`, `gh secret set AWS_ROLE_ARN_PROD`,
 workflow install):
 
 ```bash

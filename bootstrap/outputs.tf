@@ -9,7 +9,7 @@ output "state_bucket_name" {
 
 output "deploy_role_arn" {
   value       = aws_iam_role.deploy.arn
-  description = "Goes into the AWS_PROD_ROLE_ARN GitHub secret"
+  description = "Goes into the AWS_ROLE_ARN_PROD GitHub secret"
 }
 
 output "oidc_provider_arn" {
@@ -29,10 +29,10 @@ output "next_steps" {
 
     2. Store the deploy role ARN as the prod workflow secret:
 
-         gh secret set AWS_PROD_ROLE_ARN --body "${aws_iam_role.deploy.arn}"
+         gh secret set AWS_ROLE_ARN_PROD --body "${aws_iam_role.deploy.arn}"
 
        (or: repo Settings > Secrets and variables > Actions > New repository secret
-        name AWS_PROD_ROLE_ARN, value ${aws_iam_role.deploy.arn})
+        name AWS_ROLE_ARN_PROD, value ${aws_iam_role.deploy.arn})
 
     3. Install the workflow and let CI do the rest:
 

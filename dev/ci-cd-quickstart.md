@@ -45,8 +45,8 @@ The runner talks to AWS via OIDC (no long-lived keys).
 
 | Secret | Required | Used for |
 | --- | --- | --- |
-| `AWS_ROLE_ARN` | Yes (plan/apply) | Role to assume via `configure-aws-credentials` |
-| `TF_VAR_MSSQL_SA_PASSWORD` | Yes (plan/apply) | MSSQL SA password (marked `sensitive` in code) |
+| `AWS_ROLE_ARN_DEV` | Yes (plan/apply) | Role to assume via `configure-aws-credentials` |
+| `TF_VAR_MSSQL_SA_PASSWORD_DEV` | Yes (plan/apply) | MSSQL SA password (marked `sensitive` in code) |
 
 > GitHub won't let you read an existing secret back. To set/add one:
 > **Settings → Secrets and variables → Actions**, then **New repository secret**.
@@ -54,7 +54,7 @@ The runner talks to AWS via OIDC (no long-lived keys).
 
 **AWS OIDC** also needs the repo's GitHub OIDC provider configured in AWS and a
 role with a trust policy scoped to this repo + environment; its ARN is what you
-store in `AWS_ROLE_ARN`. The provider's audience is `sts.amazonaws.com` (already
+store in `AWS_ROLE_ARN_DEV`. The provider's audience is `sts.amazonaws.com` (already
 set in the workflow). A starting point for the trust policy is
 `trust-policy.json` in this directory.
 
@@ -153,7 +153,7 @@ for existing infrastructure.
   supplied a required input var; see §3.
 - **`Missing 'versions.tf' in the Terraform root module`** → the flat layout was
   broken (or you checked out a branch that still uses `environments/dev`).
-- **`Could not assume role`** → `AWS_ROLE_ARN` missing, or the OIDC trust policy
+- **`Could not assume role`** → `AWS_ROLE_ARN_DEV` missing, or the OIDC trust policy
   doesn't match this repo/branch. Recheck §2.
 - **`security-scan` formatting step is green but the tree isn't formatted** →
   intentional: `terraform fmt -check` is informational (`continue-on-error`)

@@ -6,7 +6,7 @@ Creates everything the prod pipeline needs **before it can deploy anything**:
 | --- | --- |
 | S3 bucket `nomaos-tfstate-<prod-account-id>-eu-west-1` (versioned, AES256, public-access-blocked, TLS-only, 30-day noncurrent expiry) | `prod/versions.tf` `backend "s3"` |
 | GitHub Actions OIDC provider (`token.actions.githubusercontent.com`, live thumbprints) | both workflows' `configure-aws-credentials` |
-| Deploy role `agrovesto-prod-github-deploy` (trust: `main`, PRs, `arena/*` branches — see `github_sub_patterns`) | the `AWS_PROD_ROLE_ARN` secret in `prod.workflow.yml` |
+| Deploy role `agrovesto-prod-github-deploy` (trust: `main`, PRs, `arena/*` branches — see `github_sub_patterns`) | the `AWS_ROLE_ARN_PROD` secret in `prod.workflow.yml` |
 
 It is **not part of any pipeline**: plain local state (`*.tfstate` is
 gitignored), run manually from a workstation with admin access to the prod
@@ -31,7 +31,7 @@ The apply prints a `next_steps` block; in short:
 sed -i 's/PROD_ACCOUNT_ID/<prod-account-id>/' ../prod/versions.tf
 
 # 2) save the deploy role ARN as the prod pipeline's secret
-gh secret set AWS_PROD_ROLE_ARN --body "<deploy-role-arn-from-output>"
+gh secret set AWS_ROLE_ARN_PROD --body "<deploy-role-arn-from-output>"
 
 # 3) install the prod workflow (the token that manages this repo can't) and merge to main
 cp ../prod.workflow.yml ../.github/workflows/prod.yml

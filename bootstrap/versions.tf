@@ -6,7 +6,7 @@
 # before it can exist:
 #
 #   1. S3 bucket for the prod Terraform state (referenced by prod/versions.tf)
-#   2. GitHub Actions OIDC provider + deploy IAM role (ARN -> AWS_PROD_ROLE_ARN)
+#   2. GitHub Actions OIDC provider + deploy IAM role (ARN -> AWS_ROLE_ARN_PROD)
 #
 # Run it with admin credentials in the PROD account (e.g. SSO admin profile):
 #

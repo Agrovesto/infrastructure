@@ -10,7 +10,7 @@ dev/
 ├── versions.tf              # terraform block, backend, provider
 ├── variables.tf             # every input (single env + what used to be modules)
 ├── locals.tf                # naming, nginx upstreams, rendered templates, DNS maps
-├── data.tf                  # AZs, Amazon Linux 2023 AMI, IAM policy documents
+├── data.tf                  # AZs, Ubuntu 24.04 LTS AMI, IAM policy documents
 ├── vpc.tf                   # VPC + public subnet + IGW
 ├── security_groups.tf       # nginx (80/443) + SSH
 ├── s3_backup.tf             # versioned, encrypted MSSQL backup bucket
@@ -89,10 +89,10 @@ runs every Terraform command from this folder (`TF_WORKING_DIR: "dev"`).
 - **Pull requests** (to `dev`): Checkov + Trivy scans (SARIF → code scanning)
   and a read-only `terraform plan` posted as a PR comment.
 - **Push to `dev`**: applies the dev stack after the same checks.
-- The runner needs AWS OIDC (`AWS_ROLE_ARN` secret). Non-secret required
+- The runner needs AWS OIDC (`AWS_ROLE_ARN_DEV` secret). Non-secret required
   variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) are
   supplied by the committed `terraform.auto.tfvars`; the MSSQL SA password is
-  injected via the `TF_VAR_MSSQL_SA_PASSWORD` secret.
+  injected via the `TF_VAR_MSSQL_SA_PASSWORD_DEV` secret.
 
 Install it into GitHub Actions with:
 

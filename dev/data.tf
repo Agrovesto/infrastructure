@@ -6,14 +6,14 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_ami" "al2023" {
+data "aws_ami" "ubuntu" {
   count       = var.ami_id == "" ? 1 : 0
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
   filter {

@@ -1,10 +1,17 @@
 #!/bin/bash
 set -euxo pipefail
 
-dnf update -y
-dnf install -y docker git amazon-cloudwatch-agent
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get upgrade -y -o Dpkg::Options::=--force-confold
+apt-get install -y docker.io git xfsprogs curl
 systemctl enable --now docker
-usermod -aG docker ec2-user
+usermod -aG docker ubuntu
+
+# CloudWatch agent (installed only, matches previous behaviour — no config written)
+curl -fsSL https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o /tmp/cw-agent.deb
+dpkg -i /tmp/cw-agent.deb || apt-get install -f -y
+rm -f /tmp/cw-agent.deb
 
 # Docker Compose plugin
 mkdir -p /usr/local/lib/docker/cli-plugins

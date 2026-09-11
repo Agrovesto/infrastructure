@@ -16,7 +16,7 @@ environment**; each folder is a self-contained, flat Terraform root module.
 ├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
 ├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
 ├── bootstrap/               # run-once (manual, local state): prod tfstate S3 bucket,
-│   │                        # GitHub OIDC provider + Terraform deploy role -> AWS_PROD_ROLE_ARN
+│   │                        # GitHub OIDC provider + Terraform deploy role -> AWS_ROLE_ARN_PROD
 │   └── README.md
 └── .github/workflows/       # installed workflows (managed manually, see below)
 ```
@@ -59,7 +59,7 @@ state bucket and the IAM role GitHub Actions assumes. The run-once
 cd bootstrap && terraform init && AWS_PROFILE=prod-admin terraform apply
 # ...then follow the printed next_steps:
 #   sed -i 's/PROD_ACCOUNT_ID/<prod-acct>/' prod/versions.tf
-#   gh secret set AWS_PROD_ROLE_ARN --body "<deploy-role-arn>"
+#   gh secret set AWS_ROLE_ARN_PROD --body "<deploy-role-arn>"
 ```
 
 See `bootstrap/README.md` for the full runbook (policy choices, trust
@@ -78,10 +78,10 @@ cp prod.workflow.yml .github/workflows/prod.yml   # new: deploys ./prod to the p
 
 - **Dev workflow** triggers on PRs/pushes to the `dev` branch that touch
   `dev/**`; Terraform runs with `TF_WORKING_DIR=dev`; assumes the role in the
-  `AWS_ROLE_ARN` secret (dev account).
+  `AWS_ROLE_ARN_DEV` secret (dev account).
 - **Prod workflow** triggers on PRs/pushes to the `main` branch that touch
   `prod/**`; Terraform runs with `TF_WORKING_DIR=prod`; assumes the role in
-  the `AWS_PROD_ROLE_ARN` secret (prod account — see `prod/trust-policy.json`
+  the `AWS_ROLE_ARN_PROD` secret (prod account — see `prod/trust-policy.json`
   for the OIDC trust-policy template and `prod/README.md` for one-time setup).
 
 > The currently installed `.github/workflows/dev.yml` still targets the old

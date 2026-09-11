@@ -86,7 +86,7 @@ variable "instance_type" {
 }
 
 variable "ami_id" {
-  description = "Leave empty to use the latest Amazon Linux 2023 AMI"
+  description = "Leave empty to use the latest Ubuntu 24.04 LTS (noble) AMI from Canonical"
   type        = string
   default     = ""
 }
