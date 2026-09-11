@@ -1,0 +1,29 @@
+# Used by the prod pipeline (root copy: prod.workflow.yml, installed as
+# .github/workflows/prod.yml) via `config_file: prod/checkov.yml`.
+# NOTE: checkov only auto-discovers a file named `.checkov.yaml` — the
+# workflow must pass this file explicitly.
+framework:
+  - terraform
+
+# Checks skipped for the PROD environment, each with its reason.
+# Fix findings instead of skipping them wherever practical.
+skip-check:
+  - CKV2_AWS_28 # WAF on the ALB: cost + ruleset tuning still to be decided; add prod WAF when ready
+  - CKV2_AWS_38 # DNSSEC needs KMS + registrar DS records; enable when the prod zone is delegated
+  - CKV2_AWS_39 # Route53 query logging costs extra
+  - CKV_AWS_76  # CloudWatch log groups use AWS-owned encryption, not a CMK
+  - CKV_AWS_97  # ECS cluster logs/insights use AWS-owned encryption, not a CMK
+  - CKV_AWS_136 # ECR uses the AWS-managed aws/ecr KMS key, not a CMK
+  - CKV_AWS_145 # ALB logs bucket uses SSE-S3 (AES256); ELB log delivery does not support CMK
+  - CKV_AWS_16  # RDS storage is encrypted with the AWS-managed aws/rds key, not a CMK
+  - CKV_AWS_161 # RDS has no custom KMS CMK (AWS-managed key is intentional)
+  - CKV_AWS_18  # Access-log buckets don't log to a second bucket
+  - CKV_AWS_144 # S3 cross-region replication doubles storage cost
+  - CKV_AWS_260 # Public ALB ingress on port 80 exists only to redirect to HTTPS
+  - CKV_AWS_2   # HTTP ALB listener exists only to 301-redirect to the HTTPS listener
+  - CKV_AWS_382 # ECS tasks need unrestricted egress: ECR pulls, CloudWatch, Secrets Manager, RDS
+  - CKV_AWS_355 # ECS execution role reads only the instance's own Secrets Manager secret
+  - CKV_AWS_290 # ECS task role is provisioned (empty) for future app-level AWS access
+
+compact: true
+quiet: false

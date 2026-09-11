@@ -2,10 +2,10 @@
 # Terraform CI/CD Pipeline
 # Agrovesto / Dev Account.
 #
-# FLAT LAYOUT: the whole stack (Terraform code, .tftpl templates, scan configs
-# and this workflow) lives in the repository ROOT — there is no
-# `environments/dev` or `modules/` tree any more. Every terraform/infracost
-# command below therefore runs from the repo root (TF_WORKING_DIR = ".").
+# LAYOUT: the repo now holds one folder per environment — dev/ (dev stack)
+# and prod/ (prod stack) — each a self-contained flat Terraform root module.
+# This workflow only touches dev/ (TF_WORKING_DIR = "dev"); the prod pipeline
+# is prod.workflow.yml.
 #
 # INSTALL: this file is the canonical copy of the pipeline. Copy it into place
 # with:
@@ -32,14 +32,8 @@ on:
       - dev
 
     paths:
-      - "**.tf"
-      - "**.tfvars"
-      - "**.tftpl"
-      - "infracost-usage.yml"
-      - "infracost.yml"
+      - "dev/**"
       - "dev.workflow.yml"
-      - "checkov.yml"
-      - "trivy.yml"
 
   # ---------------------------------------------------------------------------
   # Pushes to dev
@@ -49,14 +43,8 @@ on:
       - dev
 
     paths:
-      - "**.tf"
-      - "**.tfvars"
-      - "**.tftpl"
-      - "infracost-usage.yml"
-      - "infracost.yml"
+      - "dev/**"
       - "dev.workflow.yml"
-      - "checkov.yml"
-      - "trivy.yml"
 
 
 # =============================================================================
@@ -92,8 +80,8 @@ env:
   TF_VERSION: "1.6.6"
   TF_IN_AUTOMATION: "true"
 
-  # The stack is the repository root now (was: environments/dev).
-  TF_WORKING_DIR: "."
+  # The dev stack now lives in ./dev (prod stack in ./prod).
+  TF_WORKING_DIR: "dev"
 
   # Files that must exist for this to be a valid Terraform root module.
   TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
@@ -161,7 +149,7 @@ jobs:
 
         with:
           directory: ${{ env.TF_WORKING_DIR }}
-          config_file: checkov.yml
+          config_file: dev/checkov.yml
           output_format: cli,sarif
           output_file_path: console,results.sarif
           soft_fail: true
@@ -194,6 +182,8 @@ jobs:
 
         with:
           scan-type: config
+          scan-ref: dev
+          trivy-config: dev/trivy.yml
           format: table
           severity: CRITICAL,HIGH
           exit-code: "1"
@@ -516,7 +506,7 @@ jobs:
           echo "Terraform working directory:"
           echo "${{ env.TF_WORKING_DIR }}"
 
-          if [ -f versions.tf ] && [ -f variables.tf ]; then
+          if [ -f "${TF_WORKING_DIR}/versions.tf" ] && [ -f "${TF_WORKING_DIR}/variables.tf" ]; then
 
             echo "exists=true" >> "$GITHUB_OUTPUT"
 
@@ -605,7 +595,7 @@ jobs:
 
         run: |
 
-          USAGE_FILE="infracost-usage.yml"
+          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
 
           USAGE_ARGS=()
 
@@ -638,7 +628,7 @@ jobs:
 
         run: |
 
-          if [ ! -f versions.tf ] || [ ! -f variables.tf ]; then
+          if [ ! -f "${TF_WORKING_DIR}/versions.tf" ] || [ ! -f "${TF_WORKING_DIR}/variables.tf" ]; then
 
             echo "::error::No Terraform root module (versions.tf / variables.tf) on the PR branch."
 
@@ -673,7 +663,7 @@ jobs:
 
         run: |
 
-          USAGE_FILE="infracost-usage.yml"
+          USAGE_FILE="${TF_WORKING_DIR}/infracost-usage.yml"
 
           USAGE_ARGS=()
 

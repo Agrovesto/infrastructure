@@ -1,0 +1,24 @@
+{
+  "Comment": "Attach this trust policy to the GitHub Actions OIDC role in the PROD account, then store the role ARN as the AWS_PROD_ROLE_ARN repo secret. Replace PROD_ACCOUNT_ID with the prod AWS account id.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::PROD_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": [
+            "repo:Agrovesto@101108012/*:ref:refs/heads/main",
+            "repo:Agrovesto@101108012/*:pull_request"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,115 +1,77 @@
-# Agrovesto infrastructure (dev)
+# Agrovesto infrastructure
 
-Terraform for the **dev** AWS account. Everything lives in a **single flat root
-directory** — there is no `modules/` or `environments/` tree any more.
+Terraform for the Agrovesto AWS accounts. The repository holds **one folder per
+environment**; each folder is a self-contained, flat Terraform root module.
 
 ```
 .
-├── versions.tf              # terraform block, backend, provider
-├── variables.tf             # every input (single env + what used to be modules)
-├── locals.tf                # naming, nginx upstreams, rendered templates, DNS maps
-├── data.tf                  # AZs, Amazon Linux 2023 AMI, IAM policy documents
-├── vpc.tf                   # VPC + public subnet + IGW
-├── security_groups.tf       # nginx (80/443) + SSH
-├── s3_backup.tf             # versioned, encrypted MSSQL backup bucket
-├── iam.tf                   # EC2 host role + EventBridge scheduler role
-├── ec2.tf                   # app host, MSSQL data volume, Elastic IP
-├── scheduler.tf             # start 08:00 / stop 20:00 (Africa/Lagos)
-├── amplify.tf               # frontends
-├── route53.tf               # hosted zone + A/CNAME records
-├── outputs.tf
-├── terraform.auto.tfvars    # committed, secret-free values (auto-loaded)
-├── user_data.sh.tftpl       # cloud-init for the EC2 host
-├── docker-compose.yml.tftpl # nginx + APIs + Vault + MSSQL
-├── nginx.conf.tftpl         # one server block per subdomain
-├── infracost-usage.yml      # usage assumptions for cost estimates
-├── dev.workflow.yml         # the CI/CD pipeline (root copy — see below)
-├── checkov.yml  trivy.yml  infracost.yml  trust-policy.json
-└── ci-cd-and-costs-quickstart.md
+├── dev/                     # dev account — EC2 + docker (nginx, 5 APIs, Vault, MSSQL on EC2)
+│   ├── *.tf, *.tftpl, terraform.auto.tfvars
+│   ├── checkov.yml  trivy.yml  infracost-usage.yml  trust-policy.json
+│   └── README.md  ci-cd-and-costs-quickstart.md
+├── prod/                    # prod account — ECS/Fargate + ECR + ALB + RDS SQL Server + Route53
+│   ├── *.tf, terraform.auto.tfvars
+│   ├── checkov.yml  trivy.yml  infracost-usage.yml  trust-policy.json
+│   └── README.md
+├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
+├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
+├── infracost.yml            # both projects, for local Infracost runs
+└── .github/workflows/       # installed workflows (managed manually, see below)
 ```
 
-## What gets created
+## Environments
 
-| Piece | Details |
-| --- | --- |
-| Amplify | Two apps (`landing`, `onboarding`) with custom domains. Add a key in `amplify_apps` to create more. |
-| VPC | Single public subnet + IGW (dev). |
-| EC2 | Public subnet, Elastic IP, **nginx** reverse proxy. Root disk (OS + apps) + extra EBS (MSSQL data). |
-| Docker on EC2 | 5 APIs, HashiCorp Vault (dev mode), SQL Server 2022 with 5 databases. Bind-mounted to the MSSQL disk. |
-| Route 53 | Hosted zone + A records for every backend/vault hostname → EC2 EIP. Amplify manages frontend CNAMEs via domain association. |
-| S3 | Versioned, encrypted bucket for nightly MSSQL backups (cron on the instance). |
-| EventBridge Scheduler | Start EC2 07:00, stop 20:00 every day (`Africa/Lagos`). |
+| Folder | Account | What it creates | Workflow |
+| --- | --- | --- | --- |
+| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases), S3 backups, EventBridge start/stop scheduler, Route53 zone | `dev.workflow.yml` → applies on push to `dev` |
+| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services in private subnets, 5 ECR repos, RDS SQL Server (Multi-AZ) with the same 5 databases, Route53 aliases | `prod.workflow.yml` → applies on push to `main` |
 
-Traffic path:
+Service names and database names are identical in both accounts (dev naming
+convention): `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`.
 
-```
-Internet → Route53
-            ├─ www / onboarding  → Amplify
-            └─ wallet / onboarding-api / input / moneval / serviceprovider / vault / mssql
-                                 → EIP → nginx (EC2) → docker containers
-```
+| Service | Dev URL | Prod URL |
+| --- | --- | --- |
+| wallet | wallet.nomaos.com | wallet.nomaos.com |
+| onboarding | onboarding-api.nomaos.com | onboarding-api.nomaos.com |
+| input | input.nomaos.com | input.nomaos.com |
+| moneval | moneval.nomaos.com | moneval.nomaos.com |
+| serviceprovider | serviceprovider.nomaos.com | serviceprovider.nomaos.com |
 
-## Adding more resources later
+> ⚠️ Both stacks currently manage a hosted zone for the same root domain. Only
+> one zone can be authoritative at the registrar — see `prod/README.md` and
+> the note in `prod/terraform.auto.tfvars` before delegating prod.
 
-- **Another frontend** — add an entry under `amplify_apps` in `terraform.auto.tfvars`.
-- **Another API** — add an entry under `apis` (`image`, `host_port`, `subdomain`). Nginx + DNS follow automatically.
-- **Another MSSQL database** — append to `mssql_databases`.
-- **Extra DNS records** — use `extra_a_records`, `extra_cname_records` or `extra_alias_records` in `locals.tf`; they merge over the generated ones.
-- **Another environment** — this root module *is* the dev environment. For a
-  second account, create a new repo/branch (or re-introduce a directory) and
-  change `project`, `environment`, `vpc_cidr` and the backend `key`.
+## Installing the GitHub Actions workflows
 
-## Apply (dev)
-
-Run from the repository root — there is nothing to `cd` into:
+The automation token that manages this repo has **no `workflows` permission**,
+so the pipelines live at the repository root as canonical copies and are
+installed into `.github/workflows/` by hand:
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars   # optional local overrides
-# edit domain, GitHub token, SA password, real API images
-terraform init
-terraform plan
-terraform apply
+cp dev.workflow.yml  .github/workflows/dev.yml    # repoints dev CI at ./dev
+cp prod.workflow.yml .github/workflows/prod.yml   # new: deploys ./prod to the prod account
 ```
 
-Delegate `domain_name` to the `route53_name_servers` output at your registrar.
+- **Dev workflow** triggers on PRs/pushes to the `dev` branch that touch
+  `dev/**`; Terraform runs with `TF_WORKING_DIR=dev`; assumes the role in the
+  `AWS_ROLE_ARN` secret (dev account).
+- **Prod workflow** triggers on PRs/pushes to the `main` branch that touch
+  `prod/**`; Terraform runs with `TF_WORKING_DIR=prod`; assumes the role in
+  the `AWS_PROD_ROLE_ARN` secret (prod account — see `prod/trust-policy.json`
+  for the OIDC trust-policy template and `prod/README.md` for one-time setup).
 
-MSSQL SA password must meet SQL Server complexity rules. Vault root token in **dev** is `dev-root-token` (change via user-data / compose when you leave dev-mode).
+> The currently installed `.github/workflows/dev.yml` still targets the old
+> flat layout; replace it as above after merging this change.
 
-## CI/CD (`dev.workflow.yml`)
-
-The pipeline is authored at the repository root as **`dev.workflow.yml`** and
-runs every Terraform command from that same root (`TF_WORKING_DIR: "."`).
-
-- **Pull requests** (to `dev`): Checkov + Trivy scans (SARIF → code scanning)
-  and a read-only `terraform plan` posted as a PR comment.
-- **Push to `dev`**: applies the dev stack after the same checks.
-- **Infracost** cost estimates on PRs are optional: set an `INFRACOST_API_KEY`
-  secret to enable the `infracost` job (monthly cost-change comment).
-- The runner needs AWS OIDC (`AWS_ROLE_ARN` secret). Non-secret required
-  variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) are
-  supplied by the committed `terraform.auto.tfvars`; the MSSQL SA password is
-  injected via the `TF_VAR_MSSQL_SA_PASSWORD` secret.
-
-Install it into GitHub Actions with:
+## Local runs
 
 ```bash
-cp dev.workflow.yml .github/workflows/dev.yml
+cd dev   # or: cd prod
+terraform init && terraform plan
 ```
 
-> Heads-up: the checked-in `.github/workflows/dev.yml` still points at the old
-> `environments/dev` path and is now stale — replace it with
-> `dev.workflow.yml` (the automation token has no `workflows` permission, so
-> it cannot be updated by CI itself).
+Infracost across both stacks:
 
-See `ci-cd-and-costs-quickstart.md` for the full pipeline walkthrough
-(secrets, variables, Infracost usage file, troubleshooting).
-
-## Notes
-
-- APIs listen on the docker network; nginx is the only public HTTP/S listener.
-- Scheduler IAM can start/stop **any** instance in the account (`ec2:StartInstances` on `*`). Tighten the resource ARN if you add prod later.
-- Amplify custom domains require the hosted zone to exist in the same account (this stack creates it by default).
-- Resource addresses changed when the tree was flattened (e.g. `aws_instance.app`
-  instead of `module.ec2.aws_instance.this`). If you had a pre-existing state
-  file, run `terraform state mv` (or import) before the first apply — see the
-  migration table in `ci-cd-and-costs-quickstart.md`.
+```bash
+infracost breakdown --config-file infracost.yml
+```

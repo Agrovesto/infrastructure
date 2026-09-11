@@ -1,8 +1,9 @@
 # CI/CD & Infracost Quickstart (dev)
 
-The repository is **flat**: Terraform code, `.tftpl` templates, scan configs and
-the pipeline all live in the repository root. There is no `environments/dev`
-directory and no `modules/` directory any more.
+The dev stack is a **flat module in `dev/`**: Terraform code, `.tftpl`
+templates and scan configs all live in that folder. There is no
+`environments/dev` directory and no `modules/` directory; the sibling `prod/`
+folder holds the (separate) production stack.
 
 This repo ships its Terraform CI/CD pipeline as a **root-level copy** —
 `dev.workflow.yml` — because the automation token used to manage the repo has
@@ -27,7 +28,7 @@ Everything below assumes the workflow is installed as
 | 3. Cost estimate | `infracost` | pull requests | AWS OIDC + vars + `INFRACOST_API_KEY` |
 | 4. Apply | `terraform-apply` | push to `dev` | AWS OIDC + vars |
 
-All `terraform`/`infracost` commands run from the **repository root**
+All `terraform`/`infracost` commands run from the **`dev/` folder**
 (`TF_WORKING_DIR: "."`), i.e. right next to `versions.tf`, `variables.tf`,
 `locals.tf`, … There is no `cd environments/dev` step anywhere.
 
@@ -90,7 +91,7 @@ Locally, an (untracked) `terraform.tfvars` still takes precedence over
 
 ## 4. Infracost & the usage file
 
-`infracost-usage.yml` sits in the repository root next to the Terraform code
+`infracost-usage.yml` sits in the `dev/` folder next to the Terraform code
 and holds the *consumption* assumptions Infracost can't infer from code (an EC2
 scheduler runtime and S3 backup storage). The workflow passes `--usage-file`
 automatically when the file is present.
@@ -98,7 +99,7 @@ automatically when the file is present.
 Run it locally to preview before relying on it:
 
 ```bash
-# from the repo root
+# from the dev/ folder
 export INFRACOST_API_KEY=...
 infracost breakdown --path=. --usage-file=infracost-usage.yml --format=table
 ```
