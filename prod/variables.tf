@@ -194,18 +194,23 @@ variable "ecr_images_to_keep" {
 # RDS (SQL Server) — one instance hosting the same 5 databases as dev
 # -----------------------------------------------------------------------------
 
-# sqlserver-ex (Express)  — free licence, legal in production. Costs the bare
-#                           instance rate (~$30/mo on db.t3.small). Limits:
-#                           10 GB per database, ~1.4 GB buffer pool, no SQL
-#                           Server Agent, no Multi-AZ, no backup compression.
-# sqlserver-web (Web)     — cheap, but Microsoft licenses it only for public
-#                           internet-facing web apps, not line-of-business apps.
-# sqlserver-se (Standard) — ~$450/mo at 2 vCPU; the smallest instance is
-#                           db.m5/m6i/m7i.large (2 vCPU / 8 GiB).
+# sqlserver-se (Standard)  — ~$450/mo on db.m7i.large (2 vCPU / 8 GiB floor).
+#                            No per-database size cap, SQL Server Agent, and
+#                            Multi-AZ is available. The licence is most of the
+#                            cost, and it is charged per vCPU.
+# sqlserver-ex (Express)   — free licence, so it costs the bare instance rate
+#                            (~$15/mo on db.t3.micro). Legal in production.
+#                            Limits: 10 GB per database, ~1.4 GB buffer pool,
+#                            4 cores, no SQL Server Agent, and no Multi-AZ on
+#                            RDS at all.
+# sqlserver-web (Web)      — ~$60-90/mo on db.t3.small. Bigger than Express
+#                            (no 10 GB cap) but Microsoft licenses it only for
+#                            public internet-facing web apps, not line-of-
+#                            business applications.
 # sqlserver-ee (Enterprise)
 #
-# There is NO in-place edition change on RDS. Upgrading = snapshot -> restore
-# as the new edition -> rename to keep the endpoint. Downgrading = native
+# There is NO in-place edition change on RDS. Upgrading = snapshot -> restore as
+# the new edition -> rename to keep the endpoint. Downgrading = native
 # backup/restore or DMS into a new instance.
 variable "mssql_engine" {
   description = "sqlserver-ex (Express), sqlserver-web (Web), sqlserver-se (Standard), sqlserver-ee (Enterprise)"
@@ -219,24 +224,24 @@ variable "mssql_engine_version" {
   default     = null
 }
 
-# Start on the smallest instance Express is offered on: db.t3.small
-# (2 vCPU / 2 GiB). Because the Express licence is free, this is ~$30/mo
-# including storage — vs ~$450/mo for the smallest Standard.
-#
-# Extra RAM buys almost nothing on Express: SQL Server caps the buffer pool at
-# ~1.4 GB regardless of the instance. Step up to db.t3.medium (2 vCPU / 4 GiB,
-# ~$50/mo) only if concurrent query memory, not caching, is the problem.
+# db.t3.micro = 2 vCPU / 1 GiB, the smallest instance SQL Server runs on at
+# all. With the free Express licence that is ~$15/mo for the whole database.
 #
 # Instance classes per edition (AWS "DB instance class support for Microsoft SQL
 # Server"):
 #   Express  db.t3.micro  - db.t3.xlarge
-#   Web      db.t3.small  - db.t3.xlarge  (2022), up to db.t3.2xlarge (2019)
-#   Standard db.t3.xlarge - db.t3.2xlarge, db.m5/m6i/m7i.large+  (2 vCPU/8 GiB)
-# So db.t3.small is NOT available for Standard — the cheapest Standard is
-# db.m7i.large (2 vCPU / 8 GiB), kept as the upgrade target below.
+#   Web      db.t3.small  - db.t3.xlarge
+#   Standard db.t3.xlarge - db.t3.2xlarge, db.m5/m6i/m7i.large+ (2 vCPU / 8 GiB)
+# So db.t3.micro and db.t3.small exist only for Express and Web.
+#
+# The real constraint here is RAM, not licence: 1 GiB total, of which the OS and
+# the RDS monitoring agent take a few hundred MB, leaves ~600-700 MB for SQL
+# Server — under the 1.4 GB buffer pool Express would otherwise allow. Fine for
+# light traffic; if it thrashes, db.t3.small (2 GiB) is one variable and about
+# $13/mo more, applied with a short reboot. See the step_up_to_small test run.
 variable "mssql_instance_class" {
   type    = string
-  default = "db.t3.small"
+  default = "db.t3.micro"
 }
 
 # 20 GiB is the documented minimum for every SQL Server edition on gp3/gp2. gp3
@@ -273,6 +278,14 @@ variable "mssql_master_username" {
 variable "mssql_databases" {
   description = "Databases created on the RDS SQL Server instance (same names as dev)"
   type        = list(string)
+}
+
+# "error" and "agent" are the only log types SQL Server publishes to
+# CloudWatch. Express has no SQL Server Agent, so prod pins this to ["error"];
+# put "agent" back if and when the edition moves to Standard.
+variable "mssql_enabled_cloudwatch_logs_exports" {
+  type    = list(string)
+  default = ["error", "agent"]
 }
 
 variable "mssql_backup_retention_days" {

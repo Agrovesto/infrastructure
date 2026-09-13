@@ -102,25 +102,31 @@ ecs_autoscaling_min_capacity      = 1
 ecs_autoscaling_max_capacity      = 4
 ecs_autoscaling_requests_per_task = 1000
 
-# --- RDS: start on SQL Server Express, upgrade when the data outgrows it -------
+# --- RDS: SQL Server Express on db.t3.micro, 20 GB with a 50 GB ceiling -------
 # The Express licence is free, so the database costs the bare instance rate:
-# db.t3.small (2 vCPU / 2 GiB) + 20 GB gp3 is ~$30/mo, against ~$450/mo for the
+# db.t3.micro (2 vCPU / 1 GiB) + 20 GB gp3 is ~$15/mo, against ~$450/mo for the
 # smallest Standard (db.m7i.large).
 #
-# What Express costs you in capability (all hard SQL Server limits):
+# What Express costs you (all hard SQL Server limits):
 #   - 10 GB max per database  <-- the one to watch; writes fail at the cap
-#   - ~1.4 GB buffer pool, 4 cores max (RAM beyond ~2 GiB is largely wasted)
+#   - ~1.4 GB buffer pool, 4 cores max
 #   - no SQL Server Agent (schedule recurring work in the app, e.g. Hangfire)
 #   - NO Multi-AZ on RDS at all (Standard/Enterprise only)
-#   - no native backup compression, no TDE-equivalent, no read replicas
 #
-# Upgrade path (not in-place): snapshot -> restore as sqlserver-web or
-# sqlserver-se on db.m7i.large -> rename to keep the endpoint. Budget 30-60 min
-# and one maintenance window. Trigger: any database approaching 8 GB.
+# What db.t3.micro costs you beyond that: 1 GiB of RAM total. Step up to
+# db.t3.small (2 GiB) for ~$13/mo more if the instance thrashes — one variable,
+# a few minutes of downtime.
+#
+# Upgrade path (never in-place): snapshot -> restore as sqlserver-web or
+# sqlserver-se on db.m7i.large -> rename to keep the endpoint. Trigger: any
+# single database approaching 8 GB, or the day you need Multi-AZ.
 mssql_engine                   = "sqlserver-ex"
-mssql_instance_class           = "db.t3.small"
+mssql_instance_class           = "db.t3.micro"
 mssql_allocated_storage_gb     = 20
 mssql_max_allocated_storage_gb = 50
+
+# Express has no SQL Server Agent, so there is no agent log to publish.
+mssql_enabled_cloudwatch_logs_exports = ["error"]
 
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds

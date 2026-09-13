@@ -94,12 +94,12 @@ run "instance" {
     error_message = "Engine must come from var.mssql_engine."
   }
 
-  # Starting on Express: the licence is free, so the database costs the bare
-  # instance rate. The limits being accepted are documented in variables.tf —
-  # the one that bites is 10 GB per database.
+  # Express: the licence is free, so the database costs the bare instance rate.
+  # The limits being accepted are documented in terraform.auto.tfvars — the one
+  # that bites is 10 GB per database.
   assert {
     condition     = aws_db_instance.mssql.engine == "sqlserver-ex"
-    error_message = "Expected SQL Server Express (sqlserver-ex) to start."
+    error_message = "Expected SQL Server Express (sqlserver-ex)."
   }
 
   assert {
@@ -107,11 +107,17 @@ run "instance" {
     error_message = "Instance class must come from var.mssql_instance_class."
   }
 
-  # db.t3.small (2 vCPU / 2 GiB) is the smallest instance Express is offered on.
-  # Extra RAM buys little: Express caps the buffer pool at ~1.4 GB regardless.
+  # db.t3.micro (2 vCPU / 1 GiB) is the smallest instance SQL Server runs on at
+  # all, and only Express/Web are offered on it.
   assert {
-    condition     = aws_db_instance.mssql.instance_class == "db.t3.small"
-    error_message = "Expected db.t3.small: the 2 vCPU / 2 GiB floor, and the cheapest SQL Server there is."
+    condition     = aws_db_instance.mssql.instance_class == "db.t3.micro"
+    error_message = "Expected db.t3.micro: the SQL Server hardware floor (2 vCPU / 1 GiB)."
+  }
+
+  # Express has no SQL Server Agent, so there is no agent log to publish.
+  assert {
+    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error"]
+    error_message = "On Express the only publishable SQL Server log is the error log."
   }
 
   assert {
@@ -301,34 +307,46 @@ run "db_init_enabled" {
 }
 
 # -----------------------------------------------------------------------------
-# The way out of Express. RDS has no in-place edition change, so the real
-# migration is snapshot -> restore -> rename; the config side is these three
-# variables. Proves nothing else has to move when the data outgrows Express.
+# Step-up paths. Neither needs a rebuild: changing the instance class is a short
+# reboot, changing the edition is a snapshot/restore migration.
 # -----------------------------------------------------------------------------
 
-run "standard_edition_upgrade" {
+run "step_up_to_small" {
   command = plan
 
   variables {
-    mssql_engine                  = "sqlserver-se"
-    mssql_instance_class          = "db.m7i.large"
-    mssql_max_allocated_storage_gb = 100
+    mssql_instance_class          = "db.t3.small"
   }
 
   assert {
-    condition     = aws_db_instance.mssql.engine == "sqlserver-se"
-    error_message = "Upgrading to Standard must only need mssql_engine."
+    condition     = aws_db_instance.mssql.instance_class == "db.t3.small"
+    error_message = "db.t3.small doubles RAM to 2 GiB for ~$13/mo — the first fix if db.t3.micro thrashes."
   }
 
-  # Express's db.t3.small is not offered for Standard: its burstable range
-  # starts at db.t3.xlarge (4 vCPU), so the cheapest Standard is 2 vCPU/8 GiB.
+  assert {
+    condition     = aws_db_instance.mssql.engine == "sqlserver-ex"
+    error_message = "Doubling RAM must not change the edition."
+  }
+}
+
+run "standard_edition_step_up" {
+  command = plan
+
+  variables {
+    mssql_engine                          = "sqlserver-se"
+    mssql_instance_class                  = "db.m7i.large"
+    mssql_enabled_cloudwatch_logs_exports = ["error", "agent"]
+  }
+
+  # Standard is not offered on db.t3.micro or db.t3.small: its burstable range
+  # starts at db.t3.xlarge (4 vCPU), so 2 vCPU / 8 GiB is the floor.
   assert {
     condition     = aws_db_instance.mssql.instance_class == "db.m7i.large"
     error_message = "Standard's floor is db.m7i.large (2 vCPU / 8 GiB)."
   }
 
   assert {
-    condition     = aws_db_instance.mssql.max_allocated_storage == 100
-    error_message = "The storage ceiling must follow var.mssql_max_allocated_storage_gb."
+    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error", "agent"]
+    error_message = "Standard has SQL Server Agent, so the agent log can be published again."
   }
 }
