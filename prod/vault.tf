@@ -92,7 +92,9 @@ resource "aws_efs_access_point" "vault" {
 }
 
 resource "aws_efs_mount_target" "vault" {
-  count = var.enable_vault ? length(aws_subnet.private) : 0
+  # Known at plan time (see the note in vpc.tf): count must not be derived
+  # from aws_subnet.private, whose length is unknown until apply.
+  count = var.enable_vault ? length(var.private_subnet_cidrs) : 0
 
   file_system_id  = aws_efs_file_system.vault[0].id
   subnet_id       = aws_subnet.private[count.index].id

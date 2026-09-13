@@ -53,7 +53,9 @@ resource "aws_route" "internet" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
+  # Count off the variable, not off aws_subnet.public, so it is known at plan
+  # time (same latent bug fixed in prod/vpc.tf).
+  count = length(var.public_subnet_cidrs)
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id

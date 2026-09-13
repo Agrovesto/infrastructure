@@ -16,9 +16,17 @@ resource "aws_acm_certificate" "wildcard" {
 }
 
 locals {
+  # Every domain AWS asks us to validate: the cert's CN plus its SANs.
+  #
+  # NOTE: `subject_alternative_names` is a *set*, so it must be converted with
+  # tolist() before concat() will accept it (concat only takes lists/tuples).
+  # The set of domains must stay derivable *before* the certificate exists —
+  # for_each rejects maps/sets whose keys come from resource attributes, and
+  # `domain_validation_options` (used below for the record values) is only
+  # known after apply.
   acm_validation_domains = toset(concat(
     [aws_acm_certificate.wildcard.domain_name],
-    aws_acm_certificate.wildcard.subject_alternative_names
+    tolist(aws_acm_certificate.wildcard.subject_alternative_names)
   ))
   acm_dvo = { for dvo in aws_acm_certificate.wildcard.domain_validation_options : dvo.domain_name => dvo }
 }
