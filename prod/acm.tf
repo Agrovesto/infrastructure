@@ -18,7 +18,7 @@ resource "aws_acm_certificate" "wildcard" {
 locals {
   acm_validation_domains = toset(concat(
     [aws_acm_certificate.wildcard.domain_name],
-    aws_acm_certificate.wildcard.subject_alternative_names
+    tolist(aws_acm_certificate.wildcard.subject_alternative_names)
   ))
   acm_dvo = { for dvo in aws_acm_certificate.wildcard.domain_validation_options : dvo.domain_name => dvo }
 }

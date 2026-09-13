@@ -92,7 +92,7 @@ resource "aws_efs_access_point" "vault" {
 }
 
 resource "aws_efs_mount_target" "vault" {
-  count = var.enable_vault ? length(aws_subnet.private) : 0
+  count = var.enable_vault ? length(var.private_subnet_cidrs) : 0
 
   file_system_id  = aws_efs_file_system.vault[0].id
   subnet_id       = aws_subnet.private[count.index].id
