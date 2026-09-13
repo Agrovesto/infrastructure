@@ -88,6 +88,15 @@ log_retention_days = 30
 # redundancy on private-subnet egress. Flip to false for go-live HA.
 single_nat_gateway = true
 
+# --- ECS autoscaling ------------------------------------------------------------
+# One task stays warm per service (the ALB cannot wake a service from zero —
+# with no healthy target it returns 503), scaling out on request load up to 4
+# tasks. Tune requests-per-task once there is real traffic.
+ecs_autoscaling_enabled           = true
+ecs_autoscaling_min_capacity      = 1
+ecs_autoscaling_max_capacity      = 4
+ecs_autoscaling_requests_per_task = 1000
+
 # --- RDS storage ----------------------------------------------------------------
 # 50 GB provisioned, autoscaling ceiling 100 GB (gp3).
 mssql_allocated_storage_gb     = 50

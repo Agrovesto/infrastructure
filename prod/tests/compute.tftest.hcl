@@ -310,3 +310,92 @@ run "container_definitions_with_vault_secrets" {
     error_message = "vault_secrets_enabled = true must stop injecting DB creds from Secrets Manager."
   }
 }
+
+# -----------------------------------------------------------------------------
+# Autoscaling — one warm task per service, scale out on load
+# -----------------------------------------------------------------------------
+
+run "autoscaling" {
+  command = plan
+
+  assert {
+    condition     = length(aws_appautoscaling_target.services) == 5
+    error_message = "One autoscaling target per service."
+  }
+
+  assert {
+    condition     = contains(keys(aws_appautoscaling_target.services), "vault") == false
+    error_message = "Vault must never autoscale: raft on EFS needs exactly one writer."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.services["wallet"].min_capacity == 1
+    error_message = "min_capacity = 1 keeps a warm task: at 0 the ALB has no healthy target and 503s."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.services["wallet"].max_capacity == var.ecs_autoscaling_max_capacity
+    error_message = "max_capacity must come from var.ecs_autoscaling_max_capacity."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.services["wallet"].service_namespace == "ecs"
+    error_message = "Targets belong to the ecs namespace."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.services["wallet"].scalable_dimension == "ecs:service:DesiredCount"
+    error_message = "ECS autoscaling scales DesiredCount."
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_policy.services) == 5
+    error_message = "One scaling policy per service."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_policy.services["wallet"].policy_type == "TargetTrackingScaling"
+    error_message = "Policies are target-tracking (no manual step adjustments to tune)."
+  }
+
+  assert {
+    condition = flatten([
+      for c in aws_appautoscaling_policy.services["wallet"].target_tracking_scaling_policy_configuration : [
+        for m in c.predefined_metric_specification : m.predefined_metric_type
+      ]
+    ]) == ["ALBRequestCountPerTarget"]
+    error_message = "Scale on ALB requests per target, not raw CPU."
+  }
+
+  assert {
+    condition = [
+      for c in aws_appautoscaling_policy.services["wallet"].target_tracking_scaling_policy_configuration : c.target_value
+    ] == [1000]
+    error_message = "Target 1000 requests/minute/task (~16 rps)."
+  }
+
+  assert {
+    condition = [
+      for c in aws_appautoscaling_policy.services["wallet"].target_tracking_scaling_policy_configuration : c.scale_out_cooldown
+    ] == [60]
+    error_message = "Scale out quickly (60s) so load spikes are absorbed."
+  }
+}
+
+run "autoscaling_disabled" {
+  command = plan
+
+  variables {
+    ecs_autoscaling_enabled = false
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_target.services) == 0
+    error_message = "ecs_autoscaling_enabled = false must create no scaling targets."
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_policy.services) == 0
+    error_message = "ecs_autoscaling_enabled = false must create no scaling policies."
+  }
+}

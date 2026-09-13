@@ -100,6 +100,50 @@ variable "single_az_ecs" {
   default     = false
 }
 
+# -----------------------------------------------------------------------------
+# ECS autoscaling
+#
+# Every service keeps one warm task (the ALB cannot wake a service from zero:
+# with no healthy target it just returns 503) and scales out on ALB request
+# load. Vault never scales — one raft writer only.
+# -----------------------------------------------------------------------------
+
+variable "ecs_autoscaling_enabled" {
+  description = "Attach an Application Auto Scaling target + request-count policy to every service"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_autoscaling_min_capacity" {
+  description = "Tasks kept warm. 0 means the ALB 503s until something scales the service up, which nothing does automatically."
+  type        = number
+  default     = 1
+}
+
+variable "ecs_autoscaling_max_capacity" {
+  description = "Upper bound on tasks per service"
+  type        = number
+  default     = 4
+}
+
+variable "ecs_autoscaling_requests_per_task" {
+  description = "Target ALB requests per minute per task (1000 ≈ 16 rps per task). Lower = more tasks."
+  type        = number
+  default     = 1000
+}
+
+variable "ecs_autoscaling_scale_in_cooldown" {
+  description = "Seconds to wait before scaling in again (slow, so a brief lull does not drop tasks)"
+  type        = number
+  default     = 300
+}
+
+variable "ecs_autoscaling_scale_out_cooldown" {
+  description = "Seconds to wait before scaling out again (fast, so load spikes are absorbed)"
+  type        = number
+  default     = 60
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention for service logs and VPC flow logs (prod baseline: 1 year, CKV_AWS_338)"
   type        = number
