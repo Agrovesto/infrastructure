@@ -60,7 +60,7 @@ resource "aws_route" "public_internet" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
+  count = length(var.public_subnet_cidrs)
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
@@ -110,7 +110,7 @@ resource "aws_subnet" "private" {
 # One route table per private subnet, each pointing at its AZ's NAT gateway
 # (or the single shared one when var.single_nat_gateway = true).
 resource "aws_route_table" "private" {
-  count = length(aws_subnet.private)
+  count = length(var.private_subnet_cidrs)
 
   vpc_id = aws_vpc.main.id
 
@@ -153,7 +153,7 @@ resource "aws_subnet" "database" {
 # Database subnets share the private NAT route tables: RDS needs no internet
 # itself, but the association keeps every non-public subnet off the IGW.
 resource "aws_route_table_association" "database" {
-  count = length(aws_subnet.database)
+  count = length(var.database_subnet_cidrs)
 
   subnet_id      = aws_subnet.database[count.index].id
   route_table_id = aws_route_table.private[count.index % length(aws_route_table.private)].id

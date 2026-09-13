@@ -84,6 +84,16 @@ output "route53_name_servers" {
   value       = var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
 }
 
+output "agrovesto_zone_id" {
+  description = "Zone ID of the imported agrovesto.com zone"
+  value       = aws_route53_zone.agrovesto.zone_id
+}
+
+output "agrovesto_zone_name_servers" {
+  description = "NS servers of the imported agrovesto.com zone (for registrar delegation if ever needed)"
+  value       = aws_route53_zone.agrovesto.name_servers
+}
+
 # -- RDS ------------------------------------------------------------------------
 
 output "mssql_endpoint" {

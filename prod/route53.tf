@@ -25,6 +25,12 @@ resource "aws_route53_zone" "this" {
   tags = merge(local.tags, { Name = var.domain_name })
 }
 
+resource "aws_route53_zone" "agrovesto" {
+  name = "agrovesto.com"
+
+  tags = merge(local.tags, { Name = "agrovesto.com" })
+}
+
 # Prod service aliases -> ALB.
 resource "aws_route53_record" "alias" {
   #checkov:skip=CKV2_AWS_23: alias records point at the ALB via aws_lb.main (checkov cannot trace alias targets)
