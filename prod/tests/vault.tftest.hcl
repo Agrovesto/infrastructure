@@ -200,3 +200,24 @@ run "vault_disabled" {
     error_message = "enable_vault = false must remove the vault DNS alias."
   }
 }
+
+# -----------------------------------------------------------------------------
+# Vault also runs on Graviton, at the Fargate floor
+# -----------------------------------------------------------------------------
+
+run "vault_task_platform" {
+  command = plan
+
+  assert {
+    condition     = [for p in aws_ecs_task_definition.vault[0].runtime_platform : p.cpu_architecture] == ["ARM64"]
+    error_message = "The Vault task runs on Graviton too (hashicorp/vault ships a linux/arm64 image)."
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.vault[0].cpu == 256 &&
+      aws_ecs_task_definition.vault[0].memory == 512
+    )
+    error_message = "Vault runs at the Fargate floor (256 CPU / 512 MB); bump var.vault_cpu/memory if it OOMs."
+  }
+}

@@ -99,9 +99,17 @@ run "instance" {
     error_message = "Instance class must come from var.mssql_instance_class."
   }
 
+  # Standard Edition is not offered on db.t3.medium/large (burstable starts at
+  # db.t3.xlarge = 4 vCPU), and the License-Included fee is per vCPU — so the
+  # cheapest Standard is a 2 vCPU class on the "unbundled" 7th-gen list.
   assert {
-    condition     = aws_db_instance.mssql.allocated_storage == 50
-    error_message = "Expected 50 GB provisioned storage."
+    condition     = aws_db_instance.mssql.instance_class == "db.m7i.large"
+    error_message = "Expected db.m7i.large: 2 vCPU halves the SQL Server licence vs db.t3.xlarge (4 vCPU)."
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.allocated_storage == 20
+    error_message = "20 GiB is the documented minimum for SQL Server Standard on gp3."
   }
 
   assert {
@@ -275,5 +283,12 @@ run "db_init_enabled" {
   assert {
     condition     = length(aws_cloudwatch_log_group.db_init) == 1
     error_message = "run_db_init = true must create the init task's log group."
+  }
+
+  # Deliberately x86: mcr.microsoft.com/mssql-tools ships amd64 only, so this
+  # task must NOT inherit the ARM64 platform used by the services.
+  assert {
+    condition     = length([for p in aws_ecs_task_definition.db_init[0].runtime_platform : p.cpu_architecture]) == 0
+    error_message = "The db-init task must stay on the default x86_64 platform (mssql-tools is amd64-only)."
   }
 }

@@ -42,6 +42,13 @@ resource "aws_ecs_task_definition" "services" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  # Graviton (ARM64): ~20% cheaper than x86 Fargate. Images must be built for
+  # linux/arm64 — see var.ecs_cpu_architecture.
+  runtime_platform {
+    cpu_architecture        = var.ecs_cpu_architecture
+    operating_system_family = var.ecs_operating_system_family
+  }
+
   container_definitions = jsonencode([
     {
       name      = each.key

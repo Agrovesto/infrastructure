@@ -108,6 +108,24 @@ variable "single_az_ecs" {
 # load. Vault never scales — one raft writer only.
 # -----------------------------------------------------------------------------
 
+# Fargate task CPU architecture. ARM64 (Graviton) is ~20% cheaper per vCPU and
+# per GB than x86, and .NET 6/8 run natively on linux-arm64.
+#
+# REQUIREMENT: every image must be built for linux/arm64. An amd64-only image
+# on an ARM64 task fails at start-up with "exec format error". Build with
+#   docker buildx build --platform linux/arm64 ...
+# (or push a multi-arch manifest). The db-init task is deliberately left on
+# x86 — mcr.microsoft.com/mssql-tools ships amd64 only.
+variable "ecs_cpu_architecture" {
+  type    = string
+  default = "ARM64"
+}
+
+variable "ecs_operating_system_family" {
+  type    = string
+  default = "LINUX"
+}
+
 variable "ecs_autoscaling_enabled" {
   description = "Attach an Application Auto Scaling target + request-count policy to every service"
   type        = bool
@@ -188,14 +206,34 @@ variable "mssql_engine_version" {
   default     = null
 }
 
+# Smallest sensible SQL Server Standard instance.
+#
+# AWS's "DB instance class support for Microsoft SQL Server" table: Standard
+# Edition is NOT offered on db.t3.medium / db.t3.large / db.t3.small — the
+# burstable range for Standard starts at db.t3.xlarge (4 vCPU). The 2 vCPU
+# classes (db.m5/m6i/m7i.large, db.r5/r6i/r7i.large) ARE supported, and
+# because SQL Server's License-Included fee is charged per vCPU, dropping from
+# 4 vCPU to 2 roughly halves the licence — that is most of the RDS bill.
+#
+# db.m7i.large is also on AWS's "unbundled" list: the instance and the licence
+# are billed separately at ~$0.19/vCPU-hr instead of the higher bundled rate
+# baked into the t3/m5/m6i hourly prices, so it is the cheapest 2 vCPU
+# Standard option (~$420-500/mo in eu-west-1 vs ~$900-1,050 for db.t3.xlarge).
+#
+# If 8 GiB proves tight for SQL Server, db.r7i.large is the same 2 vCPU with
+# 16 GiB for a little more. Graviton (db.m7g / db.r7g) is NOT an option:
+# RDS does not support SQL Server on ARM.
 variable "mssql_instance_class" {
   type    = string
-  default = "db.t3.xlarge"
+  default = "db.m7i.large"
 }
 
+# 20 GiB is the documented minimum for SQL Server Standard on gp3/gp2. gp3
+# still delivers 3,000 baseline IOPS at any size, and autoscaling covers
+# growth up to var.mssql_max_allocated_storage_gb.
 variable "mssql_allocated_storage_gb" {
   type    = number
-  default = 100
+  default = 20
 }
 
 variable "mssql_max_allocated_storage_gb" {
@@ -262,6 +300,17 @@ variable "vault_secrets_enabled" {
 variable "vault_image" {
   type    = string
   default = "hashicorp/vault:1.15"
+}
+
+# 256 / 512 is the Fargate floor for any task (x86 or ARM).
+variable "vault_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "vault_memory" {
+  type    = number
+  default = 512
 }
 
 variable "vault_subdomain" {

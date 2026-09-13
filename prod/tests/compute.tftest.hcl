@@ -399,3 +399,51 @@ run "autoscaling_disabled" {
     error_message = "ecs_autoscaling_enabled = false must create no scaling policies."
   }
 }
+
+# -----------------------------------------------------------------------------
+# Graviton (ARM64) + the smallest Fargate task size
+# -----------------------------------------------------------------------------
+
+run "graviton_tasks" {
+  command = plan
+
+  assert {
+    condition     = [for p in aws_ecs_task_definition.services["wallet"].runtime_platform : p.cpu_architecture] == ["ARM64"]
+    error_message = "Service tasks run on Graviton (ARM64): ~20% cheaper than x86. Images must be built for linux/arm64."
+  }
+
+  assert {
+    condition     = [for p in aws_ecs_task_definition.services["wallet"].runtime_platform : p.operating_system_family] == ["LINUX"]
+    error_message = "Operating system family is LINUX."
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.services["wallet"].cpu == 256 &&
+      aws_ecs_task_definition.services["wallet"].memory == 512
+    )
+    error_message = "256 CPU / 512 MB is the smallest Fargate task that exists."
+  }
+
+  assert {
+    condition = alltrue([
+      for k, t in aws_ecs_task_definition.services : length([
+        for p in t.runtime_platform : p.cpu_architecture if p.cpu_architecture == "ARM64"
+      ]) == 1
+    ])
+    error_message = "Every service task, not just wallet, must be on ARM64."
+  }
+}
+
+run "x86_fallback" {
+  command = plan
+
+  variables {
+    ecs_cpu_architecture = "X86_64"
+  }
+
+  assert {
+    condition     = [for p in aws_ecs_task_definition.services["wallet"].runtime_platform : p.cpu_architecture] == ["X86_64"]
+    error_message = "ecs_cpu_architecture = X86_64 must put tasks back on x86 (escape hatch for amd64-only images)."
+  }
+}

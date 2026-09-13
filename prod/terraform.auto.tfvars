@@ -15,6 +15,11 @@ domain_name = "nomaos.com"
 # $PORT so the ALB health checks pass on first apply. Build and push your real
 # images to the ECR repos (agrovesto-prod-<svc>) and update these to
 #   <account-id>.dkr.ecr.eu-west-1.amazonaws.com/agrovesto-prod-<svc>:<tag>
+#
+# ARM64 REQUIRED (tasks run on Graviton): build every image for linux/arm64 —
+#   docker buildx build --platform linux/arm64 -t agrovesto-prod-<svc>:<tag> .
+# An amd64-only image starts and dies immediately with "exec format error".
+# cpu 256 / memory 512 is already the smallest Fargate task that exists.
 services = {
   wallet = {
     image         = "ealen/echo-server:latest"
@@ -97,9 +102,20 @@ ecs_autoscaling_min_capacity      = 1
 ecs_autoscaling_max_capacity      = 4
 ecs_autoscaling_requests_per_task = 1000
 
-# --- RDS storage ----------------------------------------------------------------
-# 50 GB provisioned, autoscaling ceiling 100 GB (gp3).
-mssql_allocated_storage_gb     = 50
+# --- RDS: SQL Server Standard at its smallest -------------------------------------
+# db.m7i.large = 2 vCPU / 8 GiB. Standard Edition is not offered on
+# db.t3.medium/large (the burstable range starts at db.t3.xlarge = 4 vCPU), and
+# the License-Included fee is per vCPU, so 2 vCPU halves the licence versus the
+# old db.t3.xlarge. m7i is also "unbundled" (licence billed separately at the
+# cheaper per-vCPU rate). Graviton is not available for SQL Server.
+#
+# Next step once this is stable for a month: buy a 1-year Reserved Instance
+# (or Database Savings Plan) — that is another ~20-25% off the instance.
+mssql_instance_class = "db.m7i.large"
+
+# 20 GiB is the documented minimum for Standard on gp3 (gp3 still gives 3,000
+# baseline IOPS at any size); autoscaling covers growth to 100 GiB.
+mssql_allocated_storage_gb     = 20
 mssql_max_allocated_storage_gb = 100
 
 # --- Vault ----------------------------------------------------------------------

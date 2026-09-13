@@ -117,6 +117,10 @@ resource "aws_ecs_task_definition" "db_init" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
+
+  # Deliberately NOT Graviton: mcr.microsoft.com/mssql-tools ships amd64 only,
+  # so this task stays on the default x86_64 platform. One one-off task, so
+  # there is nothing to save by porting it.
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
