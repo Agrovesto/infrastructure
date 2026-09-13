@@ -82,7 +82,7 @@ variable "backup_retention_days" {
 
 variable "instance_type" {
   type    = string
-  default = "t3.xlarge"
+  default = "t3.medium"
 }
 
 variable "ami_id" {
@@ -129,7 +129,7 @@ variable "ecr_force_delete" {
 variable "ecr_images_to_keep" {
   description = "How many tagged images to retain per repository"
   type        = number
-  default     = 10
+  default     = 3
 }
 
 variable "associate_elastic_ip" {

@@ -187,7 +187,7 @@ variable "ecr_force_delete" {
 variable "ecr_images_to_keep" {
   description = "How many tagged images to retain per repository"
   type        = number
-  default     = 10
+  default     = 3
 }
 
 # -----------------------------------------------------------------------------
@@ -266,7 +266,7 @@ variable "mssql_port" {
 variable "mssql_multi_az" {
   description = "Standby replica in a second AZ (prod default: on)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "mssql_master_username" {
