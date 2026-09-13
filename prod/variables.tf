@@ -419,3 +419,38 @@ variable "extra_alias_records" {
   }))
   default     = {}
 }
+
+# -----------------------------------------------------------------------------
+# SQL Server Express 10 GB guard (prod/db_size_alarm.tf)
+# -----------------------------------------------------------------------------
+
+variable "db_size_alarm_enabled" {
+  description = "Schedule a task that checks every database's size and alarms as one nears the Express 10 GB cap"
+  type        = bool
+  default     = true
+}
+
+variable "db_size_check_schedule" {
+  description = "EventBridge schedule expression for the database size check"
+  type        = string
+  default     = "rate(12 hours)"
+}
+
+# Express caps each database at 10240 MB and writes fail at the cap, so the
+# threshold has to leave time to react: 8192 MB is roughly one week at 100 MB/day.
+variable "db_size_alarm_threshold_mb" {
+  type    = number
+  default = 8192
+}
+
+variable "db_size_alarm_email" {
+  description = "Where to send size alarms. Empty = the alarm is visible in CloudWatch but notifies nobody."
+  type        = string
+  default     = ""
+}
+
+variable "db_size_check_image" {
+  description = "Image providing sqlcmd. Must be amd64: this task runs on x86_64."
+  type        = string
+  default     = "mcr.microsoft.com/mssql-tools:latest"
+}

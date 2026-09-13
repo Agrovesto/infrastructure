@@ -124,3 +124,35 @@ data "aws_iam_policy_document" "alb_logs" {
     resources = ["${aws_s3_bucket.alb_logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
   }
 }
+
+# --- IAM: EventBridge -> ECS RunTask (database size check) ----------------------
+
+data "aws_iam_policy_document" "events_assume" {
+  count = var.db_size_alarm_enabled ? 1 : 0
+
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "events_run_task" {
+  count = var.db_size_alarm_enabled ? 1 : 0
+
+  # Scoped to this one task-definition family, and only the two roles that task
+  # actually needs, so EventBridge cannot start arbitrary workloads.
+  statement {
+    sid       = "RunDatabaseSizeCheck"
+    actions   = ["ecs:RunTask"]
+    resources = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.db_size_check_family}:*"]
+  }
+
+  statement {
+    sid       = "PassTaskRoles"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn]
+  }
+}

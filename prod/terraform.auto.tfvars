@@ -128,6 +128,15 @@ mssql_max_allocated_storage_gb = 50
 # Express has no SQL Server Agent, so there is no agent log to publish.
 mssql_enabled_cloudwatch_logs_exports = ["error"]
 
+# --- SQL Server Express 10 GB guard --------------------------------------------
+# A scheduled task queries each database's size twice a day and alarms at
+# 8 GB, because on Express writes fail at 10 GB with no warning from AWS and no
+# SQL Server Agent to notice. Set an email to be told; leave it empty and the
+# alarm only shows up in CloudWatch.
+# db_size_alarm_email = "ops@agrovesto.com"
+# db_size_check_schedule     = "rate(12 hours)"
+# db_size_alarm_threshold_mb = 8192
+
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds
 # injected from Secrets Manager until Vault is initialized. Bootstrap steps and

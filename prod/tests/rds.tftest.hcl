@@ -301,7 +301,7 @@ run "db_init_enabled" {
   # Deliberately x86: mcr.microsoft.com/mssql-tools ships amd64 only, so this
   # task must NOT inherit the ARM64 platform used by the services.
   assert {
-    condition     = length([for p in aws_ecs_task_definition.db_init[0].runtime_platform : p.cpu_architecture]) == 0
+    condition     = try(length(aws_ecs_task_definition.db_init[0].runtime_platform), 0) == 0
     error_message = "The db-init task must stay on the default x86_64 platform (mssql-tools is amd64-only)."
   }
 }
@@ -348,5 +348,86 @@ run "standard_edition_step_up" {
   assert {
     condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error", "agent"]
     error_message = "Standard has SQL Server Agent, so the agent log can be published again."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# The 10 GB guard: scheduled sqlcmd task -> log metric filter -> alarm
+# -----------------------------------------------------------------------------
+
+run "db_size_guard" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ecs_task_definition.db_size_check) == 1
+    error_message = "The Express 10 GB guard must create its scheduled task definition."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.db_size_check) == 1
+    error_message = "The size check needs its own log group for the metric filter to read."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.db_size_check[0].schedule_expression == "rate(12 hours)"
+    error_message = "The size check runs twice a day by default."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_metric_filter.db_size_alert[0].pattern == "\"DB_SIZE_ALERT\""
+    error_message = "The metric filter must match the DB_SIZE_ALERT token sqlcmd prints."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.db_size[0].threshold == 1
+    error_message = "A single DB_SIZE_ALERT line is enough to alarm."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.db_size[0].period == 86400
+    error_message = "A 24h period keeps the alarm steady instead of flapping between 12-hourly runs."
+  }
+
+  # mcr.microsoft.com/mssql-tools is amd64-only, so this task stays on x86.
+  assert {
+    condition     = try(length(aws_ecs_task_definition.db_size_check[0].runtime_platform), 0) == 0
+    error_message = "The size-check task must stay on the default x86_64 platform (mssql-tools is amd64-only)."
+  }
+}
+
+run "db_size_guard_with_email" {
+  command = plan
+
+  variables {
+    db_size_alarm_email = "ops@nomaos.com"
+  }
+
+  assert {
+    condition     = length(aws_sns_topic.db_size_alarm) == 1
+    error_message = "Setting db_size_alarm_email must create an SNS topic."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.db_size[0].alarm_actions) == 1
+    error_message = "With an email set, the alarm must notify the topic."
+  }
+}
+
+run "db_size_guard_disabled" {
+  command = plan
+
+  variables {
+    db_size_alarm_enabled = false
+  }
+
+  assert {
+    condition = (
+      length(aws_ecs_task_definition.db_size_check) == 0 &&
+      length(aws_cloudwatch_log_group.db_size_check) == 0 &&
+      length(aws_cloudwatch_metric_alarm.db_size) == 0 &&
+      length(aws_cloudwatch_event_rule.db_size_check) == 0 &&
+      length(aws_sns_topic.db_size_alarm) == 0
+    )
+    error_message = "db_size_alarm_enabled = false must remove the whole guard."
   }
 }

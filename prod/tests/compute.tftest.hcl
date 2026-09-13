@@ -264,12 +264,12 @@ run "container_definitions" {
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort == 5001
+    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort == 5001
     error_message = "Container port must match the service map."
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].logConfiguration.logDriver == "awslogs"
+    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].logConfiguration.logDriver == "awslogs"
     error_message = "Containers must log to CloudWatch via awslogs."
   }
 
@@ -306,7 +306,7 @@ run "container_definitions_with_vault_secrets" {
   }
 
   assert {
-    condition = length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets) == 0
+    condition     = length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets) == 0
     error_message = "vault_secrets_enabled = true must stop injecting DB creds from Secrets Manager."
   }
 }
