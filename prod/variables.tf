@@ -194,10 +194,23 @@ variable "ecr_images_to_keep" {
 # RDS (SQL Server) — one instance hosting the same 5 databases as dev
 # -----------------------------------------------------------------------------
 
+# sqlserver-ex (Express)  — free licence, legal in production. Costs the bare
+#                           instance rate (~$30/mo on db.t3.small). Limits:
+#                           10 GB per database, ~1.4 GB buffer pool, no SQL
+#                           Server Agent, no Multi-AZ, no backup compression.
+# sqlserver-web (Web)     — cheap, but Microsoft licenses it only for public
+#                           internet-facing web apps, not line-of-business apps.
+# sqlserver-se (Standard) — ~$450/mo at 2 vCPU; the smallest instance is
+#                           db.m5/m6i/m7i.large (2 vCPU / 8 GiB).
+# sqlserver-ee (Enterprise)
+#
+# There is NO in-place edition change on RDS. Upgrading = snapshot -> restore
+# as the new edition -> rename to keep the endpoint. Downgrading = native
+# backup/restore or DMS into a new instance.
 variable "mssql_engine" {
-  description = "sqlserver-se (Standard), sqlserver-ee (Enterprise), sqlserver-ex (Express), sqlserver-web (Web)"
+  description = "sqlserver-ex (Express), sqlserver-web (Web), sqlserver-se (Standard), sqlserver-ee (Enterprise)"
   type        = string
-  default     = "sqlserver-se"
+  default     = "sqlserver-ex"
 }
 
 variable "mssql_engine_version" {
@@ -206,29 +219,27 @@ variable "mssql_engine_version" {
   default     = null
 }
 
-# Smallest sensible SQL Server Standard instance.
+# Start on the smallest instance Express is offered on: db.t3.small
+# (2 vCPU / 2 GiB). Because the Express licence is free, this is ~$30/mo
+# including storage — vs ~$450/mo for the smallest Standard.
 #
-# AWS's "DB instance class support for Microsoft SQL Server" table: Standard
-# Edition is NOT offered on db.t3.medium / db.t3.large / db.t3.small — the
-# burstable range for Standard starts at db.t3.xlarge (4 vCPU). The 2 vCPU
-# classes (db.m5/m6i/m7i.large, db.r5/r6i/r7i.large) ARE supported, and
-# because SQL Server's License-Included fee is charged per vCPU, dropping from
-# 4 vCPU to 2 roughly halves the licence — that is most of the RDS bill.
+# Extra RAM buys almost nothing on Express: SQL Server caps the buffer pool at
+# ~1.4 GB regardless of the instance. Step up to db.t3.medium (2 vCPU / 4 GiB,
+# ~$50/mo) only if concurrent query memory, not caching, is the problem.
 #
-# db.m7i.large is also on AWS's "unbundled" list: the instance and the licence
-# are billed separately at ~$0.19/vCPU-hr instead of the higher bundled rate
-# baked into the t3/m5/m6i hourly prices, so it is the cheapest 2 vCPU
-# Standard option (~$420-500/mo in eu-west-1 vs ~$900-1,050 for db.t3.xlarge).
-#
-# If 8 GiB proves tight for SQL Server, db.r7i.large is the same 2 vCPU with
-# 16 GiB for a little more. Graviton (db.m7g / db.r7g) is NOT an option:
-# RDS does not support SQL Server on ARM.
+# Instance classes per edition (AWS "DB instance class support for Microsoft SQL
+# Server"):
+#   Express  db.t3.micro  - db.t3.xlarge
+#   Web      db.t3.small  - db.t3.xlarge  (2022), up to db.t3.2xlarge (2019)
+#   Standard db.t3.xlarge - db.t3.2xlarge, db.m5/m6i/m7i.large+  (2 vCPU/8 GiB)
+# So db.t3.small is NOT available for Standard — the cheapest Standard is
+# db.m7i.large (2 vCPU / 8 GiB), kept as the upgrade target below.
 variable "mssql_instance_class" {
   type    = string
-  default = "db.m7i.large"
+  default = "db.t3.small"
 }
 
-# 20 GiB is the documented minimum for SQL Server Standard on gp3/gp2. gp3
+# 20 GiB is the documented minimum for every SQL Server edition on gp3/gp2. gp3
 # still delivers 3,000 baseline IOPS at any size, and autoscaling covers
 # growth up to var.mssql_max_allocated_storage_gb.
 variable "mssql_allocated_storage_gb" {
@@ -239,7 +250,7 @@ variable "mssql_allocated_storage_gb" {
 variable "mssql_max_allocated_storage_gb" {
   description = "Storage autoscaling ceiling (0 disables autoscaling)"
   type        = number
-  default     = 500
+  default     = 50
 }
 
 variable "mssql_port" {

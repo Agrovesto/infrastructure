@@ -33,7 +33,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "$${MSSQL_SA_PASSWORD}"
-      MSSQL_PID: "Express"
+      MSSQL_PID: "${mssql.pid}"
     ports:
       - "127.0.0.1:${mssql.host_port}:1433"
     volumes:

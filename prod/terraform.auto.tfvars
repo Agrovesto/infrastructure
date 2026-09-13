@@ -102,21 +102,25 @@ ecs_autoscaling_min_capacity      = 1
 ecs_autoscaling_max_capacity      = 4
 ecs_autoscaling_requests_per_task = 1000
 
-# --- RDS: SQL Server Standard at its smallest -------------------------------------
-# db.m7i.large = 2 vCPU / 8 GiB. Standard Edition is not offered on
-# db.t3.medium/large (the burstable range starts at db.t3.xlarge = 4 vCPU), and
-# the License-Included fee is per vCPU, so 2 vCPU halves the licence versus the
-# old db.t3.xlarge. m7i is also "unbundled" (licence billed separately at the
-# cheaper per-vCPU rate). Graviton is not available for SQL Server.
+# --- RDS: start on SQL Server Express, upgrade when the data outgrows it -------
+# The Express licence is free, so the database costs the bare instance rate:
+# db.t3.small (2 vCPU / 2 GiB) + 20 GB gp3 is ~$30/mo, against ~$450/mo for the
+# smallest Standard (db.m7i.large).
 #
-# Next step once this is stable for a month: buy a 1-year Reserved Instance
-# (or Database Savings Plan) — that is another ~20-25% off the instance.
-mssql_instance_class = "db.m7i.large"
-
-# 20 GiB is the documented minimum for Standard on gp3 (gp3 still gives 3,000
-# baseline IOPS at any size); autoscaling covers growth to 100 GiB.
+# What Express costs you in capability (all hard SQL Server limits):
+#   - 10 GB max per database  <-- the one to watch; writes fail at the cap
+#   - ~1.4 GB buffer pool, 4 cores max (RAM beyond ~2 GiB is largely wasted)
+#   - no SQL Server Agent (schedule recurring work in the app, e.g. Hangfire)
+#   - NO Multi-AZ on RDS at all (Standard/Enterprise only)
+#   - no native backup compression, no TDE-equivalent, no read replicas
+#
+# Upgrade path (not in-place): snapshot -> restore as sqlserver-web or
+# sqlserver-se on db.m7i.large -> rename to keep the endpoint. Budget 30-60 min
+# and one maintenance window. Trigger: any database approaching 8 GB.
+mssql_engine                   = "sqlserver-ex"
+mssql_instance_class           = "db.t3.small"
 mssql_allocated_storage_gb     = 20
-mssql_max_allocated_storage_gb = 100
+mssql_max_allocated_storage_gb = 50
 
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds

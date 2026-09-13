@@ -171,3 +171,29 @@ run "no_elastic_ip" {
     error_message = "associate_elastic_ip = false must not allocate an Elastic IP."
   }
 }
+
+# -----------------------------------------------------------------------------
+# SQL Server edition on the dev host
+# -----------------------------------------------------------------------------
+
+run "mssql_edition" {
+  command = plan
+
+  assert {
+    condition     = strcontains(aws_instance.app.user_data, "MSSQL_PID: \"Developer\"")
+    error_message = "dev runs SQL Server Developer Edition: free, full Enterprise feature set, dev/test use only."
+  }
+}
+
+run "mssql_edition_overridable" {
+  command = plan
+
+  variables {
+    mssql_pid = "Express"
+  }
+
+  assert {
+    condition     = strcontains(aws_instance.app.user_data, "MSSQL_PID: \"Express\"")
+    error_message = "var.mssql_pid must reach the compose file (set it to Express when dev must mirror prod's 10 GB cap)."
+  }
+}

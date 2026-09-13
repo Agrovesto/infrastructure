@@ -35,6 +35,7 @@ locals {
     sa_password = var.mssql_sa_password
     databases   = var.mssql_databases
     image       = var.mssql_image
+    pid         = var.mssql_pid
     host_port   = var.mssql_host_port
     subdomain   = var.mssql_subdomain
   }

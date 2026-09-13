@@ -90,8 +90,16 @@ run "instance" {
   }
 
   assert {
-    condition     = aws_db_instance.mssql.engine == "sqlserver-se"
-    error_message = "Engine must be SQL Server Standard (sqlserver-se)."
+    condition     = aws_db_instance.mssql.engine == var.mssql_engine
+    error_message = "Engine must come from var.mssql_engine."
+  }
+
+  # Starting on Express: the licence is free, so the database costs the bare
+  # instance rate. The limits being accepted are documented in variables.tf —
+  # the one that bites is 10 GB per database.
+  assert {
+    condition     = aws_db_instance.mssql.engine == "sqlserver-ex"
+    error_message = "Expected SQL Server Express (sqlserver-ex) to start."
   }
 
   assert {
@@ -99,22 +107,21 @@ run "instance" {
     error_message = "Instance class must come from var.mssql_instance_class."
   }
 
-  # Standard Edition is not offered on db.t3.medium/large (burstable starts at
-  # db.t3.xlarge = 4 vCPU), and the License-Included fee is per vCPU — so the
-  # cheapest Standard is a 2 vCPU class on the "unbundled" 7th-gen list.
+  # db.t3.small (2 vCPU / 2 GiB) is the smallest instance Express is offered on.
+  # Extra RAM buys little: Express caps the buffer pool at ~1.4 GB regardless.
   assert {
-    condition     = aws_db_instance.mssql.instance_class == "db.m7i.large"
-    error_message = "Expected db.m7i.large: 2 vCPU halves the SQL Server licence vs db.t3.xlarge (4 vCPU)."
+    condition     = aws_db_instance.mssql.instance_class == "db.t3.small"
+    error_message = "Expected db.t3.small: the 2 vCPU / 2 GiB floor, and the cheapest SQL Server there is."
   }
 
   assert {
     condition     = aws_db_instance.mssql.allocated_storage == 20
-    error_message = "20 GiB is the documented minimum for SQL Server Standard on gp3."
+    error_message = "20 GiB is the documented minimum for SQL Server on gp3."
   }
 
   assert {
-    condition     = aws_db_instance.mssql.max_allocated_storage == 100
-    error_message = "Expected a 100 GB autoscaling ceiling."
+    condition     = aws_db_instance.mssql.max_allocated_storage == 50
+    error_message = "Expected a 50 GB autoscaling ceiling."
   }
 
   assert {
@@ -290,5 +297,38 @@ run "db_init_enabled" {
   assert {
     condition     = length([for p in aws_ecs_task_definition.db_init[0].runtime_platform : p.cpu_architecture]) == 0
     error_message = "The db-init task must stay on the default x86_64 platform (mssql-tools is amd64-only)."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# The way out of Express. RDS has no in-place edition change, so the real
+# migration is snapshot -> restore -> rename; the config side is these three
+# variables. Proves nothing else has to move when the data outgrows Express.
+# -----------------------------------------------------------------------------
+
+run "standard_edition_upgrade" {
+  command = plan
+
+  variables {
+    mssql_engine                  = "sqlserver-se"
+    mssql_instance_class          = "db.m7i.large"
+    mssql_max_allocated_storage_gb = 100
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.engine == "sqlserver-se"
+    error_message = "Upgrading to Standard must only need mssql_engine."
+  }
+
+  # Express's db.t3.small is not offered for Standard: its burstable range
+  # starts at db.t3.xlarge (4 vCPU), so the cheapest Standard is 2 vCPU/8 GiB.
+  assert {
+    condition     = aws_db_instance.mssql.instance_class == "db.m7i.large"
+    error_message = "Standard's floor is db.m7i.large (2 vCPU / 8 GiB)."
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.max_allocated_storage == 100
+    error_message = "The storage ceiling must follow var.mssql_max_allocated_storage_gb."
   }
 }
