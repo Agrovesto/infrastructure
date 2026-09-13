@@ -125,7 +125,7 @@ variable "ecr_force_delete" {
 variable "ecr_images_to_keep" {
   description = "How many tagged images to retain per repository"
   type        = number
-  default     = 10
+  default     = 3
 }
 
 # -----------------------------------------------------------------------------
@@ -146,18 +146,18 @@ variable "mssql_engine_version" {
 
 variable "mssql_instance_class" {
   type    = string
-  default = "db.t3.xlarge"
+  default = "db.t3.small"
 }
 
 variable "mssql_allocated_storage_gb" {
   type    = number
-  default = 100
+  default = 50
 }
 
 variable "mssql_max_allocated_storage_gb" {
   description = "Storage autoscaling ceiling (0 disables autoscaling)"
   type        = number
-  default     = 500
+  default     = 100
 }
 
 variable "mssql_port" {
@@ -168,7 +168,7 @@ variable "mssql_port" {
 variable "mssql_multi_az" {
   description = "Standby replica in a second AZ (prod default: on)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "mssql_master_username" {
