@@ -69,9 +69,9 @@ mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"
 # --- ECR (API image repos) ---------------------------------------------------
 # Repos are created from the `apis` map above (agrovesto-dev-<svc>). Push with
 # `terraform output ecr_repository_urls`; the EC2 host self-authenticates.
-ecr_image_tag_mutability = "MUTABLE" # dev: re-push :latest freely (prod is IMMUTABLE)
-ecr_force_delete         = true      # terraform destroy may empty + delete repos
-ecr_images_to_keep       = 5        # tagged images retained per repo
+ecr_image_tag_mutability = "IMMUTABLE" # prod: release tags cannot be overwritten
+ecr_force_delete         = false       # prod: never delete repos that still hold images
+ecr_images_to_keep       = 5           # tagged images retained per repo
 
 
 # --- HA mode: SINGLE-AZ for now -------------------------------------------------
@@ -79,6 +79,19 @@ ecr_images_to_keep       = 5        # tagged images retained per repo
 # these and apply: mssql_multi_az = true, single_az_ecs = false.
 mssql_multi_az = false
 single_az_ecs  = true
+
+# --- Cost tuning ----------------------------------------------------------------
+# CloudWatch: 30-day retention for service logs and VPC flow logs.
+log_retention_days = 30
+
+# One shared NAT gateway instead of one per AZ: saves ~$35/mo, costs AZ
+# redundancy on private-subnet egress. Flip to false for go-live HA.
+single_nat_gateway = true
+
+# --- RDS storage ----------------------------------------------------------------
+# 50 GB provisioned, autoscaling ceiling 100 GB (gp3).
+mssql_allocated_storage_gb     = 50
+mssql_max_allocated_storage_gb = 100
 
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds
