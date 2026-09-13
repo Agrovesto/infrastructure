@@ -75,11 +75,12 @@ resource "aws_db_instance" "mssql" {
   final_snapshot_identifier = var.mssql_skip_final_snapshot ? null : "${local.name}-mssql-final-snapshot"
   deletion_protection       = var.deletion_protection
 
-  # Enhanced monitoring + log exports (agent + error logs to CloudWatch) +
-  # Performance Insights (free 7-day retention tier).
+  # Enhanced monitoring + log exports to CloudWatch + Performance Insights
+  # (free 7-day retention tier). The log types are a variable because Express
+  # has no SQL Server Agent, so there is no agent log to publish.
   monitoring_interval                   = 60
   monitoring_role_arn                   = aws_iam_role.rds_monitoring.arn
-  enabled_cloudwatch_logs_exports       = ["agent", "error"]
+  enabled_cloudwatch_logs_exports       = var.mssql_enabled_cloudwatch_logs_exports
   performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
@@ -117,6 +118,10 @@ resource "aws_ecs_task_definition" "db_init" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
+
+  # Deliberately NOT Graviton: mcr.microsoft.com/mssql-tools ships amd64 only,
+  # so this task stays on the default x86_64 platform. One one-off task, so
+  # there is nothing to save by porting it.
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 

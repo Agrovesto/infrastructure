@@ -172,6 +172,26 @@ variable "mssql_image" {
   default = "mcr.microsoft.com/mssql/server:2022-latest"
 }
 
+# Developer Edition: free, full Enterprise feature set, licensed for dev/test
+# only — never for production. That makes dev a superset of whatever prod runs,
+# which is the point: code that works here does not hit edition limits later.
+#
+# Flip to "Express" (or "Standard") when dev needs to mirror prod's limits
+# exactly, e.g. to reproduce a 10 GB-per-database problem.
+#
+# NOTE: MSSQL_PID is only read the first time the container initialises
+# /var/opt/mssql. On an existing dev host the data volume keeps its original
+# edition until the volume is recreated or an in-place edition upgrade is run.
+variable "mssql_pid" {
+  type    = string
+  default = "Developer"
+
+  validation {
+    condition     = contains(["Developer", "Express", "Standard", "Enterprise", "Web"], var.mssql_pid)
+    error_message = "MSSQL_PID must be one of Developer, Express, Standard, Enterprise, Web."
+  }
+}
+
 variable "mssql_host_port" {
   type    = number
   default = 1433

@@ -118,6 +118,10 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route" "private_nat" {
+  # Count off the *variable*, not off aws_subnet.private: referencing the
+  # resource here makes count unknown until apply, which Terraform rejects
+  # ("The count value depends on resource attributes..."). The two are the
+  # same number before and after the fix, so no state change.
   count = length(var.private_subnet_cidrs)
 
   route_table_id         = aws_route_table.private[count.index].id
@@ -126,6 +130,8 @@ resource "aws_route" "private_nat" {
 }
 
 resource "aws_route_table_association" "private" {
+  # See aws_route.private_nat: count must come from the variable so it is
+  # known at plan time.
   count = length(var.private_subnet_cidrs)
 
   subnet_id      = aws_subnet.private[count.index].id

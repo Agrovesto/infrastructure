@@ -8,6 +8,11 @@ domain_name = "nomaos.com"
 
 # ...and creates no Route53 zone/records of its own.
 manage_dns = false
+
+# --- App host ------------------------------------------------------------------
+# t3.medium (2 vCPU / 4 GiB) runs nginx + 5 API containers + Vault + SQL Server
+# in docker compose. Bump back to t3.xlarge if the host runs hot.
+instance_type = "t3.medium"
 # --- Frontends (Amplify) ---
 amplify_apps = {
   landing = {

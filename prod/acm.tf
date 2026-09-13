@@ -37,6 +37,13 @@ resource "aws_acm_certificate" "wildcard" {
   tags = merge(local.tags, { Name = local.acm_domains[0] })
 }
 
+# One validation record per domain in local.acm_domains.
+#
+# NOTE: for a wildcard + apex certificate AWS returns TWO validation options
+# that share the SAME CNAME, so both instances here upsert the identical
+# Route53 record — that is what `allow_overwrite = true` is for (without it the
+# second one fails with "... but it already exists"). The provider also
+# tolerates the matching double-delete on destroy.
 resource "aws_route53_record" "acm_validation" {
   for_each = toset(local.acm_domains)
 

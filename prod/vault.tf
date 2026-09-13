@@ -92,6 +92,8 @@ resource "aws_efs_access_point" "vault" {
 }
 
 resource "aws_efs_mount_target" "vault" {
+  # Known at plan time (see the note in vpc.tf): count must not be derived
+  # from aws_subnet.private, whose length is unknown until apply.
   count = var.enable_vault ? length(var.private_subnet_cidrs) : 0
 
   file_system_id  = aws_efs_file_system.vault[0].id
@@ -146,10 +148,20 @@ resource "aws_ecs_task_definition" "vault" {
   family                   = "${local.name}-vault"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
+  # 256 CPU / 512 MB is the smallest Fargate task there is. Vault is happy
+  # there for a single node with a handful of secrets; bump to 512/1024
+  # (~$8/mo) if it OOMs or unseal gets sluggish.
+  cpu                      = var.vault_cpu
+  memory                   = var.vault_memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.vault_task[0].arn
+
+  # Graviton, like the services. hashicorp/vault ships a linux/arm64 image.
+  runtime_platform {
+    cpu_architecture        = var.ecs_cpu_architecture
+    operating_system_family = var.ecs_operating_system_family
+  }
+
 
   volume {
     name = "vault-raft"
