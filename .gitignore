@@ -10,3 +10,13 @@ terraform.tfvars
 tfplan
 tfplan.txt
 tfplan*
+
+# CI artifacts (written by the Terraform Test & Coverage job)
+test-results.json
+test-stderr.log
+coverage.json
+coverage.md
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc

@@ -7,13 +7,23 @@
 # This workflow only touches dev/ (TF_WORKING_DIR = "dev"); the prod pipeline
 # is prod.workflow.yml.
 #
-# INSTALL: this file is the canonical copy of the pipeline. Copy it into place
-# with:
+# STAGES: 1 security-scan (fmt, Checkov, Trivy) -> 2 terraform-test (terraform
+# test + resource coverage, gated on TF_COVERAGE_FAIL_UNDER) -> 3
+# sonarqube-scan -> 4 terraform-plan (PR comment) -> 5 terraform-apply.
+# Stages 2 and 3 gate 4 and 5.
+#
+# INSTALL: this file is the canonical copy of the pipeline. Merging it does
+# NOT change what GitHub Actions runs -- the copy below has to be made by hand:
 #
 #     cp dev.workflow.yml .github/workflows/dev.yml
+#     git add .github/workflows/dev.yml && git commit -m "ci: install pipeline" && git push
 #
-# (the automation token that manages this repo has no `workflows` permission,
-# so it cannot commit into .github/workflows directly).
+# The automation token that manages this repo has no `workflows` permission, so
+# neither it nor an agent can commit into .github/workflows: a push touching
+# those paths is rejected with "refusing to allow a GitHub App to create or
+# update workflow ... without `workflows` permission". Until the copy is made
+# the installed .github/workflows/dev.yml keeps running the previous pipeline
+# and keeps failing at Terraform Init.
 # =============================================================================
 
 name: "Terraform CI/CD Pipeline"
@@ -74,8 +84,24 @@ env:
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_DEV }}
 
   # Terraform
-  TF_VERSION: "1.6.6"
+  #
+  # MUST satisfy `required_version` in both `dev/versions.tf` and
+  # `prod/versions.tf`, which pin ">= 1.7.0" for `mock_provider` /
+  # `override_data` in `terraform test`. Terraform checks that constraint in
+  # `init`, before it does anything else, so a lower pin here fails the whole
+  # pipeline at "Terraform Init" with:
+  #
+  #     Error: Unsupported Terraform Core version
+  #
+  # Bump both together. (This was pinned to 1.6.6 while the modules asked for
+  # >= 1.7.0, which is exactly how that failure happened.)
+  TF_VERSION: "1.16.2"
   TF_IN_AUTOMATION: "true"
+
+  # Minimum Terraform resource coverage, in percent, enforced by
+  # scripts/tf_coverage.py. Set to a ratchet just under today's measured
+  # value so the number can only go up; see tests/README.md.
+  TF_COVERAGE_FAIL_UNDER: "60"
 
   # The dev stack now lives in ./dev (prod stack in ./prod).
   TF_WORKING_DIR: "dev"
@@ -275,6 +301,231 @@ jobs:
 
   # ===========================================================================
   # STAGE 2
+  # TERRAFORM TEST + COVERAGE
+  # ===========================================================================
+
+  terraform-test:
+
+    name: "Terraform Test & Coverage"
+
+    needs:
+      - security-scan
+
+    runs-on: ubuntu-latest
+
+    # The suites are offline -- `mock_provider "aws"` means no AWS calls and no
+    # state -- so this job needs no OIDC credentials. `-backend=false` keeps the
+    # S3 backend out of `init`; the real AWS provider schema still has to be
+    # downloaded once, because the mock provider reuses it.
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    steps:
+
+      # -----------------------------------------------------------------------
+      # Checkout
+      # -----------------------------------------------------------------------
+
+      - name: Checkout Repository
+
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Setup Terraform
+      # -----------------------------------------------------------------------
+
+      - name: Setup Terraform
+
+        uses: hashicorp/setup-terraform@v3
+
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # -----------------------------------------------------------------------
+      # Terraform Init -- providers only, never the state backend
+      # -----------------------------------------------------------------------
+
+      - name: Terraform Init (backend=false)
+
+        run: terraform init -backend=false -input=false -no-color
+
+      # -----------------------------------------------------------------------
+      # Terraform test
+      #
+      # -json so the coverage step can read the same run. continue-on-error
+      # keeps the job going when the suite fails, so the report below still
+      # explains what broke; the coverage step is what actually fails the job.
+      # -----------------------------------------------------------------------
+
+      - name: Terraform Test
+
+        id: test
+
+        continue-on-error: true
+
+        run: |
+          set -o pipefail
+          terraform test -no-color -json 2>test-stderr.log | tee test-results.json
+          echo
+          echo "--- terraform test stderr ---"
+          cat test-stderr.log
+
+      # -----------------------------------------------------------------------
+      # Resource coverage + verdict
+      #
+      # Fails the job if the suite failed OR coverage is under
+      # TF_COVERAGE_FAIL_UNDER. Runs from the repo root so the script sees the
+      # module as `prod` / `dev` rather than `.`.
+      # -----------------------------------------------------------------------
+
+      - name: Compute Test Coverage
+
+        working-directory: ${{ github.workspace }}
+
+        run: |
+          python3 scripts/tf_coverage.py "${{ env.TF_WORKING_DIR }}" \
+            --test-json "${{ env.TF_WORKING_DIR }}/test-results.json" \
+            --fail-under "${{ env.TF_COVERAGE_FAIL_UNDER }}" \
+            --json "${{ env.TF_WORKING_DIR }}/coverage.json" \
+            --summary-md coverage.md
+
+          {
+            echo ''
+            cat coverage.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # -----------------------------------------------------------------------
+      # Keep the raw reports
+      # -----------------------------------------------------------------------
+
+      - name: Upload Test + Coverage Report
+
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: ${{ env.TF_WORKING_DIR }}-terraform-test
+          path: |
+            ${{ env.TF_WORKING_DIR }}/test-results.json
+            ${{ env.TF_WORKING_DIR }}/test-stderr.log
+            ${{ env.TF_WORKING_DIR }}/coverage.json
+            coverage.md
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # STAGE 3
+  # SONARQUBE ANALYSIS
+  # ===========================================================================
+
+  sonarqube-scan:
+
+    name: "SonarQube Analysis (Dev)"
+
+    needs:
+      - security-scan
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # -----------------------------------------------------------------------
+      # Checkout
+      # -----------------------------------------------------------------------
+
+      - name: Checkout Repository
+
+        uses: actions/checkout@v4
+
+        with:
+          # Full history: SonarQube wants blame data for new-code analysis.
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # Credentials gate
+      #
+      # SonarQube is opt-in so an unconfigured repository is never blocked.
+      # Set these secrets to switch it on:
+      #
+      #   SONAR_TOKEN     required. Generate in SonarQube under
+      #                   My Account > Security, or in SonarCloud under
+      #                   Administration > Security > Global Analysis Tokens.
+      #                   Needs the "Execute Analysis" permission.
+      #
+      #   SONAR_HOST_URL  required for a self-hosted SonarQube Server, e.g.
+      #                   https://sonar.example.com. Leave unset to target
+      #                   SonarCloud (https://sonarcloud.io).
+      #
+      # The project key and file scope come from sonar-project-dev.properties, so dev and
+      # prod report as two separate SonarQube projects.
+      # -----------------------------------------------------------------------
+
+      - name: Check SonarQube Credentials
+
+        id: sonar
+
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SONAR_TOKEN is not set; skipping the SonarQube scan. The SonarQube Summary step records the skip in the job summary."
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Scan
+      # -----------------------------------------------------------------------
+
+      - name: SonarQube Scan
+
+        if: steps.sonar.outputs.configured == 'true'
+
+        uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9 # v5.3.0
+
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+        with:
+          projectBaseDir: .
+          args: -Dproject.settings=sonar-project-dev.properties
+
+      # -----------------------------------------------------------------------
+      # Summary
+      # -----------------------------------------------------------------------
+
+      - name: SonarQube Summary
+
+        if: always()
+
+        env:
+          # Values are passed via env rather than interpolated into the shell,
+          # and the backticks below are escaped so markdown code spans survive.
+          OUTCOME: ${{ steps.sonar.outputs.configured == 'true' && 'scanned' || 'skipped' }}
+          CREDENTIALS: ${{ steps.sonar.outputs.configured == 'true' && 'present' || 'absent' }}
+
+        run: |
+          {
+            # Blank line first: a heading glued to the previous section's last
+            # line is not parsed as a heading by the markdown renderer.
+            echo ''
+            echo '## SonarQube (Dev)'
+            echo ''
+            echo '| | |'
+            echo '| --- | --- |'
+            echo "| Outcome | \`$OUTCOME\` |"
+            echo "| Credentials | \`$CREDENTIALS\` |"
+            echo '| Config file | `sonar-project-dev.properties` |'
+            echo "| Commit | \`${{ github.sha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # STAGE 4
   # TERRAFORM PLAN
   # ===========================================================================
 
@@ -284,6 +535,8 @@ jobs:
 
     needs:
       - security-scan
+      - terraform-test
+      - sonarqube-scan
 
     if: github.event_name == 'pull_request'
 
@@ -503,7 +756,7 @@ jobs:
         run: exit 1
 
   # ===========================================================================
-  # STAGE 3
+  # STAGE 5
   # TERRAFORM APPLY
   # ===========================================================================
 
@@ -513,6 +766,8 @@ jobs:
 
     needs:
       - security-scan
+      - terraform-test
+      - sonarqube-scan
 
     if: >
       github.event_name == 'push' &&

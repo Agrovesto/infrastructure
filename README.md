@@ -15,6 +15,12 @@ environment**; each folder is a self-contained, flat Terraform root module.
 │   └── README.md
 ├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
 ├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
+├── sonar-project-dev.properties    # SonarQube scope for the dev pipeline
+├── sonar-project-prod.properties   # SonarQube scope for the prod pipeline
+├── scripts/
+│   └── tf_coverage.py       # Terraform resource coverage — see tests/README.md
+├── tests/
+│   └── README.md            # the terraform test suites in dev/tests and prod/tests
 ├── bootstrap/               # run-once (manual, local state): prod tfstate S3 bucket,
 │   │                        # GitHub OIDC provider + Terraform deploy role -> AWS_ROLE_ARN_PROD
 │   └── README.md
@@ -67,6 +73,12 @@ patterns, CLI alternative).
 
 ## Installing the GitHub Actions workflows
 
+> **Merging a change to `*.workflow.yml` does not change CI.** GitHub Actions
+> runs the files under `.github/workflows/`, and the token that manages this
+> repo has no `workflows` permission — pushes touching those paths are rejected
+> outright. Every pipeline change therefore has to be installed by hand, by
+> someone whose credentials do have that permission.
+
 The automation token that manages this repo has **no `workflows` permission**,
 so the pipelines live at the repository root as canonical copies and are
 installed into `.github/workflows/` by hand:
@@ -74,6 +86,7 @@ installed into `.github/workflows/` by hand:
 ```bash
 cp dev.workflow.yml  .github/workflows/dev.yml    # repoints dev CI at ./dev
 cp prod.workflow.yml .github/workflows/prod.yml   # new: deploys ./prod to the prod account
+git add .github/workflows && git commit -m "ci: install pipelines" && git push
 ```
 
 - **Dev workflow** triggers on PRs/pushes to the `dev` branch that touch
@@ -86,6 +99,39 @@ cp prod.workflow.yml .github/workflows/prod.yml   # new: deploys ./prod to the p
 
 > The currently installed `.github/workflows/dev.yml` still targets the old
 > flat layout; replace it as above after merging this change.
+
+### Pipeline stages
+
+Both pipelines run the same five stages against their own directory:
+
+| Stage | Job | What it does |
+|---|---|---|
+| 1 | `Lint & Security Scan` | `terraform fmt`, Checkov, Trivy (vuln + secret + misconfig) → job summary |
+| 2 | `Terraform Test & Coverage` | `terraform test` + resource coverage, gated on `TF_COVERAGE_FAIL_UNDER` |
+| 3 | `SonarQube Analysis` | SonarScanner against `sonar-project-<env>.properties` |
+| 4 | `Terraform Plan & PR Diff` | plan on PRs, posted as a PR comment |
+| 5 | `Terraform Apply` | plan + apply on push to `dev` / `main` |
+
+Stages 2 and 3 gate 4 and 5 — a failing suite or a coverage regression stops
+the plan and the apply, not just the build badge.
+
+**Terraform version.** `TF_VERSION` must satisfy `required_version` in
+`dev/versions.tf` and `prod/versions.tf` (`>= 1.7.0`, needed for
+`mock_provider`). Terraform enforces that during `init`, before it does
+anything else, so a lower pin fails every run at *Terraform Init* with
+*Unsupported Terraform Core version*. It is currently `1.16.2`.
+
+**SonarQube** is opt-in and skipped (with a warning, not a failure) until these
+secrets exist:
+
+| Secret | Required | Notes |
+|---|---|---|
+| `SONAR_TOKEN` | yes | Needs the *Execute Analysis* permission on the project |
+| `SONAR_HOST_URL` | self-hosted only | e.g. `https://sonar.example.com`; leave unset for SonarCloud |
+
+Each environment reports as its own SonarQube project
+(`agrovesto-infrastructure-dev` / `-prod`), scoped to `dev/` and `prod/`
+respectively — see the `sonar-project-*.properties` files.
 
 ## Local runs
 

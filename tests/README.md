@@ -90,3 +90,59 @@ enable/disable toggles (`enable_vault`, `run_db_init`, `manage_dns`,
   dev 3 — the default is 10 in both) and `db_size_alarm_email`. `manage_dns` is
   pinned `false` in dev's tfvars while the dev tests exercise the `true`
   branch, because that is where the Route 53 records live.
+
+## Coverage
+
+`terraform test` says whether the suite passes; it says nothing about how much
+of the module the suite touches. `scripts/tf_coverage.py` answers that.
+
+**What it measures.** Every top-level `resource` and `data` block in the
+module's own `*.tf` files (the `tests/` directory is excluded — `override_resource`
+blocks there are not the thing under test) is a *block*. A block is *covered*
+when at least one `*.tftest.hcl` refers to it by address (`aws_vpc.main`,
+`data.aws_caller_identity.current`). Coverage is covered ÷ total.
+
+```bash
+python3 scripts/tf_coverage.py prod --fail-under 70
+python3 scripts/tf_coverage.py dev  --fail-under 60
+```
+
+Measured on the current tree:
+
+| Module | Coverage | Blocks | Threshold in CI |
+|---|---|---|---|
+| `prod/` | 72.3% | 73 of 101 | 70 |
+| `dev/`  | 60.5% | 26 of 43  | 60 |
+
+**Read it as a floor, not a claim.** Any reference counts — in an `assert`, an
+`override_resource`, or a `variables` map. So the number answers "does the
+suite know about this resource at all", not "is every argument asserted". It is
+static, so it needs no `terraform` binary and no AWS credentials, and it will
+not notice an assertion that references a resource but checks nothing about it.
+
+Use it as a ratchet: when you add tests, raise `TF_COVERAGE_FAIL_UNDER` in
+`dev.workflow.yml` / `prod.workflow.yml` (and their installed twins) to the new
+measured value. The lowest-hanging gaps today are the `aws_iam_policy_document`
+data blocks in both `data.tf` files and `dev/iam.tf` (0% — nothing in the dev
+suite references IAM at all).
+
+## In CI
+
+Both pipelines run the suite on every PR and push:
+
+```
+Terraform Init (backend=false)   # providers only; no state, no OIDC role
+terraform test -json             # machine-readable, so coverage reads the same run
+scripts/tf_coverage.py           # report + verdict, into the job summary
+```
+
+The job fails if the suite fails **or** coverage drops below
+`TF_COVERAGE_FAIL_UNDER`. Raw `test-results.json`, `coverage.json` and
+`coverage.md` are uploaded as the `<env>-terraform-test` artifact.
+
+> **Terraform version.** `required_version = ">= 1.7.0"` in both `versions.tf`
+> files is what makes `mock_provider` work, and Terraform checks it during
+> `init`, before anything else. `TF_VERSION` in the workflows must therefore be
+> ≥ 1.7.0 — it was pinned to `1.6.6`, which failed every run at
+> `Terraform Init` with *Unsupported Terraform Core version*. Bump the two
+> together.
