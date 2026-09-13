@@ -66,5 +66,27 @@ enable/disable toggles (`enable_vault`, `run_db_init`, `manage_dns`,
 - `ingress`/`egress` on `aws_security_group` and `condition`/`action` on
   `aws_lb_listener_rule` are **sets**, which Terraform cannot index — every
   assertion iterates or flattens instead.
-- Each test file sets the variables it needs, so the suites do not depend on
-  `terraform.auto.tfvars` staying in sync.
+- **`terraform test` does not load `terraform.auto.tfvars`.** Variables in a
+  test come from the test file's `variables` block plus the variable
+  `default`s — nothing else. So an assertion is only true of production if the
+  default matches production *or* the test file sets the value explicitly.
+  Six assertions were silently wrong this way and have been fixed by pinning
+  the production value in the test file:
+
+  | Pinned in tfvars | Default | Where it is now pinned for tests |
+  |---|---|---|
+  | `log_retention_days = 30` | 365 | `prod/tests/{compute,vault,vpc}.tftest.hcl` |
+  | `mssql_multi_az = false` | true | `prod/tests/rds.tftest.hcl` |
+  | `mssql_enabled_cloudwatch_logs_exports = ["error"]` | error + agent | `prod/tests/rds.tftest.hcl` → `express_log_exports` |
+  | `instance_type = "t3.medium"` | t3.xlarge | `dev/tests/ec2.tftest.hcl` |
+
+  **Rule:** when you change a value in `terraform.auto.tfvars` only, either
+  move the value into the variable's `default` or add it to the test file's
+  `variables` block. Otherwise the suite keeps passing while describing an
+  environment you are not running.
+
+- Deliberately *not* asserted, because they only exist in tfvars and the tests
+  assert the variable rather than a literal: `ecr_images_to_keep` (prod 5,
+  dev 3 — the default is 10 in both) and `db_size_alarm_email`. `manage_dns` is
+  pinned `false` in dev's tfvars while the dev tests exercise the `true`
+  branch, because that is where the Route 53 records live.

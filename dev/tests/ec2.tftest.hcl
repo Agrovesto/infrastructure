@@ -25,6 +25,7 @@ variables {
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly"
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  instance_type     = "t3.medium"
 
   apis = {
     wallet = {

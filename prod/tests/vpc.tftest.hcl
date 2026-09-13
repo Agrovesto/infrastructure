@@ -34,8 +34,9 @@ override_data {
 }
 
 variables {
-  domain_name     = "nomaos.com"
-  mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  domain_name        = "nomaos.com"
+  mssql_databases    = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  log_retention_days = 30
 
   services = {
     wallet = {

@@ -32,6 +32,7 @@ override_data {
 variables {
   domain_name     = "nomaos.com"
   mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  mssql_multi_az  = false
 
   services = {
     wallet = {
@@ -112,12 +113,6 @@ run "instance" {
   assert {
     condition     = aws_db_instance.mssql.instance_class == "db.t3.micro"
     error_message = "Expected db.t3.micro: the SQL Server hardware floor (2 vCPU / 1 GiB)."
-  }
-
-  # Express has no SQL Server Agent, so there is no agent log to publish.
-  assert {
-    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error"]
-    error_message = "On Express the only publishable SQL Server log is the error log."
   }
 
   assert {
@@ -429,5 +424,21 @@ run "db_size_guard_disabled" {
       length(aws_sns_topic.db_size_alarm) == 0
     )
     error_message = "db_size_alarm_enabled = false must remove the whole guard."
+  }
+}
+
+# Express has no SQL Server Agent, so prod publishes only the error log. The
+# variable default is error + agent because Standard needs the agent log; this
+# run pins the production value.
+run "express_log_exports" {
+  command = plan
+
+  variables {
+    mssql_enabled_cloudwatch_logs_exports = ["error"]
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error"]
+    error_message = "On Express the only publishable SQL Server log is the error log."
   }
 }
