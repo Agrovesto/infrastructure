@@ -8,6 +8,7 @@ framework:
 # Checks skipped for the DEV environment, each with its reason.
 # Fix findings instead of skipping them wherever practical.
 skip-check:
+  - CKV_AWS_338 # Log retention is 30 days by design to reduce CloudWatch log costs
   - CKV_AWS_24 # SSH ingress open; restrict allowed_ssh_cidrs in dev.auto.tfvars when ready
   - CKV_AWS_88 # Public EC2 behind an EIP is the design (nginx is the entrypoint)
   - CKV_AWS_126 # Detailed monitoring costs extra; basic monitoring is fine for dev

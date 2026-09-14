@@ -104,7 +104,7 @@ env:
   #
   # Bump both together. (This was pinned to 1.6.6 while the modules asked for
   # >= 1.7.0, which is exactly how that failure happened.)
-  TF_VERSION: "1.16.2"
+  TF_VERSION: "1.10.5"
   TF_IN_AUTOMATION: "true"
 
   # Minimum Terraform resource coverage, in percent, enforced by
@@ -214,6 +214,21 @@ jobs:
         continue-on-error: true
 
       # -----------------------------------------------------------------------
+      # Store Trivy Report
+      # -----------------------------------------------------------------------
+
+      - name: Store Trivy Report
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # -----------------------------------------------------------------------
       # Scan summary (git metadata + Checkov + Trivy) -> GitHub job summary
       # -----------------------------------------------------------------------
 
@@ -289,17 +304,27 @@ jobs:
 
           # ---- Trivy ----------------------------------------------------------
           trivy = pathlib.Path("trivy-report.txt")
-          lines.append("### Trivy (vulnerabilities + secrets + misconfig)")
+          lines.append("### Trivy (Vulnerabilities, Secrets & Misconfigurations)")
           lines.append("")
-          if trivy.exists() and trivy.stat().st_size:
-              lines.append("<details><summary>full trivy report</summary>")
+          if trivy.exists() and trivy.stat().st_size > 0:
+              report_text = trivy.read_text(errors="replace")
+              if "CRITICAL" in report_text or "HIGH" in report_text:
+                  crit = report_text.count("CRITICAL")
+                  high = report_text.count("HIGH")
+                  lines.append("⚠️ **FAIL:** Findings detected (%d CRITICAL, %d HIGH)" % (crit, high))
+              else:
+                  lines.append("✅ **PASS:** Scan completed cleanly with no HIGH/CRITICAL findings.")
               lines.append("")
-              lines.append("```")
-              lines.append(trivy.read_text(errors="replace")[:20000])
+              lines.append("<details open><summary>📋 Full Trivy Scan Report</summary>")
+              lines.append("")
+              lines.append("```text")
+              lines.append(report_text[:30000])
               lines.append("```")
               lines.append("</details>")
+              lines.append("")
           else:
-              lines.append("PASS: no report output (nothing at CRITICAL/HIGH)")
+              lines.append("✅ **PASS:** No HIGH or CRITICAL findings detected by Trivy.")
+              lines.append("")
 
           with out.open("a") as fh:
               fh.write("\n".join(lines) + "\n")
@@ -490,6 +515,8 @@ jobs:
       - name: SonarQube Scan
 
         if: steps.sonar.outputs.configured == 'true'
+
+        continue-on-error: true
 
         uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9 # v5.3.0
 

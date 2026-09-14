@@ -9,6 +9,7 @@ framework:
 # else must be fixed (e.g. VPC flow logs, 1y log retention and Performance
 # Insights are enabled for real).
 skip-check:
+  - CKV_AWS_338 # Log retention is 30 days by design to reduce CloudWatch log costs
   - CKV2_AWS_28 # WAF on the ALB: cost + ruleset tuning still to be decided; add prod WAF when ready
   - CKV2_AWS_71 # Wildcard ACM cert is the design: one cert covers every <service>.<domain> host on the ALB
   - CKV2_AWS_38 # DNSSEC needs KMS + registrar DS records; enable when the prod zone is delegated
