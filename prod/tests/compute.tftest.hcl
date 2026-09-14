@@ -2,7 +2,44 @@
 # PROD — ECS Fargate cluster, task definitions, services, IAM, log groups
 # =============================================================================
 
-mock_provider "aws" {}
+mock_provider "aws" {
+
+  mock_resource "aws_lb" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:loadbalancer/app/mock/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:eu-west-1:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_acm_certificate_validation" {
+    defaults = {
+      certificate_arn = "arn:aws:acm:eu-west-1:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:role/mock-role"
+    }
+  }
+
+  mock_resource "aws_cloudwatch_log_group" {
+    defaults = {
+      arn = "arn:aws:logs:eu-west-1:123456789012:log-group:/aws/mock/log-group"
+    }
+  }
+
+  mock_resource "aws_kms_key" {
+    defaults = {
+      arn = "arn:aws:kms:eu-west-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+    }
+  }
+}
 
 override_data {
   target = data.aws_availability_zones.available
