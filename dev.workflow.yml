@@ -451,6 +451,7 @@ jobs:
 
     needs:
       - security-scan
+      - terraform-test
 
     runs-on: ubuntu-latest
 
