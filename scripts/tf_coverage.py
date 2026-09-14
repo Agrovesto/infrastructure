@@ -167,6 +167,9 @@ def read_test_json(path: str) -> dict:
              "error": str, "runs_list": list[dict]}. Terraform emits one JSON object per line.
     """
     result = {"passed": False, "files": 0, "runs": 0, "failed": 0, "error": "", "runs_list": []}
+    runs_by_key = {}
+    test_files_seen = set()
+
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.strip()
@@ -178,25 +181,30 @@ def read_test_json(path: str) -> dict:
                 continue
             kind = entry.get("type")
             if kind == "test_file":
-                result["files"] += 1
+                tf_path = entry.get("test_file", {}).get("path", "")
+                if tf_path and tf_path not in test_files_seen:
+                    test_files_seen.add(tf_path)
             elif kind == "test_run":
-                result["runs"] += 1
-                status = entry.get("status", "")
-                if status == "fail":
-                    result["failed"] += 1
                 tr = entry.get("test_run", {})
-                result["runs_list"].append({
-                    "path": tr.get("path", ""),
-                    "run": tr.get("run", ""),
-                    "status": status,
-                })
+                path_val = tr.get("path", "")
+                run_val = tr.get("run", "")
+                status = tr.get("status") or entry.get("status", "")
+                if path_val and run_val:
+                    key = (path_val, run_val)
+                    if key not in runs_by_key:
+                        runs_by_key[key] = {"path": path_val, "run": run_val, "status": "unknown"}
+                    if status:
+                        runs_by_key[key]["status"] = status
             elif kind == "test_summary":
                 status = entry.get("status", "")
                 result["passed"] = status in ("pass", "skip")
-                if status == "fail":
-                    result["error"] = entry.get("diagnostic", {}).get("summary", "") or (
-                        "%d test run(s) failed" % result["failed"]
-                    )
+                if status in ("fail", "error"):
+                    result["error"] = entry.get("diagnostic", {}).get("summary", "") or "Test suite failed"
+
+    result["files"] = len(test_files_seen)
+    result["runs_list"] = list(runs_by_key.values())
+    result["runs"] = len(result["runs_list"])
+    result["failed"] = sum(1 for r in result["runs_list"] if r["status"] in ("fail", "error"))
     return result
 
 
