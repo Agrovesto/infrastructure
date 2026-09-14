@@ -112,7 +112,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "instance" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_instance.app.instance_type == "t3.medium"
@@ -140,7 +140,7 @@ run "instance" {
 # -----------------------------------------------------------------------------
 
 run "storage" {
-  command = apply
+  command = plan
 
   assert {
     condition     = [for b in aws_instance.app.root_block_device : b.volume_size] == [50]
@@ -183,7 +183,7 @@ run "storage" {
 # -----------------------------------------------------------------------------
 
 run "elastic_ip" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(aws_eip.app) == 1
@@ -197,7 +197,7 @@ run "elastic_ip" {
 }
 
 run "no_elastic_ip" {
-  command = apply
+  command = plan
 
   variables {
     associate_elastic_ip = false
@@ -214,7 +214,7 @@ run "no_elastic_ip" {
 # -----------------------------------------------------------------------------
 
 run "mssql_edition" {
-  command = apply
+  command = plan
 
   assert {
     condition     = strcontains(aws_instance.app.user_data, "MSSQL_PID: \"Developer\"")
@@ -223,7 +223,7 @@ run "mssql_edition" {
 }
 
 run "mssql_edition_overridable" {
-  command = apply
+  command = plan
 
   variables {
     mssql_pid = "Express"

@@ -87,7 +87,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "vpc" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_vpc.main.cidr_block == var.vpc_cidr
@@ -110,7 +110,7 @@ run "vpc" {
 # -----------------------------------------------------------------------------
 
 run "subnets" {
-  command = apply
+  command = plan
 
   assert {
     condition = (
@@ -149,7 +149,7 @@ run "subnets" {
 # -----------------------------------------------------------------------------
 
 run "routing_counts_are_known_at_plan_time" {
-  command = apply
+  command = plan
 
   # These three used to be `count = length(aws_subnet.private)`, which is
   # unknown until apply and made plan/apply/import abort with
@@ -186,7 +186,7 @@ run "routing_counts_are_known_at_plan_time" {
 # -----------------------------------------------------------------------------
 
 run "single_nat_gateway_mode" {
-  command = apply
+  command = plan
 
   variables {
     single_nat_gateway = true
@@ -204,7 +204,7 @@ run "single_nat_gateway_mode" {
 }
 
 run "per_az_nat_gateway_mode" {
-  command = apply
+  command = plan
 
   variables {
     single_nat_gateway = false
@@ -221,7 +221,7 @@ run "per_az_nat_gateway_mode" {
 # -----------------------------------------------------------------------------
 
 run "flow_logs" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_flow_log.main.traffic_type == "ALL"

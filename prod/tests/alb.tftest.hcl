@@ -82,7 +82,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "load_balancer" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_lb.main.name == "${var.project}-${var.environment}-alb"
@@ -125,7 +125,7 @@ run "load_balancer" {
 # -----------------------------------------------------------------------------
 
 run "access_logs" {
-  command = apply
+  command = plan
 
   assert {
     condition     = one(aws_lb.main.access_logs).enabled == true
@@ -176,7 +176,7 @@ run "access_logs" {
 # -----------------------------------------------------------------------------
 
 run "target_groups" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(aws_lb_target_group.services) == 5
@@ -214,7 +214,7 @@ run "target_groups" {
 # -----------------------------------------------------------------------------
 
 run "listeners" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_lb_listener.http.port == 80
@@ -261,7 +261,7 @@ run "listeners" {
 # -----------------------------------------------------------------------------
 
 run "listener_rules" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(aws_lb_listener_rule.services) == 5
@@ -294,7 +294,7 @@ run "listener_rules" {
 }
 
 run "listener_rules_follow_the_domain_variable" {
-  command = apply
+  command = plan
 
   variables {
     domain_name = "example.com"

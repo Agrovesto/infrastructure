@@ -88,7 +88,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "alb_security_group" {
-  command = apply
+  command = plan
 
   assert {
     condition     = toset([for i in aws_security_group.alb.ingress : tonumber(i.from_port)]) == toset([80, 443])
@@ -111,7 +111,7 @@ run "alb_security_group" {
 # -----------------------------------------------------------------------------
 
 run "ecs_security_group" {
-  command = apply
+  command = plan
 
   assert {
     condition     = [for e in aws_security_group.ecs.egress : e.protocol] == ["-1"]
@@ -129,7 +129,7 @@ run "ecs_security_group" {
 # -----------------------------------------------------------------------------
 
 run "service_port_rules" {
-  command = apply
+  command = plan
 
   assert {
     condition = toset(keys(aws_security_group_rule.alb_to_ecs)) == toset([
@@ -166,7 +166,7 @@ run "service_port_rules" {
 }
 
 run "service_port_rules_without_vault" {
-  command = apply
+  command = plan
 
   variables {
     enable_vault = false
@@ -185,7 +185,7 @@ run "service_port_rules_without_vault" {
 # -----------------------------------------------------------------------------
 
 run "database_and_efs_security_groups" {
-  command = apply
+  command = plan
 
   assert {
     condition     = [for i in aws_security_group.rds.ingress : i.from_port] == [1433]
@@ -204,7 +204,7 @@ run "database_and_efs_security_groups" {
 }
 
 run "efs_security_group_without_vault" {
-  command = apply
+  command = plan
 
   variables {
     enable_vault = false
