@@ -208,6 +208,21 @@ jobs:
         continue-on-error: true
 
       # -----------------------------------------------------------------------
+      # Store Trivy Report
+      # -----------------------------------------------------------------------
+
+      - name: Store Trivy Report
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # -----------------------------------------------------------------------
       # Scan summary (git metadata + Checkov + Trivy) -> GitHub job summary
       # -----------------------------------------------------------------------
 
@@ -283,17 +298,27 @@ jobs:
 
           # ---- Trivy ----------------------------------------------------------
           trivy = pathlib.Path("trivy-report.txt")
-          lines.append("### Trivy (vulnerabilities + secrets + misconfig)")
+          lines.append("### Trivy (Vulnerabilities, Secrets & Misconfigurations)")
           lines.append("")
-          if trivy.exists() and trivy.stat().st_size:
-              lines.append("<details><summary>full trivy report</summary>")
+          if trivy.exists() and trivy.stat().st_size > 0:
+              report_text = trivy.read_text(errors="replace")
+              if "CRITICAL" in report_text or "HIGH" in report_text:
+                  crit = report_text.count("CRITICAL")
+                  high = report_text.count("HIGH")
+                  lines.append("⚠️ **FAIL:** Findings detected (%d CRITICAL, %d HIGH)" % (crit, high))
+              else:
+                  lines.append("✅ **PASS:** Scan completed cleanly with no HIGH/CRITICAL findings.")
               lines.append("")
-              lines.append("```")
-              lines.append(trivy.read_text(errors="replace")[:20000])
+              lines.append("<details open><summary>📋 Full Trivy Scan Report</summary>")
+              lines.append("")
+              lines.append("```text")
+              lines.append(report_text[:30000])
               lines.append("```")
               lines.append("</details>")
+              lines.append("")
           else:
-              lines.append("PASS: no report output (nothing at CRITICAL/HIGH)")
+              lines.append("✅ **PASS:** No HIGH or CRITICAL findings detected by Trivy.")
+              lines.append("")
 
           with out.open("a") as fh:
               fh.write("\n".join(lines) + "\n")
