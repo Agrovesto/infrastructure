@@ -104,7 +104,7 @@ locals {
   cname_records = merge(
     {
       for k, app in var.amplify_apps :
-      app.subdomain => "${app.branch}.${aws_amplify_app.this[k].default_domain}"
+      app.subdomain => "${app.branch}.${try(aws_amplify_app.this[k].default_domain, "amplifyapp.com")}"
     },
     var.extra_cname_records
   )
