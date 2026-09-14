@@ -87,10 +87,5 @@ locals {
   # One line per user database: "DB_SIZE_OK <db> <mb>MB" or "DB_SIZE_ALERT <db>
   # <mb>MB". size is in 8 KB pages, so *8/1024 is MB. type = 0 is data files —
   # Express's 10 GB cap counts data, not the transaction log.
-  db_size_check_sql = (
-    "SET NOCOUNT ON; SELECT CASE WHEN SUM(size)*8/1024 > ${var.db_size_alarm_threshold_mb} " +
-    "THEN 'DB_SIZE_ALERT ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' " +
-    "ELSE 'DB_SIZE_OK ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' END " +
-    "FROM sys.master_files WHERE database_id > 4 AND type = 0 GROUP BY database_id;"
-  )
+  db_size_check_sql = "SET NOCOUNT ON; SELECT CASE WHEN SUM(size)*8/1024 > ${var.db_size_alarm_threshold_mb} THEN 'DB_SIZE_ALERT ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' ELSE 'DB_SIZE_OK ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' END FROM sys.master_files WHERE database_id > 4 AND type = 0 GROUP BY database_id;"
 }

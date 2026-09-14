@@ -116,7 +116,7 @@ resource "aws_iam_role" "vault_task" {
   count = var.enable_vault ? 1 : 0
 
   name               = "${local.name}-vault-task-role"
-  assume_role_policy = data.aws_iam_policy_document.ecs_execution_assume.json
+  assume_role_policy = data.aws_iam_policy_document.ecs_execution_assume.json != "" ? data.aws_iam_policy_document.ecs_execution_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 
   tags = local.tags
 }
@@ -126,7 +126,7 @@ resource "aws_iam_role_policy" "vault_task" {
 
   name   = "${local.name}-vault-task-policy"
   role   = aws_iam_role.vault_task[0].id
-  policy = data.aws_iam_policy_document.vault_task.json
+  policy = data.aws_iam_policy_document.vault_task.json != "" ? data.aws_iam_policy_document.vault_task.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 }
 
 # -- ECS service ------------------------------------------------------------------

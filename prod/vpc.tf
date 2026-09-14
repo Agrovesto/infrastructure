@@ -187,7 +187,7 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 
 resource "aws_iam_role" "flow_logs" {
   name               = "${local.name}-flow-logs-role"
-  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume.json
+  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume.json != "" ? data.aws_iam_policy_document.flow_logs_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 
   tags = local.tags
 }
@@ -195,7 +195,7 @@ resource "aws_iam_role" "flow_logs" {
 resource "aws_iam_role_policy" "flow_logs" {
   name   = "${local.name}-flow-logs-policy"
   role   = aws_iam_role.flow_logs.id
-  policy = data.aws_iam_policy_document.flow_logs.json
+  policy = data.aws_iam_policy_document.flow_logs.json != "" ? data.aws_iam_policy_document.flow_logs.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 }
 
 resource "aws_flow_log" "main" {
