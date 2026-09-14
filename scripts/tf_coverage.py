@@ -164,9 +164,9 @@ def read_test_json(path: str) -> dict:
     """Summarise the output of `terraform test -json`.
 
     Returns {"passed": bool, "files": int, "runs": int, "failed": int,
-             "error": str}. Terraform emits one JSON object per line.
+             "error": str, "runs_list": list[dict]}. Terraform emits one JSON object per line.
     """
-    result = {"passed": False, "files": 0, "runs": 0, "failed": 0, "error": ""}
+    result = {"passed": False, "files": 0, "runs": 0, "failed": 0, "error": "", "runs_list": []}
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.strip()
@@ -181,6 +181,15 @@ def read_test_json(path: str) -> dict:
                 result["files"] += 1
             elif kind == "test_run":
                 result["runs"] += 1
+                status = entry.get("status", "")
+                if status == "fail":
+                    result["failed"] += 1
+                tr = entry.get("test_run", {})
+                result["runs_list"].append({
+                    "path": tr.get("path", ""),
+                    "run": tr.get("run", ""),
+                    "status": status,
+                })
             elif kind == "test_summary":
                 status = entry.get("status", "")
                 result["passed"] = status in ("pass", "skip")
@@ -240,20 +249,30 @@ def _pct(part: int, whole: int) -> float:
 
 
 def render_markdown(report: dict, fail_under: float, test_summary: dict | None) -> str:
-    lines = ["## Terraform test coverage", ""]
+    lines = ["## Terraform Test Suite & Coverage", ""]
 
     if test_summary is not None:
         state = "PASS" if test_summary["passed"] else "FAIL"
         lines.append(
-            "`terraform test`: **%s** (%d file(s), %d run(s))"
+            "### Test Suite Checks (`terraform test`): **%s** (%d test file(s), %d test run(s))"
             % (state, test_summary["files"], test_summary["runs"])
         )
         if not test_summary["passed"] and test_summary["error"]:
             lines.append("")
-            lines.append("> %s" % test_summary["error"])
+            lines.append("> ⚠️ %s" % test_summary["error"])
         lines.append("")
 
+        if test_summary.get("runs_list"):
+            lines.append("| Test File | Test Run | Status |")
+            lines.append("| --- | --- | --- |")
+            for item in test_summary["runs_list"]:
+                status_icon = "✅ PASS" if item["status"] in ("pass", "skip") else "❌ FAIL"
+                lines.append("| `%s` | `%s` | %s |" % (item["path"], item["run"], status_icon))
+            lines.append("")
+
     lines += [
+        "### Resource Coverage",
+        "",
         "**Resource coverage: %s%%** (%d of %d `resource`/`data` blocks referenced "
         "by the suite)" % (report["percent"], report["covered_blocks"], report["total_blocks"]),
         "",
