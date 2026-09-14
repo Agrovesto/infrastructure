@@ -35,13 +35,13 @@ apis = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5001
     subdomain = "dev-wallet-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001" }  
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001" }
   }
   onboarding = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5002
     subdomain = "dev-onboarding-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002" }  
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002" }
   }
   input = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
@@ -66,4 +66,4 @@ mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"
 
 ecr_image_tag_mutability = "MUTABLE" # dev: re-push :latest freely (prod is IMMUTABLE)
 ecr_force_delete         = true      # terraform destroy may empty + delete repos
-ecr_images_to_keep       = 3        # tagged images retained per repo
+ecr_images_to_keep       = 3         # tagged images retained per repo

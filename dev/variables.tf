@@ -144,7 +144,7 @@ variable "associate_elastic_ip" {
 
 variable "apis" {
   description = "Backend APIs on the EC2 docker host. Add a key to launch another API."
-  type        = map(object({
+  type = map(object({
     image     = string
     host_port = number
     subdomain = string
@@ -207,7 +207,7 @@ variable "mssql_subdomain" {
 # -----------------------------------------------------------------------------
 
 variable "vault" {
-  type    = object({
+  type = object({
     image     = optional(string, "hashicorp/vault:1.15")
     host_port = optional(number, 8200)
     subdomain = optional(string, "vault")
@@ -251,7 +251,7 @@ variable "enable_ec2_scheduler" {
 
 variable "amplify_apps" {
   description = "Amplify frontends. Add another map key to create a new app."
-  type        = map(object({
+  type = map(object({
     repository            = string
     branch                = optional(string, "main")
     subdomain             = string
@@ -315,10 +315,10 @@ variable "extra_cname_records" {
 
 variable "extra_alias_records" {
   description = "Additional alias A records (name => {name, zone_id, evaluate_target_health})"
-  type        = map(object({
+  type = map(object({
     name                   = string
     zone_id                = string
     evaluate_target_health = optional(bool, false)
   }))
-  default     = {}
+  default = {}
 }

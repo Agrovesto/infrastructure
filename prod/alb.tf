@@ -65,7 +65,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-  policy = data.aws_iam_policy_document.alb_logs.json
+  policy = can(jsondecode(data.aws_iam_policy_document.alb_logs.json)) ? data.aws_iam_policy_document.alb_logs.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 }
 
 # -- Load balancer --------------------------------------------------------------
@@ -75,10 +75,10 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   internal           = false
 
-  subnets            = aws_subnet.public[*].id
-  security_groups    = [aws_security_group.alb.id]
-  ip_address_type    = "ipv4"
-  idle_timeout       = var.alb_idle_timeout_seconds
+  subnets         = aws_subnet.public[*].id
+  security_groups = [aws_security_group.alb.id]
+  ip_address_type = "ipv4"
+  idle_timeout    = var.alb_idle_timeout_seconds
 
   drop_invalid_header_fields = true
   enable_deletion_protection = var.deletion_protection

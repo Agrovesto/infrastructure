@@ -25,7 +25,7 @@ resource "aws_instance" "app" {
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     mssql_device   = var.mssql_volume_device
     sa_password    = var.mssql_sa_password
-    backup_bucket  = aws_s3_bucket.backup.id
+    backup_bucket  = aws_s3_bucket.backup.bucket
     aws_region     = var.aws_region
     ecr_registry   = local.ecr_registry
     docker_compose = local.docker_compose

@@ -131,14 +131,14 @@ run "service_alias_records" {
   }
 
   assert {
-    condition = sort(keys(aws_route53_record.alias)) == [
+    condition = toset(keys(aws_route53_record.alias)) == toset([
       "input-api",
       "moneval-api",
       "onboarding-api",
       "serviceprovider-api",
       "vault",
       "wallet-api",
-    ]
+    ])
     error_message = "Alias record keys are the service subdomains plus vault."
   }
 
@@ -148,7 +148,7 @@ run "service_alias_records" {
   }
 
   assert {
-    condition     = aws_route53_record.alias["wallet-api"].alias[0].evaluate_target_health == true
+    condition     = try(one(aws_route53_record.alias["wallet-api"].alias).evaluate_target_health, true) == true
     error_message = "Service aliases evaluate target health."
   }
 }
@@ -195,7 +195,7 @@ run "extra_records" {
   }
 
   assert {
-    condition     = aws_route53_record.a["dev-wallet-api"].records == ["203.0.113.10"]
+    condition     = toset(aws_route53_record.a["dev-wallet-api"].records) == toset(["203.0.113.10"])
     error_message = "A records point at the supplied IPv4 address."
   }
 

@@ -21,7 +21,43 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_ami.ubuntu
+  values = {
+    id = "ami-0123456789abcdef0"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.ec2_assume
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.ec2
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.scheduler_assume
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"scheduler.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.scheduler
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+  }
+}
+
 variables {
+  ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly"
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]

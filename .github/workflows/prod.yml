@@ -457,6 +457,7 @@ jobs:
 
     needs:
       - security-scan
+      - terraform-test
 
     runs-on: ubuntu-latest
 
@@ -526,7 +527,7 @@ jobs:
 
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-prod.properties
+          args: -Dproject.settings=sonar-project-prod.properties -Dsonar.defaultBranch=devops
 
       # -----------------------------------------------------------------------
       # Summary

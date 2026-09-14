@@ -15,7 +15,7 @@
 # =============================================================================
 resource "aws_ecr_repository" "apis" {
   #checkov:skip=CKV_AWS_51: dev repos are tag-mutable on purpose so developers can re-push :latest; prod repos are IMMUTABLE
-  for_each = var.apis
+  for_each             = var.apis
   name                 = "${local.name}-${each.key}"
   image_tag_mutability = var.ecr_image_tag_mutability
   force_delete         = var.ecr_force_delete
@@ -30,7 +30,7 @@ resource "aws_ecr_repository" "apis" {
 }
 # Expire untagged digests quickly, keep the last N tagged images.
 resource "aws_ecr_lifecycle_policy" "apis" {
-  for_each = var.apis
+  for_each   = var.apis
   repository = aws_ecr_repository.apis[each.key].name
   policy = jsonencode({
     rules = [

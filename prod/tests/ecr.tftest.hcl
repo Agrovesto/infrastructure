@@ -105,7 +105,7 @@ run "repositories" {
   }
 
   assert {
-    condition     = aws_ecr_repository.services["wallet"].image_scanning_configuration[0].scan_on_push == true
+    condition     = one(aws_ecr_repository.services["wallet"].image_scanning_configuration).scan_on_push == true
     error_message = "Scan on push must stay enabled."
   }
 

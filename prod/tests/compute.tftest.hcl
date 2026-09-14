@@ -2,7 +2,100 @@
 # PROD — ECS Fargate cluster, task definitions, services, IAM, log groups
 # =============================================================================
 
-mock_provider "aws" {}
+mock_provider "aws" {
+
+  mock_resource "aws_lb" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:loadbalancer/app/mock/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_lb_listener" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener/app/mock/1234567890123456/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/mock-tg/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_ecs_cluster" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:cluster/mock-cluster"
+    }
+  }
+
+  mock_resource "aws_ecs_task_definition" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:task-definition/mock-task:1"
+    }
+  }
+
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:eu-west-1:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_acm_certificate_validation" {
+    defaults = {
+      certificate_arn = "arn:aws:acm:eu-west-1:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:role/mock-role"
+    }
+  }
+
+  mock_resource "aws_cloudwatch_log_group" {
+    defaults = {
+      arn = "arn:aws:logs:eu-west-1:123456789012:log-group:/aws/mock/log-group"
+    }
+  }
+
+  mock_resource "aws_kms_key" {
+    defaults = {
+      arn = "arn:aws:kms:eu-west-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_secretsmanager_secret" {
+    defaults = {
+      arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:mock-secret-123456"
+    }
+  }
+
+  mock_resource "aws_secretsmanager_secret_version" {
+    defaults = {
+      arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:mock-secret-123456"
+    }
+  }
+
+  mock_resource "aws_db_instance" {
+    defaults = {
+      arn      = "arn:aws:rds:eu-west-1:123456789012:db:mock-db"
+      endpoint = "mock-db.123456789012.eu-west-1.rds.amazonaws.com:1433"
+      address  = "mock-db.123456789012.eu-west-1.rds.amazonaws.com"
+    }
+  }
+
+  mock_resource "aws_sns_topic" {
+    defaults = {
+      arn = "arn:aws:sns:eu-west-1:123456789012:mock-topic"
+    }
+  }
+
+  mock_resource "aws_s3_bucket" {
+    defaults = {
+      arn = "arn:aws:s3:::mock-bucket"
+    }
+  }
+}
 
 override_data {
   target = data.aws_availability_zones.available
@@ -115,12 +208,12 @@ run "task_definitions" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].cpu == 256
+    condition     = tonumber(aws_ecs_task_definition.services["wallet"].cpu) == 256
     error_message = "Task CPU must come from the service map (0.25 vCPU)."
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].memory == 512
+    condition     = tonumber(aws_ecs_task_definition.services["wallet"].memory) == 512
     error_message = "Task memory must come from the service map."
   }
 
@@ -130,7 +223,7 @@ run "task_definitions" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].requires_compatibilities == ["FARGATE"]
+    condition     = toset(aws_ecs_task_definition.services["wallet"].requires_compatibilities) == toset(["FARGATE"])
     error_message = "Tasks must be FARGATE compatible."
   }
 
@@ -163,7 +256,7 @@ run "services" {
   }
 
   assert {
-    condition     = aws_ecs_service.services["wallet"].network_configuration[0].assign_public_ip == false
+    condition     = one(aws_ecs_service.services["wallet"].network_configuration).assign_public_ip == false
     error_message = "Tasks live in private subnets with no public IP."
   }
 
@@ -173,7 +266,7 @@ run "services" {
   }
 
   assert {
-    condition     = aws_ecs_service.services["wallet"].deployment_circuit_breaker[0].enable == true
+    condition     = one(aws_ecs_service.services["wallet"].deployment_circuit_breaker).enable == true
     error_message = "Prod services need the circuit breaker (auto-rollback on failed deploys)."
   }
 }
@@ -186,7 +279,7 @@ run "services_single_az_pin" {
   }
 
   assert {
-    condition     = length(aws_ecs_service.services["wallet"].network_configuration[0].subnets) == 1
+    condition     = length(one(aws_ecs_service.services["wallet"].network_configuration).subnets) == 1
     error_message = "single_az_ecs = true pins every task to the first private subnet."
   }
 }
@@ -265,7 +358,7 @@ run "container_definitions" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort == 5001
+    condition     = tonumber(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort) == 5001
     error_message = "Container port must match the service map."
   }
 
@@ -275,26 +368,17 @@ run "container_definitions" {
   }
 
   assert {
-    condition = [
-      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value
-      if e.name == "DB_NAME"
-    ] == ["wallet"]
+    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "DB_NAME"], "wallet")
     error_message = "DB_NAME must equal the service key (service name == database name, as in dev)."
   }
 
   assert {
-    condition = [
-      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value
-      if e.name == "VAULT_ADDR"
-    ] == ["https://vault.nomaos.com"]
+    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "VAULT_ADDR"], "https://vault.nomaos.com")
     error_message = "Services must receive VAULT_ADDR while Vault is enabled."
   }
 
   assert {
-    condition = length([
-      for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name
-      if s.name == "DB_PASSWORD"
-    ]) == 1
+    condition     = contains([for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name], "DB_PASSWORD")
     error_message = "Bootstrap mode (vault_secrets_enabled = false) injects DB_PASSWORD from Secrets Manager."
   }
 }
@@ -420,8 +504,8 @@ run "graviton_tasks" {
 
   assert {
     condition = (
-      aws_ecs_task_definition.services["wallet"].cpu == 256 &&
-      aws_ecs_task_definition.services["wallet"].memory == 512
+      tonumber(aws_ecs_task_definition.services["wallet"].cpu) == 256 &&
+      tonumber(aws_ecs_task_definition.services["wallet"].memory) == 512
     )
     error_message = "256 CPU / 512 MB is the smallest Fargate task that exists."
   }

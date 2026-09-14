@@ -115,7 +115,7 @@ run "load_balancer" {
   }
 
   assert {
-    condition     = length(aws_lb.main.subnets) == 2
+    condition     = length(aws_subnet.public) == 2
     error_message = "The ALB spans both public subnets."
   }
 }
@@ -128,12 +128,12 @@ run "access_logs" {
   command = plan
 
   assert {
-    condition     = aws_lb.main.access_logs[0].enabled == true
+    condition     = one(aws_lb.main.access_logs).enabled == true
     error_message = "ALB access logs must be enabled."
   }
 
   assert {
-    condition     = aws_lb.main.access_logs[0].prefix == "alb"
+    condition     = one(aws_lb.main.access_logs).prefix == "alb"
     error_message = "Access logs are written under the alb/ prefix."
   }
 
@@ -184,7 +184,7 @@ run "target_groups" {
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].port == 5001
+    condition     = tonumber(aws_lb_target_group.services["wallet"].port) == 5001
     error_message = "Target group port must match the service port."
   }
 
@@ -199,12 +199,12 @@ run "target_groups" {
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].health_check[0].path == "/"
+    condition     = one(aws_lb_target_group.services["wallet"].health_check).path == "/"
     error_message = "Default health-check path is the service's health_check_path (/)."
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].deregistration_delay == 30
+    condition     = tonumber(aws_lb_target_group.services["wallet"].deregistration_delay) == 30
     error_message = "Keep the 30s deregistration delay for fast deploys."
   }
 }

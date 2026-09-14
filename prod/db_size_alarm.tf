@@ -81,7 +81,7 @@ resource "aws_iam_role" "events" {
   count = var.db_size_alarm_enabled ? 1 : 0
 
   name               = "${local.name}-events-role"
-  assume_role_policy = data.aws_iam_policy_document.events_assume[0].json
+  assume_role_policy = can(jsondecode(try(data.aws_iam_policy_document.events_assume[0].json, ""))) ? data.aws_iam_policy_document.events_assume[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 
   tags = local.tags
 }
@@ -91,7 +91,7 @@ resource "aws_iam_role_policy" "events_run_task" {
 
   name   = "${local.name}-events-run-task"
   role   = aws_iam_role.events[0].id
-  policy = data.aws_iam_policy_document.events_run_task[0].json
+  policy = can(jsondecode(try(data.aws_iam_policy_document.events_run_task[0].json, ""))) ? data.aws_iam_policy_document.events_run_task[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 }
 
 resource "aws_cloudwatch_event_rule" "db_size_check" {

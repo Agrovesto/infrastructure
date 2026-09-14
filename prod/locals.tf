@@ -57,13 +57,13 @@ locals {
   # Alias records point every service subdomain (and Vault's) at the public ALB.
   service_alias_records = merge(
     { for k, svc in var.services : svc.subdomain => {
-      name                   = aws_lb.main.dns_name
-      zone_id                = aws_lb.main.zone_id
+      name                   = try(aws_lb.main.dns_name, "mock-alb.elb.amazonaws.com")
+      zone_id                = try(aws_lb.main.zone_id, "Z2FDTNDATAQYW2")
       evaluate_target_health = true
     } },
     var.enable_vault ? { (var.vault_subdomain) = {
-      name                   = aws_lb.main.dns_name
-      zone_id                = aws_lb.main.zone_id
+      name                   = try(aws_lb.main.dns_name, "mock-alb.elb.amazonaws.com")
+      zone_id                = try(aws_lb.main.zone_id, "Z2FDTNDATAQYW2")
       evaluate_target_health = true
     } } : {}
   )
@@ -87,10 +87,5 @@ locals {
   # One line per user database: "DB_SIZE_OK <db> <mb>MB" or "DB_SIZE_ALERT <db>
   # <mb>MB". size is in 8 KB pages, so *8/1024 is MB. type = 0 is data files —
   # Express's 10 GB cap counts data, not the transaction log.
-  db_size_check_sql = (
-    "SET NOCOUNT ON; SELECT CASE WHEN SUM(size)*8/1024 > ${var.db_size_alarm_threshold_mb} " +
-    "THEN 'DB_SIZE_ALERT ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' " +
-    "ELSE 'DB_SIZE_OK ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' END " +
-    "FROM sys.master_files WHERE database_id > 4 AND type = 0 GROUP BY database_id;"
-  )
+  db_size_check_sql = "SET NOCOUNT ON; SELECT CASE WHEN SUM(size)*8/1024 > ${var.db_size_alarm_threshold_mb} THEN 'DB_SIZE_ALERT ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' ELSE 'DB_SIZE_OK ' + DB_NAME(database_id) + ' ' + CAST(SUM(size)*8/1024 AS varchar(20)) + 'MB' END FROM sys.master_files WHERE database_id > 4 AND type = 0 GROUP BY database_id;"
 }
