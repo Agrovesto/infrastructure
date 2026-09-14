@@ -49,6 +49,7 @@ on:
   pull_request:
     branches:
       - main
+      - devops
 
     paths:
       - "prod/**"
@@ -526,7 +527,7 @@ jobs:
 
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-prod.properties
+          args: -Dproject.settings=sonar-project-prod.properties -Dsonar.defaultBranch=devops
 
       # -----------------------------------------------------------------------
       # Summary
