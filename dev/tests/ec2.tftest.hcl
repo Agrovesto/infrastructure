@@ -28,6 +28,7 @@ override_data {
   }
 }
 
+<<<<<<< HEAD
 override_data {
   target = data.aws_iam_policy_document.ec2_assume
   values = {
@@ -56,6 +57,8 @@ override_data {
   }
 }
 
+=======
+>>>>>>> 96e8155 (fix(ci): override data.aws_ami.ubuntu in dev test suite and set sonar.defaultBranch=devops)
 variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
