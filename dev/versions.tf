@@ -1,4 +1,4 @@
-# Trigger CI test run
+# Trigger CI test run - fix locals string concat and mock policy docs
 terraform {
   required_version = ">= 1.7.0" /* 1.7+ for mock_provider in terraform test */
 
