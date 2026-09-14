@@ -81,7 +81,11 @@ resource "aws_iam_role" "events" {
   count = var.db_size_alarm_enabled ? 1 : 0
 
   name               = "${local.name}-events-role"
+<<<<<<< HEAD
   assume_role_policy = can(jsondecode(try(data.aws_iam_policy_document.events_assume[0].json, ""))) ? data.aws_iam_policy_document.events_assume[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+=======
+  assume_role_policy = try(data.aws_iam_policy_document.events_assume[0].json, "") != "" ? data.aws_iam_policy_document.events_assume[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+>>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 
   tags = local.tags
 }
@@ -91,7 +95,11 @@ resource "aws_iam_role_policy" "events_run_task" {
 
   name   = "${local.name}-events-run-task"
   role   = aws_iam_role.events[0].id
+<<<<<<< HEAD
   policy = can(jsondecode(try(data.aws_iam_policy_document.events_run_task[0].json, ""))) ? data.aws_iam_policy_document.events_run_task[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+=======
+  policy = try(data.aws_iam_policy_document.events_run_task[0].json, "") != "" ? data.aws_iam_policy_document.events_run_task[0].json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+>>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 }
 
 resource "aws_cloudwatch_event_rule" "db_size_check" {
