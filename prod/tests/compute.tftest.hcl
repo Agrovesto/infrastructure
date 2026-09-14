@@ -292,8 +292,8 @@ run "container_definitions" {
 
   assert {
     condition = length([
-      for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name
-      if s.name == "DB_PASSWORD"
+      for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name
+      if try(s.name, "") == "DB_PASSWORD"
     ]) == 1
     error_message = "Bootstrap mode (vault_secrets_enabled = false) injects DB_PASSWORD from Secrets Manager."
   }

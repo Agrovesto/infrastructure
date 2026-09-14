@@ -184,7 +184,7 @@ run "target_groups" {
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].port == 5001
+    condition     = tonumber(aws_lb_target_group.services["wallet"].port) == 5001
     error_message = "Target group port must match the service port."
   }
 
@@ -204,7 +204,7 @@ run "target_groups" {
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].deregistration_delay == 30
+    condition     = tonumber(aws_lb_target_group.services["wallet"].deregistration_delay) == 30
     error_message = "Keep the 30s deregistration delay for fast deploys."
   }
 }

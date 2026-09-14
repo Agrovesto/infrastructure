@@ -91,7 +91,7 @@ run "alb_security_group" {
   command = plan
 
   assert {
-    condition     = sort([for i in aws_security_group.alb.ingress : tostring(i.from_port)]) == ["443", "80"]
+    condition     = toset([for i in aws_security_group.alb.ingress : tonumber(i.from_port)]) == toset([80, 443])
     error_message = "The ALB accepts 80 and 443 from the internet."
   }
 
@@ -132,16 +132,16 @@ run "service_port_rules" {
   command = plan
 
   assert {
-    condition = sort(keys(aws_security_group_rule.alb_to_ecs)) == [
+    condition = toset(keys(aws_security_group_rule.alb_to_ecs)) == toset([
       "5001", "5002", "5003", "5004", "5005", "8200"
-    ]
+    ])
     error_message = "One ALB->ECS egress rule per distinct port in local.service_ports (services + Vault)."
   }
 
   assert {
-    condition = sort(keys(aws_security_group_rule.ecs_from_alb)) == [
+    condition = toset(keys(aws_security_group_rule.ecs_from_alb)) == toset([
       "5001", "5002", "5003", "5004", "5005", "8200"
-    ]
+    ])
     error_message = "One ECS<-ALB ingress rule per distinct port in local.service_ports."
   }
 
@@ -173,9 +173,9 @@ run "service_port_rules_without_vault" {
   }
 
   assert {
-    condition = sort(keys(aws_security_group_rule.ecs_from_alb)) == [
+    condition = toset(keys(aws_security_group_rule.ecs_from_alb)) == toset([
       "5001", "5002", "5003", "5004", "5005"
-    ]
+    ])
     error_message = "Vault's 8200 must drop out of the port rules when enable_vault = false."
   }
 }

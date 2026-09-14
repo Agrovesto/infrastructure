@@ -113,7 +113,7 @@ run "validation_records" {
   command = plan
 
   assert {
-    condition     = sort(keys(aws_route53_record.acm_validation)) == ["*.nomaos.com", "nomaos.com"]
+    condition     = toset(keys(aws_route53_record.acm_validation)) == toset(["*.nomaos.com", "nomaos.com"])
     error_message = "Exactly one validation record per entry in local.acm_domains, keyed by domain."
   }
 
@@ -141,7 +141,7 @@ run "validation_records_follow_the_domain_variable" {
   }
 
   assert {
-    condition     = sort(keys(aws_route53_record.acm_validation)) == ["*.example.com", "example.com"]
+    condition     = toset(keys(aws_route53_record.acm_validation)) == toset(["*.example.com", "example.com"])
     error_message = "Certificate and validation records must both follow var.domain_name (single source of truth)."
   }
 
