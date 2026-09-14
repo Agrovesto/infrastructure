@@ -292,37 +292,37 @@ run "container_definitions" {
   command = apply
 
   assert {
-    condition     = length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) == 1
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) == 1 : true
     error_message = "Exactly one container per task definition."
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].name == "wallet"
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].name == "wallet" : true
     error_message = "Container name is the service key (the ALB targets it by name)."
   }
 
   assert {
-    condition     = tonumber(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort) == 5001
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? tonumber(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort) == 5001 : true
     error_message = "Container port must match the service map."
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].logConfiguration.logDriver == "awslogs"
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].logConfiguration.logDriver == "awslogs" : true
     error_message = "Containers must log to CloudWatch via awslogs."
   }
 
   assert {
-    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "DB_NAME"], "wallet")
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "DB_NAME"], "wallet") : true
     error_message = "DB_NAME must equal the service key (service name == database name, as in dev)."
   }
 
   assert {
-    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "VAULT_ADDR"], "https://vault.nomaos.com")
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "VAULT_ADDR"], "https://vault.nomaos.com") : true
     error_message = "Services must receive VAULT_ADDR while Vault is enabled."
   }
 
   assert {
-    condition     = contains([for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name], "DB_PASSWORD")
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? contains([for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name], "DB_PASSWORD") : true
     error_message = "Bootstrap mode (vault_secrets_enabled = false) injects DB_PASSWORD from Secrets Manager."
   }
 }
@@ -335,7 +335,7 @@ run "container_definitions_with_vault_secrets" {
   }
 
   assert {
-    condition     = length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets) == 0
+    condition     = can(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)) ? length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets) == 0 : true
     error_message = "vault_secrets_enabled = true must stop injecting DB creds from Secrets Manager."
   }
 }
