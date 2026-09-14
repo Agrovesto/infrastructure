@@ -119,7 +119,7 @@ the plan and the apply, not just the build badge.
 `dev/versions.tf` and `prod/versions.tf` (`>= 1.7.0`, needed for
 `mock_provider`). Terraform enforces that during `init`, before it does
 anything else, so a lower pin fails every run at *Terraform Init* with
-*Unsupported Terraform Core version*. It is currently `1.16.2`.
+*Unsupported Terraform Core version*. It is currently `1.10.5`.
 
 **SonarQube** is opt-in and skipped (with a warning, not a failure) until these
 secrets exist:
