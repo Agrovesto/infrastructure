@@ -10,6 +10,30 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_lb_listener" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener/app/mock/1234567890123456/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/mock-tg/1234567890123456"
+    }
+  }
+
+  mock_resource "aws_ecs_cluster" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:cluster/mock-cluster"
+    }
+  }
+
+  mock_resource "aws_ecs_task_definition" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:task-definition/mock-task:1"
+    }
+  }
+
   mock_resource "aws_acm_certificate" {
     defaults = {
       arn = "arn:aws:acm:eu-west-1:123456789012:certificate/11111111-1111-1111-1111-111111111111"
@@ -37,6 +61,38 @@ mock_provider "aws" {
   mock_resource "aws_kms_key" {
     defaults = {
       arn = "arn:aws:kms:eu-west-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  mock_resource "aws_secretsmanager_secret" {
+    defaults = {
+      arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:mock-secret-123456"
+    }
+  }
+
+  mock_resource "aws_secretsmanager_secret_version" {
+    defaults = {
+      arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:mock-secret-123456"
+    }
+  }
+
+  mock_resource "aws_db_instance" {
+    defaults = {
+      arn      = "arn:aws:rds:eu-west-1:123456789012:db:mock-db"
+      endpoint = "mock-db.123456789012.eu-west-1.rds.amazonaws.com:1433"
+      address  = "mock-db.123456789012.eu-west-1.rds.amazonaws.com"
+    }
+  }
+
+  mock_resource "aws_sns_topic" {
+    defaults = {
+      arn = "arn:aws:sns:eu-west-1:123456789012:mock-topic"
+    }
+  }
+
+  mock_resource "aws_s3_bucket" {
+    defaults = {
+      arn = "arn:aws:s3:::mock-bucket"
     }
   }
 }
