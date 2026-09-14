@@ -87,7 +87,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "certificate" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_acm_certificate.wildcard.domain_name == "*.nomaos.com"
@@ -110,7 +110,7 @@ run "certificate" {
 # -----------------------------------------------------------------------------
 
 run "validation_records" {
-  command = plan
+  command = apply
 
   assert {
     condition     = toset(keys(aws_route53_record.acm_validation)) == toset(["*.nomaos.com", "nomaos.com"])
@@ -134,7 +134,7 @@ run "validation_records" {
 }
 
 run "validation_records_follow_the_domain_variable" {
-  command = plan
+  command = apply
 
   variables {
     domain_name = "example.com"

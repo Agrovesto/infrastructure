@@ -176,7 +176,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "cluster" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_ecs_cluster.main.name == "${var.project}-${var.environment}"
@@ -200,7 +200,7 @@ run "cluster" {
 # -----------------------------------------------------------------------------
 
 run "task_definitions" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecs_task_definition.services) == 5
@@ -238,7 +238,7 @@ run "task_definitions" {
 # -----------------------------------------------------------------------------
 
 run "services" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecs_service.services) == 5
@@ -272,7 +272,7 @@ run "services" {
 }
 
 run "services_single_az_pin" {
-  command = plan
+  command = apply
 
   variables {
     single_az_ecs = true
@@ -289,7 +289,7 @@ run "services_single_az_pin" {
 # -----------------------------------------------------------------------------
 
 run "log_groups" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_cloudwatch_log_group.services) == 5
@@ -312,7 +312,7 @@ run "log_groups" {
 # -----------------------------------------------------------------------------
 
 run "iam" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_iam_role.ecs_execution.name == "${var.project}-${var.environment}-ecs-execution-role"
@@ -401,7 +401,7 @@ run "container_definitions_with_vault_secrets" {
 # -----------------------------------------------------------------------------
 
 run "autoscaling" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_appautoscaling_target.services) == 5
@@ -468,7 +468,7 @@ run "autoscaling" {
 }
 
 run "autoscaling_disabled" {
-  command = plan
+  command = apply
 
   variables {
     ecs_autoscaling_enabled = false
@@ -490,7 +490,7 @@ run "autoscaling_disabled" {
 # -----------------------------------------------------------------------------
 
 run "graviton_tasks" {
-  command = plan
+  command = apply
 
   assert {
     condition     = [for p in aws_ecs_task_definition.services["wallet"].runtime_platform : p.cpu_architecture] == ["ARM64"]
@@ -521,7 +521,7 @@ run "graviton_tasks" {
 }
 
 run "x86_fallback" {
-  command = plan
+  command = apply
 
   variables {
     ecs_cpu_architecture = "X86_64"

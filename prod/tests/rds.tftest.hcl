@@ -83,7 +83,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "instance" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_db_instance.mssql.identifier == "${var.project}-${var.environment}-mssql"
@@ -156,7 +156,7 @@ run "instance" {
 # -----------------------------------------------------------------------------
 
 run "availability_and_safety" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_db_instance.mssql.multi_az == false
@@ -195,7 +195,7 @@ run "availability_and_safety" {
 }
 
 run "multi_az_mode" {
-  command = plan
+  command = apply
 
   variables {
     mssql_multi_az = true
@@ -212,7 +212,7 @@ run "multi_az_mode" {
 # -----------------------------------------------------------------------------
 
 run "monitoring" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_db_instance.mssql.monitoring_interval == 60
@@ -240,7 +240,7 @@ run "monitoring" {
 # -----------------------------------------------------------------------------
 
 run "credentials" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_secretsmanager_secret.mssql_master.name == "${var.project}-${var.environment}-mssql-master"
@@ -263,7 +263,7 @@ run "credentials" {
 # -----------------------------------------------------------------------------
 
 run "db_init_disabled_by_default" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecs_task_definition.db_init) == 0
@@ -277,7 +277,7 @@ run "db_init_disabled_by_default" {
 }
 
 run "db_init_enabled" {
-  command = plan
+  command = apply
 
   variables {
     run_db_init = true
@@ -307,7 +307,7 @@ run "db_init_enabled" {
 # -----------------------------------------------------------------------------
 
 run "step_up_to_small" {
-  command = plan
+  command = apply
 
   variables {
     mssql_instance_class          = "db.t3.small"
@@ -325,7 +325,7 @@ run "step_up_to_small" {
 }
 
 run "standard_edition_step_up" {
-  command = plan
+  command = apply
 
   variables {
     mssql_engine                          = "sqlserver-se"
@@ -351,7 +351,7 @@ run "standard_edition_step_up" {
 # -----------------------------------------------------------------------------
 
 run "db_size_guard" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecs_task_definition.db_size_check) == 1
@@ -391,7 +391,7 @@ run "db_size_guard" {
 }
 
 run "db_size_guard_with_email" {
-  command = plan
+  command = apply
 
   variables {
     db_size_alarm_email = "ops@nomaos.com"
@@ -409,7 +409,7 @@ run "db_size_guard_with_email" {
 }
 
 run "db_size_guard_disabled" {
-  command = plan
+  command = apply
 
   variables {
     db_size_alarm_enabled = false
@@ -431,7 +431,7 @@ run "db_size_guard_disabled" {
 # variable default is error + agent because Standard needs the agent log; this
 # run pins the production value.
 run "express_log_exports" {
-  command = plan
+  command = apply
 
   variables {
     mssql_enabled_cloudwatch_logs_exports = ["error"]

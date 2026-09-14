@@ -83,7 +83,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "kms_and_efs" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_kms_key.vault.enable_key_rotation == true
@@ -118,7 +118,7 @@ run "kms_and_efs" {
 # -----------------------------------------------------------------------------
 
 run "service" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_ecs_service.vault[0].launch_type == "FARGATE"
@@ -175,7 +175,7 @@ run "service" {
 # -----------------------------------------------------------------------------
 
 run "vault_disabled" {
-  command = plan
+  command = apply
 
   variables {
     enable_vault = false
@@ -207,7 +207,7 @@ run "vault_disabled" {
 # -----------------------------------------------------------------------------
 
 run "vault_task_platform" {
-  command = plan
+  command = apply
 
   assert {
     condition     = [for p in aws_ecs_task_definition.vault[0].runtime_platform : p.cpu_architecture] == ["ARM64"]

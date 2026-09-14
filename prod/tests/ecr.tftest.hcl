@@ -82,7 +82,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "repositories" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecr_repository.services) == 5
@@ -125,7 +125,7 @@ run "repositories" {
 # -----------------------------------------------------------------------------
 
 run "lifecycle_policy" {
-  command = plan
+  command = apply
 
   assert {
     condition     = jsondecode(aws_ecr_lifecycle_policy.services["wallet"].policy).rules[0].selection.countNumber == 14

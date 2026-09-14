@@ -86,7 +86,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "hosted_zones" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_route53_zone.this) == 1
@@ -105,7 +105,7 @@ run "hosted_zones" {
 }
 
 run "existing_zone_mode" {
-  command = plan
+  command = apply
 
   variables {
     create_hosted_zone = false
@@ -123,7 +123,7 @@ run "existing_zone_mode" {
 # -----------------------------------------------------------------------------
 
 run "service_alias_records" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_route53_record.alias) == 6
@@ -158,7 +158,7 @@ run "service_alias_records" {
 # -----------------------------------------------------------------------------
 
 run "no_extra_records_by_default" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_route53_record.a) == 0
@@ -172,7 +172,7 @@ run "no_extra_records_by_default" {
 }
 
 run "extra_records" {
-  command = plan
+  command = apply
 
   variables {
     extra_a_records = {
@@ -211,7 +211,7 @@ run "extra_records" {
 }
 
 run "apex_record_uses_the_bare_domain" {
-  command = plan
+  command = apply
 
   variables {
     extra_a_records = {

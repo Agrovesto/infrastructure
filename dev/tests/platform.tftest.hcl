@@ -111,7 +111,7 @@ variables {
 # -----------------------------------------------------------------------------
 
 run "vpc" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_vpc.main.cidr_block == "10.20.0.0/16"
@@ -151,7 +151,7 @@ run "vpc" {
 # -----------------------------------------------------------------------------
 
 run "scheduler" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_scheduler_schedule_group.ec2.name == "${var.project}-${var.environment}-ec2"
@@ -180,7 +180,7 @@ run "scheduler" {
 }
 
 run "scheduler_disabled" {
-  command = plan
+  command = apply
 
   variables {
     enable_ec2_scheduler = false
@@ -202,7 +202,7 @@ run "scheduler_disabled" {
 # -----------------------------------------------------------------------------
 
 run "backup_bucket" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_s3_bucket_public_access_block.backup.block_public_acls == true
@@ -252,7 +252,7 @@ run "backup_bucket" {
 # -----------------------------------------------------------------------------
 
 run "ecr" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_ecr_repository.apis) == 5
@@ -285,7 +285,7 @@ run "ecr" {
 # -----------------------------------------------------------------------------
 
 run "amplify" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(aws_amplify_app.this) == 2
@@ -314,7 +314,7 @@ run "amplify" {
 }
 
 run "amplify_custom_domains" {
-  command = plan
+  command = apply
 
   variables {
     amplify_enable_custom_domain = true
@@ -331,7 +331,7 @@ run "amplify_custom_domains" {
 # -----------------------------------------------------------------------------
 
 run "dns_managed_by_prod" {
-  command = plan
+  command = apply
 
   variables {
     manage_dns = false
@@ -354,7 +354,7 @@ run "dns_managed_by_prod" {
 }
 
 run "dns_managed_by_dev" {
-  command = plan
+  command = apply
 
   variables {
     manage_dns = true
