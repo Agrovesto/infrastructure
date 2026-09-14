@@ -43,6 +43,7 @@ data "aws_iam_policy_document" "vault_kms" {
 resource "aws_kms_key" "vault" {
   description         = "${local.name} Vault (auto-unseal) + Vault EFS encryption"
   policy              = can(jsondecode(data.aws_iam_policy_document.vault_kms.json)) ? data.aws_iam_policy_document.vault_kms.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+  policy              = can(jsondecode(data.aws_iam_policy_document.vault_kms.json)) ? data.aws_iam_policy_document.vault_kms.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
   enable_key_rotation = true
 
   tags = merge(local.tags, { Name = "${local.name}-vault" })
@@ -116,11 +117,7 @@ resource "aws_iam_role" "vault_task" {
   count = var.enable_vault ? 1 : 0
 
   name               = "${local.name}-vault-task-role"
-<<<<<<< HEAD
   assume_role_policy = can(jsondecode(data.aws_iam_policy_document.ecs_execution_assume.json)) ? data.aws_iam_policy_document.ecs_execution_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-=======
-  assume_role_policy = data.aws_iam_policy_document.ecs_execution_assume.json != "" ? data.aws_iam_policy_document.ecs_execution_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 
   tags = local.tags
 }
@@ -130,11 +127,7 @@ resource "aws_iam_role_policy" "vault_task" {
 
   name   = "${local.name}-vault-task-policy"
   role   = aws_iam_role.vault_task[0].id
-<<<<<<< HEAD
   policy = can(jsondecode(data.aws_iam_policy_document.vault_task.json)) ? data.aws_iam_policy_document.vault_task.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-=======
-  policy = data.aws_iam_policy_document.vault_task.json != "" ? data.aws_iam_policy_document.vault_task.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 }
 
 # -- ECS service ------------------------------------------------------------------

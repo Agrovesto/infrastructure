@@ -187,11 +187,7 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 
 resource "aws_iam_role" "flow_logs" {
   name               = "${local.name}-flow-logs-role"
-<<<<<<< HEAD
   assume_role_policy = can(jsondecode(data.aws_iam_policy_document.flow_logs_assume.json)) ? data.aws_iam_policy_document.flow_logs_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-=======
-  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume.json != "" ? data.aws_iam_policy_document.flow_logs_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 
   tags = local.tags
 }
@@ -199,11 +195,7 @@ resource "aws_iam_role" "flow_logs" {
 resource "aws_iam_role_policy" "flow_logs" {
   name   = "${local.name}-flow-logs-policy"
   role   = aws_iam_role.flow_logs.id
-<<<<<<< HEAD
   policy = can(jsondecode(data.aws_iam_policy_document.flow_logs.json)) ? data.aws_iam_policy_document.flow_logs.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-=======
-  policy = data.aws_iam_policy_document.flow_logs.json != "" ? data.aws_iam_policy_document.flow_logs.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 }
 
 resource "aws_flow_log" "main" {
