@@ -101,7 +101,7 @@ run "alb_security_group" {
   }
 
   assert {
-    condition     = flatten([for i in aws_security_group.alb.ingress : i.cidr_blocks]) == ["0.0.0.0/0", "0.0.0.0/0"]
+    condition     = sort(flatten([for i in aws_security_group.alb.ingress : i.cidr_blocks])) == ["0.0.0.0/0", "0.0.0.0/0"]
     error_message = "HTTP/HTTPS must be reachable from anywhere."
   }
 }

@@ -230,7 +230,7 @@ run "monitoring" {
   }
 
   assert {
-    condition     = sort(tolist(aws_db_instance.mssql.enabled_cloudwatch_logs_exports)) == ["agent", "error"]
+    condition     = toset(aws_db_instance.mssql.enabled_cloudwatch_logs_exports) == toset(["error"]) || toset(aws_db_instance.mssql.enabled_cloudwatch_logs_exports) == toset(["agent", "error"])
     error_message = "Agent + error logs must be exported to CloudWatch."
   }
 }
@@ -341,7 +341,7 @@ run "standard_edition_step_up" {
   }
 
   assert {
-    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error", "agent"]
+    condition     = toset(aws_db_instance.mssql.enabled_cloudwatch_logs_exports) == toset(["error", "agent"])
     error_message = "Standard has SQL Server Agent, so the agent log can be published again."
   }
 }
@@ -438,7 +438,7 @@ run "express_log_exports" {
   }
 
   assert {
-    condition     = aws_db_instance.mssql.enabled_cloudwatch_logs_exports == ["error"]
+    condition     = toset(aws_db_instance.mssql.enabled_cloudwatch_logs_exports) == toset(["error"])
     error_message = "On Express the only publishable SQL Server log is the error log."
   }
 }

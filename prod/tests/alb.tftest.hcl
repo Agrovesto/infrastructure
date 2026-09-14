@@ -128,12 +128,12 @@ run "access_logs" {
   command = plan
 
   assert {
-    condition     = aws_lb.main.access_logs[0].enabled == true
+    condition     = one(aws_lb.main.access_logs).enabled == true
     error_message = "ALB access logs must be enabled."
   }
 
   assert {
-    condition     = aws_lb.main.access_logs[0].prefix == "alb"
+    condition     = one(aws_lb.main.access_logs).prefix == "alb"
     error_message = "Access logs are written under the alb/ prefix."
   }
 
@@ -199,7 +199,7 @@ run "target_groups" {
   }
 
   assert {
-    condition     = aws_lb_target_group.services["wallet"].health_check[0].path == "/"
+    condition     = one(aws_lb_target_group.services["wallet"].health_check).path == "/"
     error_message = "Default health-check path is the service's health_check_path (/)."
   }
 

@@ -62,7 +62,7 @@ locals {
     apis          = var.apis
     mssql         = local.mssql
     vault         = var.vault
-    backup_bucket = aws_s3_bucket.backup.id
+    backup_bucket = aws_s3_bucket.backup.bucket
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {
@@ -91,10 +91,10 @@ locals {
 
   # All backend + vault names point at the public EC2 (nginx).
   a_records = merge(
-    { for k, fqdn in local.api_fqdns : split(".", fqdn)[0] => local.ec2_public_ip },
+    { for k, api in var.apis : api.subdomain => local.ec2_public_ip },
     {
-      vault = local.ec2_public_ip
-      mssql = local.ec2_public_ip
+      (var.vault.subdomain) = local.ec2_public_ip
+      (var.mssql_subdomain) = local.ec2_public_ip
     },
     var.extra_a_records
   )

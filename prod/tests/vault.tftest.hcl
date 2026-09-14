@@ -131,7 +131,7 @@ run "service" {
   }
 
   assert {
-    condition     = aws_ecs_service.vault[0].deployment_circuit_breaker[0].rollback == true
+    condition     = one(aws_ecs_service.vault[0].deployment_circuit_breaker).rollback == true
     error_message = "A failed Vault deploy must roll back."
   }
 
@@ -146,7 +146,7 @@ run "service" {
   }
 
   assert {
-    condition     = aws_lb_target_group.vault[0].health_check[0].matcher == "200-399"
+    condition     = one(aws_lb_target_group.vault[0].health_check).matcher == "200-399"
     error_message = "Sealed/uninitialized Vault must still count as healthy (operator init happens later)."
   }
 
@@ -216,8 +216,8 @@ run "vault_task_platform" {
 
   assert {
     condition = (
-      aws_ecs_task_definition.vault[0].cpu == 256 &&
-      aws_ecs_task_definition.vault[0].memory == 512
+      tonumber(aws_ecs_task_definition.vault[0].cpu) == 256 &&
+      tonumber(aws_ecs_task_definition.vault[0].memory) == 512
     )
     error_message = "Vault runs at the Fargate floor (256 CPU / 512 MB); bump var.vault_cpu/memory if it OOMs."
   }

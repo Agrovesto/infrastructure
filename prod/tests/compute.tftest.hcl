@@ -115,12 +115,12 @@ run "task_definitions" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].cpu == 256
+    condition     = tonumber(aws_ecs_task_definition.services["wallet"].cpu) == 256
     error_message = "Task CPU must come from the service map (0.25 vCPU)."
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].memory == 512
+    condition     = tonumber(aws_ecs_task_definition.services["wallet"].memory) == 512
     error_message = "Task memory must come from the service map."
   }
 
@@ -130,7 +130,7 @@ run "task_definitions" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.services["wallet"].requires_compatibilities == ["FARGATE"]
+    condition     = toset(aws_ecs_task_definition.services["wallet"].requires_compatibilities) == toset(["FARGATE"])
     error_message = "Tasks must be FARGATE compatible."
   }
 
@@ -163,7 +163,7 @@ run "services" {
   }
 
   assert {
-    condition     = aws_ecs_service.services["wallet"].network_configuration[0].assign_public_ip == false
+    condition     = one(aws_ecs_service.services["wallet"].network_configuration).assign_public_ip == false
     error_message = "Tasks live in private subnets with no public IP."
   }
 
@@ -173,7 +173,7 @@ run "services" {
   }
 
   assert {
-    condition     = aws_ecs_service.services["wallet"].deployment_circuit_breaker[0].enable == true
+    condition     = one(aws_ecs_service.services["wallet"].deployment_circuit_breaker).enable == true
     error_message = "Prod services need the circuit breaker (auto-rollback on failed deploys)."
   }
 }
@@ -186,7 +186,7 @@ run "services_single_az_pin" {
   }
 
   assert {
-    condition     = length(aws_ecs_service.services["wallet"].network_configuration[0].subnets) == 1
+    condition     = length(one(aws_ecs_service.services["wallet"].network_configuration).subnets) == 1
     error_message = "single_az_ecs = true pins every task to the first private subnet."
   }
 }
@@ -420,8 +420,8 @@ run "graviton_tasks" {
 
   assert {
     condition = (
-      aws_ecs_task_definition.services["wallet"].cpu == 256 &&
-      aws_ecs_task_definition.services["wallet"].memory == 512
+      tonumber(aws_ecs_task_definition.services["wallet"].cpu) == 256 &&
+      tonumber(aws_ecs_task_definition.services["wallet"].memory) == 512
     )
     error_message = "256 CPU / 512 MB is the smallest Fargate task that exists."
   }

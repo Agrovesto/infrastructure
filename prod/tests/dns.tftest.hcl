@@ -148,7 +148,7 @@ run "service_alias_records" {
   }
 
   assert {
-    condition     = aws_route53_record.alias["wallet-api"].alias[0].evaluate_target_health == true
+    condition     = one(aws_route53_record.alias["wallet-api"].alias).evaluate_target_health == true
     error_message = "Service aliases evaluate target health."
   }
 }
