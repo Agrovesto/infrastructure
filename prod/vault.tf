@@ -151,10 +151,10 @@ resource "aws_ecs_task_definition" "vault" {
   # 256 CPU / 512 MB is the smallest Fargate task there is. Vault is happy
   # there for a single node with a handful of secrets; bump to 512/1024
   # (~$8/mo) if it OOMs or unseal gets sluggish.
-  cpu                      = var.vault_cpu
-  memory                   = var.vault_memory
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.vault_task[0].arn
+  cpu                = var.vault_cpu
+  memory             = var.vault_memory
+  execution_role_arn = aws_iam_role.ecs_execution.arn
+  task_role_arn      = aws_iam_role.vault_task[0].arn
 
   # Graviton, like the services. hashicorp/vault ships a linux/arm64 image.
   runtime_platform {
@@ -193,9 +193,9 @@ resource "aws_ecs_task_definition" "vault" {
       # docker-entrypoint turns VAULT_LOCAL_CONFIG into the server config.
       environment = [
         {
-          name  = "VAULT_LOCAL_CONFIG"
+          name = "VAULT_LOCAL_CONFIG"
           value = jsonencode({
-            storage  = {
+            storage = {
               raft = {
                 path    = "/vault/raft"
                 node_id = "${local.name}-vault-1"
@@ -207,7 +207,7 @@ resource "aws_ecs_task_definition" "vault" {
                 tls_disable = true # TLS terminates at the ALB (same pattern as the other services)
               }
             }
-            seal     = {
+            seal = {
               awskms = {
                 region     = var.aws_region
                 kms_key_id = aws_kms_key.vault.key_id
@@ -229,7 +229,7 @@ resource "aws_ecs_task_definition" "vault" {
 
       logConfiguration = {
         logDriver = "awslogs"
-        options   = {
+        options = {
           awslogs-group         = aws_cloudwatch_log_group.vault[0].name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"

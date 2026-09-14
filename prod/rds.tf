@@ -14,11 +14,11 @@
 # =============================================================================
 
 resource "random_password" "mssql_master" {
-  length           = 32
-  min_lower        = 1
-  min_upper        = 1
-  min_numeric      = 1
-  min_special      = 1
+  length      = 32
+  min_lower   = 1
+  min_upper   = 1
+  min_numeric = 1
+  min_special = 1
   # RDS SQL Server: any printable ASCII except /, ", @ and space.
   override_special = "!#$%^&*()-_=+[]{}<>:;?"
 }
@@ -32,7 +32,7 @@ resource "aws_secretsmanager_secret" "mssql_master" {
 }
 
 resource "aws_secretsmanager_secret_version" "mssql_master" {
-  secret_id     = aws_secretsmanager_secret.mssql_master.id
+  secret_id = aws_secretsmanager_secret.mssql_master.id
   secret_string = jsonencode({
     username = var.mssql_master_username
     password = random_password.mssql_master.result
@@ -67,7 +67,7 @@ resource "aws_db_instance" "mssql" {
   multi_az = var.mssql_multi_az
 
   backup_retention_period = var.mssql_backup_retention_days
-  backup_window           = "03:00-04:00"      # UTC
+  backup_window           = "03:00-04:00"         # UTC
   maintenance_window      = "sun:04:30-sun:05:30" # UTC, outside the backup window
   copy_tags_to_snapshot   = true
 
@@ -122,8 +122,8 @@ resource "aws_ecs_task_definition" "db_init" {
   # Deliberately NOT Graviton: mcr.microsoft.com/mssql-tools ships amd64 only,
   # so this task stays on the default x86_64 platform. One one-off task, so
   # there is nothing to save by porting it.
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  execution_role_arn = aws_iam_role.ecs_execution.arn
+  task_role_arn      = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([
     {
@@ -149,7 +149,7 @@ resource "aws_ecs_task_definition" "db_init" {
 
       logConfiguration = {
         logDriver = "awslogs"
-        options   = {
+        options = {
           awslogs-group         = aws_cloudwatch_log_group.db_init[0].name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"

@@ -75,10 +75,10 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   internal           = false
 
-  subnets            = aws_subnet.public[*].id
-  security_groups    = [aws_security_group.alb.id]
-  ip_address_type    = "ipv4"
-  idle_timeout       = var.alb_idle_timeout_seconds
+  subnets         = aws_subnet.public[*].id
+  security_groups = [aws_security_group.alb.id]
+  ip_address_type = "ipv4"
+  idle_timeout    = var.alb_idle_timeout_seconds
 
   drop_invalid_header_fields = true
   enable_deletion_protection = var.deletion_protection

@@ -161,7 +161,6 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
-        continue-on-error: true
 
       # -----------------------------------------------------------------------
       # Checkov
@@ -212,7 +211,6 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
 
-        continue-on-error: true
 
       # -----------------------------------------------------------------------
       # Store Trivy Report
@@ -394,7 +392,6 @@ jobs:
 
         id: test
 
-        continue-on-error: true
 
         run: |
           set -o pipefail
@@ -517,7 +514,6 @@ jobs:
 
         if: steps.sonar.outputs.configured == 'true'
 
-        continue-on-error: true
 
         uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9 # v5.3.0
 
@@ -693,7 +689,6 @@ jobs:
             -no-color \
             tfplan > tfplan.txt
 
-        continue-on-error: true
 
       # -----------------------------------------------------------------------
       # Publish Terraform plan to PR
