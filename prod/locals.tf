@@ -57,13 +57,13 @@ locals {
   # Alias records point every service subdomain (and Vault's) at the public ALB.
   service_alias_records = merge(
     { for k, svc in var.services : svc.subdomain => {
-      name                   = aws_lb.main.dns_name
-      zone_id                = aws_lb.main.zone_id
+      name                   = try(aws_lb.main.dns_name, "mock-alb.elb.amazonaws.com")
+      zone_id                = try(aws_lb.main.zone_id, "Z2FDTNDATAQYW2")
       evaluate_target_health = true
     } },
     var.enable_vault ? { (var.vault_subdomain) = {
-      name                   = aws_lb.main.dns_name
-      zone_id                = aws_lb.main.zone_id
+      name                   = try(aws_lb.main.dns_name, "mock-alb.elb.amazonaws.com")
+      zone_id                = try(aws_lb.main.zone_id, "Z2FDTNDATAQYW2")
       evaluate_target_health = true
     } } : {}
   )

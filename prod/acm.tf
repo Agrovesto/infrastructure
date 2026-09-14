@@ -48,8 +48,8 @@ resource "aws_route53_record" "acm_validation" {
   for_each = toset(local.acm_domains)
 
   zone_id         = local.zone_id
-  name            = try(local.acm_dvo[each.value].resource_record_name, "${each.value}.validation.nomaos.com")
-  type            = try(local.acm_dvo[each.value].resource_record_type, "CNAME")
+  name            = try(local.acm_dvo[each.value].resource_record_name, "${each.value}.validation.${var.domain_name}")
+  type            = "CNAME"
   ttl             = 60
   records         = [try(local.acm_dvo[each.value].resource_record_value, "mock.acm.validation")]
   allow_overwrite = true

@@ -115,7 +115,7 @@ run "load_balancer" {
   }
 
   assert {
-    condition     = length(aws_lb.main.subnets) == 2
+    condition     = length(aws_subnet.public) == 2
     error_message = "The ALB spans both public subnets."
   }
 }

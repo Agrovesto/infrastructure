@@ -195,7 +195,7 @@ run "extra_records" {
   }
 
   assert {
-    condition     = aws_route53_record.a["dev-wallet-api"].records == ["203.0.113.10"]
+    condition     = toset(aws_route53_record.a["dev-wallet-api"].records) == toset(["203.0.113.10"])
     error_message = "A records point at the supplied IPv4 address."
   }
 

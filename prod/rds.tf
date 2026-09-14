@@ -85,7 +85,7 @@ resource "aws_db_instance" "mssql" {
   performance_insights_retention_period = 7
 
   auto_minor_version_upgrade = true
-  apply_immediately          = true
+  apply_immediately          = false
 
   tags = merge(local.tags, { Name = "${local.name}-mssql" })
 }

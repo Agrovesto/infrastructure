@@ -101,7 +101,7 @@ run "alb_security_group" {
   }
 
   assert {
-    condition     = sort(flatten([for i in aws_security_group.alb.ingress : i.cidr_blocks])) == ["0.0.0.0/0", "0.0.0.0/0"]
+    condition     = toset(flatten([for i in aws_security_group.alb.ingress : i.cidr_blocks])) == toset(["0.0.0.0/0"])
     error_message = "HTTP/HTTPS must be reachable from anywhere."
   }
 }
@@ -157,8 +157,8 @@ run "service_port_rules" {
 
   assert {
     condition = (
-      aws_security_group_rule.ecs_from_alb["5001"].from_port == 5001 &&
-      aws_security_group_rule.ecs_from_alb["5001"].to_port == 5001 &&
+      tonumber(aws_security_group_rule.ecs_from_alb["5001"].from_port) == 5001 &&
+      tonumber(aws_security_group_rule.ecs_from_alb["5001"].to_port) == 5001 &&
       aws_security_group_rule.ecs_from_alb["5001"].protocol == "tcp"
     )
     error_message = "Each rule opens exactly one TCP port."

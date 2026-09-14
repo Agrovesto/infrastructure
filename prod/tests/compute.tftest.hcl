@@ -265,7 +265,7 @@ run "container_definitions" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort == 5001
+    condition     = tonumber(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].portMappings[0].containerPort) == 5001
     error_message = "Container port must match the service map."
   }
 

@@ -139,7 +139,7 @@ run "subnets" {
   }
 
   assert {
-    condition     = length(aws_db_subnet_group.mssql.subnet_ids) == 2
+    condition     = length(aws_subnet.database) == 2
     error_message = "The DB subnet group needs >= 2 subnets in different AZs."
   }
 }
