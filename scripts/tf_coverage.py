@@ -205,6 +205,8 @@ def read_test_json(path: str) -> dict:
     result["runs_list"] = list(runs_by_key.values())
     result["runs"] = len(result["runs_list"])
     result["failed"] = sum(1 for r in result["runs_list"] if r["status"] in ("fail", "error"))
+    if result["runs"] > 0:
+        result["passed"] = (result["failed"] == 0)
     return result
 
 
