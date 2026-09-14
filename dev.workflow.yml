@@ -520,7 +520,7 @@ jobs:
 
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-dev.properties
+          args: -Dproject.settings=sonar-project-dev.properties -Dsonar.defaultBranch=devops
 
       # -----------------------------------------------------------------------
       # Summary
