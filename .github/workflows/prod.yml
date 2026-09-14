@@ -518,13 +518,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: .
-          args: >
-            -Dproject.settings=sonar-project-prod.properties
-            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
-            -Dsonar.pullrequest.branch=${{ github.head_ref }}
-            -Dsonar.pullrequest.base=${{ github.base_ref }}
-
-
+          args: -Dproject.settings=sonar-project-prod.properties
       # -----------------------------------------------------------------------
       # Summary
       # -----------------------------------------------------------------------
