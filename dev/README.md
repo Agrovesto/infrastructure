@@ -1,4 +1,5 @@
 # Agrovesto infrastructure (dev)
+<!-- CI test suite check trigger -->
 
 Terraform for the **dev** AWS account. The stack is a **single flat module in
 this `dev/` folder** — there is no `modules/` or `environments/` tree. The
