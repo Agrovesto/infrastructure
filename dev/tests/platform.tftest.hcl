@@ -372,7 +372,7 @@ run "dns_managed_by_dev" {
   }
 
   assert {
-    condition     = sort(keys(aws_route53_record.a)) == ["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql", "vault"]
+    condition     = toset(keys(aws_route53_record.a)) == toset(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql", "vault"])
     error_message = "A record keys are the API subdomains plus vault and mssql."
   }
 

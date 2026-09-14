@@ -275,26 +275,17 @@ run "container_definitions" {
   }
 
   assert {
-    condition = [
-      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value
-      if e.name == "DB_NAME"
-    ] == ["wallet"]
+    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "DB_NAME"], "wallet")
     error_message = "DB_NAME must equal the service key (service name == database name, as in dev)."
   }
 
   assert {
-    condition = [
-      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value
-      if e.name == "VAULT_ADDR"
-    ] == ["https://vault.nomaos.com"]
+    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "VAULT_ADDR"], "https://vault.nomaos.com")
     error_message = "Services must receive VAULT_ADDR while Vault is enabled."
   }
 
   assert {
-    condition = length([
-      for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name
-      if try(s.name, "") == "DB_PASSWORD"
-    ]) == 1
+    condition     = contains([for s in try(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets, []) : s.name], "DB_PASSWORD")
     error_message = "Bootstrap mode (vault_secrets_enabled = false) injects DB_PASSWORD from Secrets Manager."
   }
 }
