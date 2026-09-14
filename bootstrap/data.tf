@@ -73,27 +73,27 @@ data "aws_iam_policy_document" "deploy_scoped" {
   #checkov:skip=CKV_AWS_108: broad permissions are the definition of a Terraform deploy role; cap with a permissions boundary later.
   #checkov:skip=CKV_AWS_110: broad permissions are the definition of a Terraform deploy role; cap with a permissions boundary later.
   statement {
-    sid       = "ManagedServices"
-    actions   = [
-      "ec2:*",                   # VPC, subnets, route tables, SGs, EIPs, NAT, flow logs
-      "ecs:*",                   # cluster, task definitions, services
-      "ecr:*",                   # repositories, lifecycle policies
-      "elasticloadbalancing:*",  # ALB, target groups, listeners, rules
-      "rds:*",                   # SQL Server instance, subnet group, monitoring
-      "acm:*",                   # wildcard certificate + validation
-      "s3:*",                    # ALB access-log bucket (+ tfstate reads below)
-      "secretsmanager:*",        # master-secret bootstrap
-      "logs:*",                  # service/flow/vault log groups
-      "kms:*",                   # Vault unseal/EFS CMK
-      "elasticfilesystem:*",     # Vault raft storage
+    sid = "ManagedServices"
+    actions = [
+      "ec2:*",                  # VPC, subnets, route tables, SGs, EIPs, NAT, flow logs
+      "ecs:*",                  # cluster, task definitions, services
+      "ecr:*",                  # repositories, lifecycle policies
+      "elasticloadbalancing:*", # ALB, target groups, listeners, rules
+      "rds:*",                  # SQL Server instance, subnet group, monitoring
+      "acm:*",                  # wildcard certificate + validation
+      "s3:*",                   # ALB access-log bucket (+ tfstate reads below)
+      "secretsmanager:*",       # master-secret bootstrap
+      "logs:*",                 # service/flow/vault log groups
+      "kms:*",                  # Vault unseal/EFS CMK
+      "elasticfilesystem:*",    # Vault raft storage
       "sts:GetCallerIdentity"
     ]
     resources = ["*"]
   }
 
   statement {
-    sid       = "Route53ZoneManagement"
-    actions   = [
+    sid = "Route53ZoneManagement"
+    actions = [
       "route53:*",
       "route53domains:Get*",
       "route53domains:List*"
@@ -102,8 +102,8 @@ data "aws_iam_policy_document" "deploy_scoped" {
   }
 
   statement {
-    sid       = "IamForTerraform"
-    actions   = [
+    sid = "IamForTerraform"
+    actions = [
       "iam:*",
       "sts:DecodeAuthorizationMessage"
     ]
@@ -135,7 +135,7 @@ data "aws_iam_policy_document" "state_bucket" {
       identifiers = ["*"]
     }
 
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
       "arn:aws:s3:::${local.state_bucket_name}",
       "arn:aws:s3:::${local.state_bucket_name}/*"

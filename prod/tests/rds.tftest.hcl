@@ -310,7 +310,7 @@ run "step_up_to_small" {
   command = plan
 
   variables {
-    mssql_instance_class          = "db.t3.small"
+    mssql_instance_class = "db.t3.small"
   }
 
   assert {
