@@ -306,7 +306,7 @@ jobs:
       - name: Check Infracost API Key
         id: infracost
         env:
-          INFRACOST_API_KEY: ${ secrets.INFRACOST_API_KEY }
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
           if [ -z "$INFRACOST_API_KEY" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -319,7 +319,7 @@ jobs:
         if: steps.infracost.outputs.configured == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${ github.event.pull_request.base.sha }
+          ref: ${{ github.event.pull_request.base.sha }}
           path: base
 
       - name: Checkout Head Revision
@@ -332,20 +332,20 @@ jobs:
         if: steps.infracost.outputs.configured == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${ env.TF_VERSION }
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Setup Infracost
         if: steps.infracost.outputs.configured == 'true'
         uses: infracost/actions/setup@v3
         with:
-          api-key: ${ secrets.INFRACOST_API_KEY }
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
 
       - name: Configure AWS Credentials (OIDC)
         if: steps.infracost.outputs.configured == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${ env.AWS_ROLE_ARN }
-          aws-region: ${ env.AWS_REGION }
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
       - name: Cost Estimate For The Base Revision
@@ -370,8 +370,8 @@ jobs:
           infracost comment github \
             --path /tmp/infracost-diff.json \
             --repo "$GITHUB_REPOSITORY" \
-            --pull-request "${ github.event.pull_request.number }" \
-            --github-token "${ secrets.GITHUB_TOKEN }" \
+            --pull-request "${{ github.event.pull_request.number }}" \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
             --behavior update
 
   terraform-plan:
