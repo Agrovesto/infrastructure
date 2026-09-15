@@ -398,6 +398,12 @@ run "monthly_report_is_mailed" {
     condition     = aws_s3_object.report_script[0].key == "scripts/monthly_report.py"
     error_message = "The report script must be published next to the budget script."
   }
+}
+
+# The task policy embeds resource ARNs, so it is only known after apply - a plan
+# run cannot evaluate it.
+run "the_report_task_may_send_mail" {
+  command = apply
 
   assert {
     condition     = strcontains(jsonencode(aws_iam_role_policy.task.policy), "ses:SendRawEmail")
