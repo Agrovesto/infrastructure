@@ -2,6 +2,12 @@
 
 mock_provider "aws" {}
 
+# The cost resources use the us-east-1 provider alias; without a mock for it the
+# test would configure the real provider and ask for credentials.
+mock_provider "aws" {
+  alias = "us_east_1"
+}
+
 override_data {
   target = data.aws_caller_identity.current
   values = {
