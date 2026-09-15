@@ -129,10 +129,13 @@ mssql_max_allocated_storage_gb = 50
 mssql_enabled_cloudwatch_logs_exports = ["error"]
 
 # --- SQL Server Express 10 GB guard --------------------------------------------
-# A scheduled task queries each database's size twice a day and alarms at
-# 8 GB, because on Express writes fail at 10 GB with no warning from AWS and no
-# SQL Server Agent to notice. Set an email to be told; leave it empty and the
-# alarm only shows up in CloudWatch.
+# DB size is now watched by the open-source monitoring stack: the hourly DMV job
+# publishes mssql_database_size_bytes and
+#   mssql_database_size_warning_bytes (default 8 GiB, see monitoring/README.md)
+# raises MssqlDatabaseNearSizeLimit through Alertmanager. The CloudWatch metric
+# filter + alarm + SNS path below is therefore off; flip this back to true (and
+# apply) if you ever want the native path alongside it.
+db_size_alarm_enabled = false
 # db_size_alarm_email = "ops@agrovesto.com"
 # db_size_check_schedule     = "rate(12 hours)"
 # db_size_alarm_threshold_mb = 8192

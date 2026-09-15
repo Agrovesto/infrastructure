@@ -154,7 +154,7 @@ Rules live in four Prometheus files, all delivered with the rest of the config:
 - `cost.yml` — `BudgetThresholdExceeded` (projected month-end spend over
   `budget_alert_ratio` of `monthly_budget_usd`) and `CostReportStale`.
 - `database.yml` — `MssqlUnreachable`, `MssqlMetricsStale`, `MssqlLowDiskSpace`,
-  `MssqlBlockedSessions`, `MssqlDeadlockSpike`.
+  `MssqlBlockedSessions`, `MssqlDeadlockSpike`, `MssqlDatabaseNearSizeLimit`.
 - `ecs.yml` — `EcsMetricsMissing`, `EcsCollectorFailing`, `EcsServiceShortOfTasks`,
   `EcsServiceTasksPending`, `EcsDeploymentFailed`, `EcsTasksStopping`,
   `EcsLogShipperStalled`.
@@ -231,6 +231,15 @@ service/task state, the blackbox probes and each service's own OTLP metrics.
 A failed connection is reported as `mssql_up 0` (not a task failure), so
 `MssqlUnreachable` is what tells you the database is down. Set
 `enable_rds_monitoring = false` to remove the task, its schedule and its rules.
+
+This job also replaces the prod stack's CloudWatch size guard: the instance is
+SQL Server Express, which caps every database at 10 GB with no warning from AWS
+and no SQL Server Agent to notice, so `mssql_database_size_bytes` above
+`mssql_database_size_warning_bytes` (default 8 GiB) raises
+`MssqlDatabaseNearSizeLimit`. `prod/terraform.auto.tfvars` therefore ships
+`db_size_alarm_enabled = false`, which removes the sqlcmd check task, its log
+group, the metric filter, the alarm and the SNS topic on the next prod apply —
+flip it back on if you want both paths for a while.
 
 ## Deploying
 

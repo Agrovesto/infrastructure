@@ -312,6 +312,12 @@ variable "mssql_database" {
   default     = "master"
 }
 
+variable "mssql_database_size_warning_bytes" {
+  description = "Per-database size that raises MssqlDatabaseNearSizeLimit. The prod instance is Express, which caps every database at 10 GB"
+  type        = number
+  default     = 8589934592
+}
+
 variable "mssql_schedule_expression" {
   description = "How often the SQL Server metrics task runs"
   type        = string

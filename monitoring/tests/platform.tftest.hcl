@@ -290,7 +290,7 @@ run "config_is_published_for_the_init_container" {
   }
 
   assert {
-    condition     = strcontains(local.prometheus_rds_rules, "mssql_up") && strcontains(local.prometheus_rds_rules, "MssqlDeadlockSpike")
+    condition     = strcontains(local.prometheus_rds_rules, "mssql_up") && strcontains(local.prometheus_rds_rules, "MssqlDeadlockSpike") && strcontains(local.prometheus_rds_rules, "MssqlDatabaseNearSizeLimit")
     error_message = "The database rules must cover reachability and deadlocks."
   }
 }

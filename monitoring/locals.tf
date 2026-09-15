@@ -251,6 +251,15 @@ locals {
             annotations:
               summary: "Deadlocks on the prod SQL Server"
               description: "{{ $value }} deadlocks in the last 15m"
+
+          - alert: MssqlDatabaseNearSizeLimit
+            expr: mssql_database_size_bytes > ${var.mssql_database_size_warning_bytes}
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Database {{ $labels.db }} is nearing the SQL Server Express 10 GB cap"
+              description: "{{ $value | humanize1024 }}B in use; writes fail at 10 GB. Snapshot, restore to sqlserver-web/standard-se and rename to keep the endpoint."
   EOT
 
   prometheus_ecs_rules = <<-EOT
