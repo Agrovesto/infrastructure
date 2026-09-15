@@ -353,6 +353,12 @@ run "standard_edition_step_up" {
 run "db_size_guard" {
   command = plan
 
+  # prod/terraform.auto.tfvars turns the native guard off now that the
+  # open-source stack watches the same metric, so pin it on for this run.
+  variables {
+    db_size_alarm_enabled = true
+  }
+
   assert {
     condition     = length(aws_ecs_task_definition.db_size_check) == 1
     error_message = "The Express 10 GB guard must create its scheduled task definition."
@@ -394,7 +400,8 @@ run "db_size_guard_with_email" {
   command = plan
 
   variables {
-    db_size_alarm_email = "ops@nomaos.com"
+    db_size_alarm_email   = "ops@nomaos.com"
+    db_size_alarm_enabled = true
   }
 
   assert {

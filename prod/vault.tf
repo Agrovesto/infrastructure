@@ -43,7 +43,6 @@ data "aws_iam_policy_document" "vault_kms" {
 resource "aws_kms_key" "vault" {
   description         = "${local.name} Vault (auto-unseal) + Vault EFS encryption"
   policy              = can(jsondecode(data.aws_iam_policy_document.vault_kms.json)) ? data.aws_iam_policy_document.vault_kms.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-  policy              = can(jsondecode(data.aws_iam_policy_document.vault_kms.json)) ? data.aws_iam_policy_document.vault_kms.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
   enable_key_rotation = true
 
   tags = merge(local.tags, { Name = "${local.name}-vault" })

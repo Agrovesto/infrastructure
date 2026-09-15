@@ -28,10 +28,6 @@ override_data {
   }
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 override_data {
   target = data.aws_iam_policy_document.ec2_assume
   values = {
@@ -60,15 +56,10 @@ override_data {
   }
 }
 
-<<<<<<< HEAD
-=======
->>>>>>> 96e8155 (fix(ci): override data.aws_ami.ubuntu in dev test suite and set sonar.defaultBranch=devops)
-=======
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
-  mssql_sa_password = "Str0ng!TestOnly"
+  mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   instance_type     = "t3.medium"
 

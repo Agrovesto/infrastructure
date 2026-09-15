@@ -1,7 +1,0 @@
-projectKey=infrastructure
-serverUrl=https://sonar.agrovesto.com
-serverVersion=26.4.0.121862
-branch=devops
-dashboardUrl=https://sonar.agrovesto.com/dashboard?id=infrastructure&branch=devops
-ceTaskId=2b192490-46be-41a7-8c20-27ddab98198a
-ceTaskUrl=https://sonar.agrovesto.com/api/ce/task?id=2b192490-46be-41a7-8c20-27ddab98198a

@@ -1,0 +1,16 @@
+# bootstrap/ — run-once stack: the versioned state bucket, its lifecycle rules
+# and the GitHub OIDC deploy role. IAM is free; only the bucket costs money.
+version: 0.1
+
+resource_usage:
+  # Every stack's state lives here (prod/dev/monitoring, separated by workspace
+  # and key). State files are KBs, and versioning keeps noncurrent versions for
+  # 30 days, so the whole bucket stays well under a megabyte.
+  aws_s3_bucket.state:
+    object_tags: 0
+    standard:
+      storage_gb: 0.5
+      monthly_tier_1_requests: 20000 # one PUT per state write (plan/apply/lock)
+      monthly_tier_2_requests: 50000 # reads on every init/plan/apply
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
