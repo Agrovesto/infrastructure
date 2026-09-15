@@ -11,15 +11,15 @@ resource "aws_service_discovery_private_dns_namespace" "monitoring" {
 
 locals {
   discovery_services = {
-    prometheus   = 9090
-    alertmanager = 9093
-    loki         = 3100
-    tempo        = 3200
-    grafana      = 3000
-    blackbox     = 9115
-    pushgateway  = 9091
-    alloy        = 4317
+    prometheus = 9090
+    loki       = 3100
+    tempo      = 3200
+    grafana    = 3000
+    edge       = 9091
   }
+
+  # The four components behind the edge task keep their own names.
+  edge_aliases = ["alloy", "alertmanager", "blackbox", "pushgateway"]
 }
 
 resource "aws_service_discovery_service" "monitoring" {
@@ -43,6 +43,16 @@ resource "aws_service_discovery_service" "monitoring" {
   }
 
   tags = merge(local.tags, { Name = "${local.name}-${each.key}" })
+}
+
+resource "aws_route53_record" "edge_alias" {
+  for_each = toset(local.edge_aliases)
+
+  zone_id = aws_service_discovery_private_dns_namespace.monitoring.hosted_zone
+  name    = "${each.key}.${local.dns_name}"
+  type    = "CNAME"
+  ttl     = 10
+  records = ["edge.${local.dns_name}"]
 }
 
 resource "aws_ecs_cluster" "monitoring" {

@@ -136,7 +136,7 @@ run "security_groups_only_open_what_is_needed" {
   }
 
   assert {
-    condition     = toset(aws_security_group_rule.internal_prometheus.cidr_blocks) == toset(["10.0.0.0/16"])
+    condition     = toset(aws_security_group_rule.internal_prometheus.cidr_blocks) == toset([data.aws_vpc.prod.cidr_block])
     error_message = "Prometheus must only accept traffic from the VPC."
   }
 
@@ -207,8 +207,8 @@ run "cloud_map_publishes_component_endpoints" {
   }
 
   assert {
-    condition     = length(aws_service_discovery_service.monitoring) == 8
-    error_message = "Every component needs a discovery service."
+    condition     = length(aws_service_discovery_service.monitoring) == 5
+    error_message = "Every ECS service needs one discovery name."
   }
 
   assert {
@@ -217,8 +217,13 @@ run "cloud_map_publishes_component_endpoints" {
   }
 
   assert {
-    condition     = one(one(aws_service_discovery_service.monitoring["alloy"].dns_config).dns_records).ttl == 10
+    condition     = one(one(aws_service_discovery_service.monitoring["edge"].dns_config).dns_records).ttl == 10
     error_message = "Discovery TTL drifted."
+  }
+
+  assert {
+    condition     = length(aws_route53_record.edge_alias) == 4 && alltrue([for r in aws_route53_record.edge_alias : r.type == "CNAME"])
+    error_message = "The four edge components must keep their names as CNAMEs to the edge task."
   }
 
   assert {

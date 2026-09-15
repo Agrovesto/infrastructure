@@ -81,7 +81,7 @@ resource "aws_ecs_service" "grafana" {
     aws_ecs_service.prometheus,
     aws_ecs_service.loki,
     aws_ecs_service.tempo,
-    aws_ecs_service.alertmanager
+    aws_ecs_service.edge
   ]
 
   deployment_circuit_breaker {

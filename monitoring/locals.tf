@@ -58,7 +58,9 @@ locals {
   ]
 
   # One awslogs config per component, all in the stack's log group.
-  log_config = { for k in keys(local.discovery_services) : k => {
+  log_components = ["prometheus", "alertmanager", "loki", "tempo", "grafana", "alloy", "blackbox", "pushgateway"]
+
+  log_config = { for k in local.log_components : k => {
     logDriver = "awslogs"
     options = {
       awslogs-group         = aws_cloudwatch_log_group.monitoring.name

@@ -105,8 +105,8 @@ run "components_run_on_fargate_with_their_own_state" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.alertmanager.container_definitions), "secret") == false
-    error_message = "Config is fetched from SSM, not injected as task secrets."
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "secret") == false
+    error_message = "Config is fetched from S3 and EFS, not injected as task secrets."
   }
 }
 
@@ -171,8 +171,8 @@ run "exporters_cover_uptime_and_push_metrics" {
   command = plan
 
   assert {
-    condition     = aws_ecs_service.blackbox.desired_count == 1
-    error_message = "The blackbox exporter must always run."
+    condition     = aws_ecs_service.edge.desired_count == 1
+    error_message = "The edge group carries the blackbox exporter and must always run."
   }
 
   assert {
@@ -186,8 +186,13 @@ run "exporters_cover_uptime_and_push_metrics" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.pushgateway.cpu != null
-    error_message = "The pushgateway task definition must be complete."
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "grafana/alloy:"),
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "prom/alertmanager:"),
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "prom/blackbox-exporter:"),
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "prom/pushgateway:")
+    ])
+    error_message = "The edge task must carry all four edge containers."
   }
 
   assert {

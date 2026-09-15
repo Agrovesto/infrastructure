@@ -131,21 +131,18 @@ variable "python_version" {
 # --- Sizing (Fargate CPU units / MiB) --------------------------------------------
 
 variable "service_sizing" {
-  description = "cpu is in Fargate units (256 = 0.25 vCPU). These are the cost floor for each component"
+  description = "cpu is in Fargate units (256 = 0.25 vCPU). One entry per ECS service; edge carries four containers"
   type = map(object({
     cpu    = number
     memory = number
   }))
 
   default = {
-    prometheus   = { cpu = 512, memory = 1024 }
-    alertmanager = { cpu = 256, memory = 512 }
-    loki         = { cpu = 512, memory = 1024 }
-    tempo        = { cpu = 512, memory = 1024 }
-    grafana      = { cpu = 512, memory = 1024 }
-    alloy        = { cpu = 256, memory = 512 }
-    blackbox     = { cpu = 256, memory = 512 }
-    pushgateway  = { cpu = 256, memory = 512 }
+    prometheus = { cpu = 512, memory = 1024 }
+    loki       = { cpu = 512, memory = 1024 }
+    tempo      = { cpu = 512, memory = 1024 }
+    grafana    = { cpu = 512, memory = 1024 }
+    edge       = { cpu = 512, memory = 1024 }
   }
 }
 

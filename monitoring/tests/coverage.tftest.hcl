@@ -83,8 +83,7 @@ run "every_task_definition_is_complete" {
       aws_ecs_task_definition.loki[*].cpu != null,
       aws_ecs_task_definition.tempo[*].cpu != null,
       aws_ecs_task_definition.grafana.cpu != null,
-      aws_ecs_task_definition.alloy.cpu != null,
-      aws_ecs_task_definition.blackbox.cpu != null
+      aws_ecs_task_definition.edge.cpu != null
     ])
     error_message = "Every task definition needs an explicit cpu value."
   }
@@ -93,8 +92,8 @@ run "every_task_definition_is_complete" {
     condition = alltrue([
       strcontains(jsonencode(aws_ecs_task_definition.loki[*].container_definitions), "grafana/loki:"),
       strcontains(jsonencode(aws_ecs_task_definition.tempo[*].container_definitions), "grafana/tempo:"),
-      strcontains(jsonencode(aws_ecs_task_definition.alloy.container_definitions), "grafana/alloy:"),
-      strcontains(jsonencode(aws_ecs_task_definition.blackbox.container_definitions), "prom/blackbox-exporter:")
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "grafana/alloy:"),
+      strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "prom/blackbox-exporter:"),
     ])
     error_message = "Task definitions must pin the open-source images."
   }
@@ -111,15 +110,13 @@ run "every_task_definition_is_complete" {
 
   assert {
     condition = alltrue([
-      aws_ecs_service.alertmanager.desired_count == 1,
-      aws_ecs_service.alloy.desired_count == 1,
-      aws_ecs_service.pushgateway.desired_count == 1
+      aws_ecs_service.edge.desired_count == 1
     ])
-    error_message = "The ingest gateway, pushgateway and Alertmanager must each run one task."
+    error_message = "The ingest gateway, pushgateway and Alertmanager must run as one task."
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.alloy.container_definitions), "4317")
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.edge.container_definitions), "4317")
     error_message = "The Alloy gateway must expose OTLP."
   }
 
@@ -211,5 +208,49 @@ run "policies_grant_the_minimum" {
   assert {
     condition     = aws_kms_alias.monitoring.name == "alias/agrovesto-monitoring-efs"
     error_message = "EFS key alias drifted."
+  }
+}
+
+run "storage_and_schedule_settings" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.cur[0].block_public_acls && aws_s3_bucket_public_access_block.cur[0].block_public_policy
+    error_message = "The CUR bucket must block public access."
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.cur[0].rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
+    error_message = "The CUR bucket must be encrypted at rest."
+  }
+
+  assert {
+    condition     = aws_s3_object.budget_script[0].key == "scripts/budget_report.py"
+    error_message = "The budget script key must match what the task downloads."
+  }
+
+  assert {
+    condition     = one(aws_cloudwatch_event_target.budget[0].ecs_target).task_count == 1 && one(one(aws_cloudwatch_event_target.budget[0].ecs_target).network_configuration).assign_public_ip == false
+    error_message = "The budget task must run one private task per schedule."
+  }
+
+  assert {
+    condition     = random_password.grafana_admin.length == 32 && random_password.grafana_admin.special == false
+    error_message = "The generated Grafana password must stay quote-safe."
+  }
+
+  assert {
+    condition     = one(aws_cloudwatch_event_target.mssql[0].ecs_target).platform_version == "1.4.0"
+    error_message = "The metrics task runs on the Fargate 1.4.0 platform."
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.mssql_metrics[0].network_mode == "awsvpc"
+    error_message = "The metrics task mounts the shared config volume."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.mssql[0].name == "agrovesto-monitoring-mssql-metrics"
+    error_message = "The metrics schedule name drifted."
   }
 }
