@@ -30,6 +30,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_COVERAGE_FAIL_UNDER: "70"
   TF_WORKING_DIR: "prod"
+  STACK_WORKSPACE: "prod"
   TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
   TF_TEMPLATES: ""
 
@@ -439,6 +440,14 @@ jobs:
         id: init
         run: terraform init -no-color
 
+      - name: Select Terraform Workspace
+        run: |
+          terraform workspace select "$STACK_WORKSPACE" || {
+            echo "::error::Terraform workspace '$STACK_WORKSPACE' is missing."
+            echo "Run the one-time migration in $TF_WORKING_DIR/README.md."
+            exit 1
+          }
+
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
@@ -564,6 +573,14 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -no-color
+
+      - name: Select Terraform Workspace
+        run: |
+          terraform workspace select "$STACK_WORKSPACE" || {
+            echo "::error::Terraform workspace '$STACK_WORKSPACE' is missing."
+            echo "Run the one-time migration in $TF_WORKING_DIR/README.md."
+            exit 1
+          }
 
       - name: Terraform Validate
         run: terraform validate -no-color

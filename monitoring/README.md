@@ -24,6 +24,7 @@ enhanced monitoring, AWS Budgets.
 | CUR + DuckDB job | `python:3.12-slim` | – | Daily cost aggregation from the Cost and Usage Report |
 | SQL Server metrics job | `python:3.12-slim` | – | Hourly DMV queries against prod RDS, pushed to Pushgateway |
 | ECS collector job | `python:3.12-slim` | – | Every two minutes: ECS cluster/service state to Pushgateway and prod task logs into Loki |
+| Monthly report job | `python:3.12-slim` | – | First of the month: previous month's cost, usage and analysis as a PDF, mailed through SES |
 
 Every task is a Graviton (ARM64) Fargate task pinned to a single private subnet,
 with one shared One Zone EFS file system (encrypted, Infrequent Access after 30
@@ -47,6 +48,7 @@ Rough monthly order of magnitude (eu-west-1 on-demand prices, ARM64):
 | ECS collector task, every 2 minutes (~45 s per run, 0.25 vCPU / 0.5 GB) | ~$3 |
 | KMS key, config bucket, CUR Parquet, component logs | ~$2.50 |
 | Scheduled jobs (hourly SQL Server task ~30 s, daily CUR task) | <$0.10 |
+| Monthly report task + SES send (1 run/month, 0.25 vCPU / 0.5 GB) | <$0.05 |
 | **Total** | **~$105–110** |
 
 Eight always-on tasks, not seven: at the `service_sizing` defaults four of them run 0.5 vCPU / 1 GB
@@ -181,6 +183,31 @@ out.
 
 The first data point needs one CUR delivery, so the panels stay empty for about a
 day after the first apply.
+
+### Monthly PDF report
+
+4. On the first of the month (`report_schedule_expression`, default 08:00 UTC) a
+   second task aggregates the previous two months with DuckDB, renders a PDF with
+   `fpdf2` (totals, cost per service with shares, usage lines, month-over-month
+   analysis and the budget verdict) and mails it through SES. It also pushes
+   `cost_last_month_usd`, `cost_previous_month_usd` and
+   `cost_last_month_budget_ratio` to Pushgateway, so closed months stay visible in
+   Grafana.
+
+All of it is gated by `enable_monthly_report` plus a recipient: leave
+`report_recipients` empty and it falls back to `alert_email`, and with that empty
+too the SES identity, the DNS records, the task and the schedule do not exist.
+The sending domain is verified in Route53 by Terraform (TXT + three DKIM CNAMEs),
+so no console step is needed — but SES starts in the sandbox, where mail is only
+delivered to verified addresses until production access is requested.
+
+### Workspace and state
+
+`prod/` and `monitoring/` share one state bucket and key
+(`s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate`) and are kept
+apart by Terraform workspaces: the monitoring pipeline selects the `monitoring`
+workspace before plan and apply and fails loudly if it is missing. One-time
+migration from the default workspace is in `prod/README.md`.
 
 ## ECS services and cluster (no Container Insights)
 

@@ -26,6 +26,11 @@ enable_cost_monitoring = true
 monthly_budget_usd     = 250
 budget_alert_ratio     = 0.8
 
+# Monthly cost/usage/analysis PDF by email (SES). The sending domain is verified
+# in Route53 here; fill report_recipients in (or alert_email above) to switch it on.
+enable_monthly_report = true
+report_recipients     = []
+
 # Uptime probes (blackbox exporter). Add or remove entries freely.
 probe_targets = {
   wallet          = "https://wallet-api.nomaos.com/"

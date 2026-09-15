@@ -117,6 +117,14 @@ resource "aws_iam_role_policy" "task" {
         Resource = ["*"]
       }
       ],
+      local.report_enabled ? [
+        {
+          Sid      = "SendMonthlyReport"
+          Effect   = "Allow"
+          Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+          Resource = [aws_ses_domain_identity.monthly_report[0].arn]
+        }
+      ] : [],
       var.enable_cost_monitoring ? [
         {
           Sid      = "ReadCostAndUsageReport"
@@ -195,7 +203,7 @@ resource "aws_iam_role_policy" "task_database_secret" {
 # The scheduled tasks (cost report, SQL Server metrics) are started by
 # EventBridge, which needs both RunTask and permission to hand over task roles.
 resource "aws_iam_role" "events" {
-  count = var.enable_cost_monitoring || local.mssql_enabled || local.collector_enabled ? 1 : 0
+  count = var.enable_cost_monitoring || local.mssql_enabled || local.collector_enabled || local.report_enabled ? 1 : 0
 
   name               = "${local.name}-events-role"
   assume_role_policy = local.events_assume
@@ -204,7 +212,7 @@ resource "aws_iam_role" "events" {
 }
 
 resource "aws_iam_role_policy" "events" {
-  count = var.enable_cost_monitoring || local.mssql_enabled || local.collector_enabled ? 1 : 0
+  count = var.enable_cost_monitoring || local.mssql_enabled || local.collector_enabled || local.report_enabled ? 1 : 0
 
   name = "${local.name}-events-policy"
   role = aws_iam_role.events[0].id
@@ -219,7 +227,8 @@ resource "aws_iam_role_policy" "events" {
         Resource = concat(
           var.enable_cost_monitoring ? ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-budget:*"] : [],
           local.mssql_enabled ? ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-mssql-metrics:*"] : [],
-          local.collector_enabled ? ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-ecs-collector:*"] : []
+          local.collector_enabled ? ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-ecs-collector:*"] : [],
+          local.report_enabled ? ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-report:*"] : []
         )
       },
       {

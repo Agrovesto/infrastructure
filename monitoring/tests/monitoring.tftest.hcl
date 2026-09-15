@@ -341,3 +341,61 @@ run "scheduled_tasks_can_be_turned_off" {
     error_message = "Without RDS monitoring the database script and rules are not published."
   }
 }
+
+run "monthly_report_is_mailed" {
+  command = plan
+
+  variables {
+    report_recipients = ["finops@nomaos.com"]
+  }
+
+  assert {
+    condition     = aws_ses_domain_identity.monthly_report[0].domain == "nomaos.com"
+    error_message = "The report sender domain must be verified in SES."
+  }
+
+  assert {
+    condition     = aws_ses_domain_dkim.monthly_report[0].domain == "nomaos.com"
+    error_message = "DKIM must be generated for the verified domain."
+  }
+
+  assert {
+    condition     = length(aws_route53_record.monthly_report_dkim) == 3 && aws_route53_record.monthly_report_dkim[0].type == "CNAME"
+    error_message = "DKIM must be published for the verified domain."
+  }
+
+  assert {
+    condition     = aws_route53_record.monthly_report_verification[0].type == "TXT"
+    error_message = "The SES verification token must be published as a TXT record."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.report[0].schedule_expression == var.report_schedule_expression
+    error_message = "The monthly report must run on the configured schedule."
+  }
+
+  assert {
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.report[0].container_definitions), "fpdf2") && strcontains(jsonencode(aws_ecs_task_definition.report[0].container_definitions), "REPORT_RECIPIENTS")
+    error_message = "The report task must render a PDF and know where to send it."
+  }
+
+  assert {
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.report[0].container_definitions), "finops@nomaos.com")
+    error_message = "The report recipients must reach the task environment."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_target.report[0].ecs_target[0].launch_type == "FARGATE"
+    error_message = "The report task must run on Fargate."
+  }
+
+  assert {
+    condition     = aws_s3_object.report_script[0].key == "scripts/monthly_report.py"
+    error_message = "The report script must be published next to the budget script."
+  }
+
+  assert {
+    condition     = strcontains(jsonencode(aws_iam_role_policy.task.policy), "ses:SendRawEmail")
+    error_message = "The report task must be allowed to send mail."
+  }
+}

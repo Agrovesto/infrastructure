@@ -289,6 +289,36 @@ variable "cur_bucket_name" {
   default     = ""
 }
 
+variable "enable_monthly_report" {
+  description = "Mail a monthly cost/usage/analysis PDF through SES (needs report_recipients or alert_email)"
+  type        = bool
+  default     = true
+}
+
+variable "report_recipients" {
+  description = "Addresses the monthly PDF goes to. Empty = alert_email; if that is empty too the report stays off"
+  type        = list(string)
+  default     = []
+}
+
+variable "report_sender" {
+  description = "SES-verified From address for the monthly report. Empty = monitoring@<domain>"
+  type        = string
+  default     = ""
+}
+
+variable "report_ses_domain" {
+  description = "Domain verified in SES for the report sender. Empty = domain_name"
+  type        = string
+  default     = ""
+}
+
+variable "report_schedule_expression" {
+  description = "EventBridge schedule for the monthly report task (UTC)"
+  type        = string
+  default     = "cron(0 8 1 * ? *)"
+}
+
 # --- Feature toggles --------------------------------------------------------------
 
 # --- RDS / SQL Server metrics ---------------------------------------------------

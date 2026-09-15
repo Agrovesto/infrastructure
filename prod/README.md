@@ -92,6 +92,31 @@ KMS auto-unseal needs no operator keys.
 | moneval | moneval.nomaos.com | 5004 | moneval |
 | serviceprovider | serviceprovider.nomaos.com | 5005 | serviceprovider |
 
+## Workspace and state
+
+The prod and monitoring stacks share one bucket and key
+(`s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate`) and are
+separated by Terraform workspaces: this stack runs in the `prod` workspace, the
+monitoring stack in `monitoring`. The pipeline selects the workspace before plan
+and apply and fails if it does not exist, so nothing can ever plan against the
+other stack's state.
+
+One-time migration (run once, from a workstation with admin credentials):
+
+```bash
+cd prod
+aws s3 cp s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate ./prod-default.tfstate
+terraform init
+terraform workspace new prod
+terraform state push ./prod-default.tfstate
+terraform workspace show          # prod
+terraform plan                    # expect: no changes
+```
+
+The old default-workspace object is left in place as a backup; delete it only once
+plan and outputs look right. The monitoring stack migrates the same way, from
+`monitoring/bootstrap.tfstate` into its own `monitoring` workspace.
+
 ## One-time setup (prod account)
 
 Run the **bootstrap module** once from an admin workstation — it creates the
