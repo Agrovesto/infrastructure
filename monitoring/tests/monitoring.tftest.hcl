@@ -43,6 +43,11 @@ mock_provider "aws" {
       arn = "arn:aws:servicediscovery:eu-west-1:123456789012:service/srv-0123456789abcdef"
     }
   }
+  mock_resource "aws_ses_domain_dkim" {
+    defaults = {
+      dkim_tokens = ["mock-dkim-token-1", "mock-dkim-token-2", "mock-dkim-token-3"]
+    }
+  }
   mock_resource "aws_ses_domain_identity" {
     defaults = {
       arn = "arn:aws:ses:eu-west-1:123456789012:identity/nomaos.com"
