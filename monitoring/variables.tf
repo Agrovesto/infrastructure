@@ -329,3 +329,41 @@ variable "enable_traces" {
   type        = bool
   default     = true
 }
+
+# --- ECS platform monitoring -----------------------------------------------------
+
+variable "enable_ecs_monitoring" {
+  description = "Run the scheduled ECS collector (cluster and service state, service logs)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_ecs_log_shipping" {
+  description = "Also ship the prod ECS task logs from CloudWatch Logs into Loki"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_cluster_name" {
+  description = "Cluster the collector reads. Empty means <project>-<environment>"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_log_group_prefix" {
+  description = "Log group prefix whose groups are shipped to Loki. Empty means /ecs/<project>-<environment>"
+  type        = string
+  default     = ""
+}
+
+variable "collector_schedule_expression" {
+  description = "How often the ECS collector runs"
+  type        = string
+  default     = "rate(2 minutes)"
+}
+
+variable "ecs_log_lookback_minutes" {
+  description = "How far back the log shipper may read after a cold start"
+  type        = number
+  default     = 15
+}

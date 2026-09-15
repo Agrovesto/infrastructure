@@ -106,7 +106,7 @@ run "storage_is_encrypted_and_shared" {
   }
 
   assert {
-    condition     = length(aws_efs_access_point.monitoring) == 8
+    condition     = length(aws_efs_access_point.monitoring) == 9
     error_message = "Every component that reads or writes shared state needs its own access point."
   }
 
@@ -226,32 +226,52 @@ run "cloud_map_publishes_component_endpoints" {
   }
 }
 
-run "config_is_rendered_into_parameters" {
+run "config_is_published_for_the_init_container" {
   command = plan
 
   assert {
-    condition     = length(aws_ssm_parameter.config) == 16
-    error_message = "Every config file, rule file and dashboard must be published to SSM."
+    condition     = length(aws_s3_object.config) == 20
+    error_message = "Every config file, rule file, script and dashboard must be published for the init container."
   }
 
   assert {
-    condition     = aws_ssm_parameter.config["alertmanager/alertmanager.yml"].type == "SecureString"
-    error_message = "The Alertmanager config can carry SMTP credentials and must be encrypted."
+    condition     = aws_s3_object.config["prometheus/prometheus.yml"].key == "config/prometheus/prometheus.yml" && aws_s3_object.config["prometheus/prometheus.yml"].bucket == aws_s3_bucket.config.id
+    error_message = "Config objects must keep the component/relative-path layout."
   }
 
   assert {
-    condition     = aws_ssm_parameter.config["prometheus/prometheus.yml"].name == "/agrovesto-monitoring/prometheus/prometheus.yml"
-    error_message = "Parameter naming drifted."
+    condition     = aws_s3_object.config["grafana/dashboards/services.json"].content_type == "application/json"
+    error_message = "Dashboards must be published as JSON."
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.config.rule).apply_server_side_encryption_by_default).sse_algorithm == "aws:kms"
+    error_message = "The config bucket must use the stack CMK."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.config.block_public_acls && aws_s3_bucket_public_access_block.config.restrict_public_buckets
+    error_message = "The config bucket must stay private."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_versioning.config.versioning_configuration).status == "Enabled"
+    error_message = "Config objects must be versioned so a rollback is possible."
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_lifecycle_configuration.config.rule).noncurrent_version_expiration).noncurrent_days == 7
+    error_message = "Superseded config versions must expire to keep the bucket free."
+  }
+
+  assert {
+    condition     = strcontains(aws_s3_bucket_policy.config.policy, "DenyNonTls")
+    error_message = "The config bucket must refuse plain HTTP."
   }
 
   assert {
     condition     = aws_ssm_parameter.grafana_admin_password.type == "SecureString" && aws_ssm_parameter.grafana_admin_password.key_id == "alias/agrovesto-monitoring-efs"
     error_message = "The generated Grafana password must be a CMK-encrypted SecureString."
-  }
-
-  assert {
-    condition     = aws_ssm_parameter.config["prometheus/rules/platform.yml"].key_id == "alias/agrovesto-monitoring-efs"
-    error_message = "Config parameters must be encrypted with the stack CMK."
   }
 
   assert {

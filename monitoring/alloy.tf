@@ -35,12 +35,7 @@ resource "aws_ecs_task_definition" "alloy" {
 
   # No container health check: the Alloy image ships no shell or wget.
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/alloy" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "alloy"
       image     = local.images.alloy

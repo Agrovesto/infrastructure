@@ -26,12 +26,7 @@ resource "aws_ecs_task_definition" "alertmanager" {
   }
 
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/alertmanager" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "alertmanager"
       image     = local.images.alertmanager

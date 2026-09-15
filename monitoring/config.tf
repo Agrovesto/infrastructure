@@ -1,10 +1,11 @@
 # Configuration delivery.
 #
-# Every component reads its config from its EFS volume: the values below are
-# published to SSM Parameter Store and a small aws-cli init container materialises
-# them into <mount>/config inside the task, so no custom images are needed.
+# Config files are rendered in locals / read from disk and published as S3
+# objects; a small aws-cli init container syncs them into <mount>/config inside
+# each task, so no custom images are needed and payloads are not capped by the
+# SSM parameter size limit.
 #
-#   SSM: /<name>/<component>/<relative path>  ->  <mount>/config/<relative path>
+#   S3: s3://<bucket>/config/<relative path>  ->  <mount>/config/<relative path>
 #
 # Changing a value here needs a service redeploy to take effect
 # (aws ecs update-service --force-new-deployment).
@@ -32,16 +33,102 @@ locals {
     "prometheus/rules/database.yml" = local.prometheus_rds_rules
   } : {}
 
-  config_parameters = merge(local.base_config_parameters, local.rds_config_parameters)
+  collector_config_parameters = local.collector_enabled ? merge({
+    "collector/ecs_metrics.py"    = file("${path.module}/scripts/ecs_metrics.py")
+    "prometheus/rules/ecs.yml"    = local.prometheus_ecs_rules
+    "grafana/dashboards/ecs.json" = file("${path.module}/dashboards/ecs.json")
+  }, var.enable_ecs_log_shipping ? {
+    "collector/ecs_logs.py" = file("${path.module}/scripts/ecs_logs.py")
+  } : {}) : {}
+
+  config_parameters = merge(local.base_config_parameters, local.rds_config_parameters, local.collector_config_parameters)
+
+  config_content_types = {
+    json = "application/json"
+    yml  = "text/yaml"
+  }
 }
 
-resource "aws_ssm_parameter" "config" {
+resource "aws_s3_bucket" "config" {
+  bucket = "${local.name}-config-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.tags, { Name = "${local.name}-config" })
+}
+
+resource "aws_s3_bucket_public_access_block" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.monitoring.arn
+    }
+
+    # Cuts KMS request charges for objects read on every task start.
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    id     = "expire-superseded-config"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyNonTls"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.config.arn, "${aws_s3_bucket.config.arn}/*"]
+      Condition = { Bool = { "aws:SecureTransport" = "false" } }
+    }]
+  })
+}
+
+resource "aws_s3_object" "config" {
   for_each = local.config_parameters
 
-  name       = "${local.param}/${each.key}"
-  type       = "SecureString"
-  value      = each.value
-  key_id     = "alias/${local.name}-efs"
+  bucket       = aws_s3_bucket.config.id
+  key          = "config/${each.key}"
+  content      = each.value
+  etag         = md5(each.value)
+  content_type = lookup(local.config_content_types, reverse(split(".", each.key))[0], "text/plain")
 
   tags = local.tags
 }

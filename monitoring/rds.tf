@@ -45,12 +45,7 @@ resource "aws_ecs_task_definition" "mssql_metrics" {
   }
 
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/rds" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "mssql-metrics"
       image     = local.images.mssql

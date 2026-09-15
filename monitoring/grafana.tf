@@ -26,12 +26,7 @@ resource "aws_ecs_task_definition" "grafana" {
   }
 
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/grafana" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "grafana"
       image     = local.images.grafana

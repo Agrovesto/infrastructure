@@ -34,6 +34,7 @@ locals {
     alloy        = 0
     blackbox     = 65534
     rds          = 0
+    collector    = 0
   }
 }
 

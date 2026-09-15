@@ -30,12 +30,7 @@ resource "aws_ecs_task_definition" "tempo" {
   }
 
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/tempo" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "tempo"
       image     = local.images.tempo

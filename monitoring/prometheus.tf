@@ -29,12 +29,7 @@ resource "aws_ecs_task_definition" "prometheus" {
   # files into <volume>/config, which is why Prometheus finds them under
   # /prometheus/config. State (the TSDB) lives beside them in /prometheus/data.
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/prometheus" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "prometheus"
       image     = local.images.prometheus

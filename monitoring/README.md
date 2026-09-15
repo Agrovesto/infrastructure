@@ -1,8 +1,9 @@
 # Monitoring stack (prod account)
 
 Open-source observability for the Agrovesto prod stack: metrics, logs, traces,
-dashboards, uptime probes, cost/budget reporting and SQL Server (RDS) metrics — all
-running on ECS Fargate with no AWS-native observability service in the loop.
+dashboards, uptime probes, ECS cluster/service state, cost/budget reporting and
+SQL Server (RDS) metrics — all running on ECS Fargate with no AWS-native
+observability service in the loop.
 
 Native tooling that this stack deliberately replaces: CloudWatch alarms, metric
 filters and dashboards, Container Insights, X-Ray, Performance Insights, RDS
@@ -19,9 +20,10 @@ enhanced monitoring, AWS Budgets.
 | Grafana OSS | `grafana/grafana-oss` | 3000 | Dashboards, datasource provisioning, alert view |
 | Alloy | `grafana/alloy` | 3100 / 4317 / 4318 / 12345 | Telemetry gateway: OTLP receiver, Loki push API, self-metrics |
 | blackbox-exporter | `prom/blackbox-exporter` | 9115 | Synthetic uptime/TLS probes |
-| Pushgateway | `prom/pushgateway` | 9091 | Landing point for the scheduled cost and SQL Server jobs |
+| Pushgateway | `prom/pushgateway` | 9091 | Landing point for the scheduled cost, SQL Server and ECS jobs |
 | CUR + DuckDB job | `python:3.12-slim` | – | Daily cost aggregation from the Cost and Usage Report |
 | SQL Server metrics job | `python:3.12-slim` | – | Hourly DMV queries against prod RDS, pushed to Pushgateway |
+| ECS collector job | `python:3.12-slim` | – | Every two minutes: ECS cluster/service state to Pushgateway and prod task logs into Loki |
 
 Every task is a Graviton (ARM64) Fargate task pinned to a single private subnet,
 with one shared One Zone EFS file system (encrypted, Infrequent Access after 30
@@ -41,11 +43,13 @@ Rough monthly order of magnitude (eu-west-1 on-demand prices, ARM64):
 | --- | --- |
 | 7 always-on tasks (~0.25 vCPU / 0.5–1 GB each) | ~$55–70 |
 | One Zone EFS, a few GB plus IA transition | ~$2 |
-| KMS key (EFS + SSM parameters) | ~$1 |
+| KMS key (EFS + config bucket) | ~$1 |
 | Prometheus 10 GB volume on EFS, 15 day retention | included above |
 | Scheduled jobs (hourly SQL Server task ~30 s, daily CUR task) | <$1 |
+| ECS collector task, every 2 minutes (~45 s per run, 0.25 vCPU / 0.5 GB) | ~$3 |
 | CUR bucket storage (Parquet, 400 day lifecycle) | <$0.5 |
-| **Total** | **~$60–75** |
+| Config bucket (a few KB) | ~$0 |
+| **Total** | **~$65–80** |
 
 Levers, in order of effect:
 
@@ -57,6 +61,9 @@ Levers, in order of effect:
   and `traces_retention_hours` cap Loki and Tempo.
 - `enable_cost_monitoring = false` and `enable_rds_monitoring = false` remove the
   scheduled jobs entirely.
+- `enable_ecs_monitoring = false` drops the ECS collector, and
+  `enable_ecs_log_shipping = false` keeps its metrics while it stops reading
+  CloudWatch Logs (`collector_schedule_expression` also changes the cadence).
 
 ## Layout
 
@@ -69,13 +76,14 @@ monitoring/
 ├── efs.tf kms.tf    shared state: One Zone EFS, mount target, access points, CMK
 ├── iam.tf           execution / task / EventBridge roles, scoped inline policies
 ├── security_groups.tf  internal, grafana and efs security groups
-├── config.tf        SSM parameter delivery of every config file
+├── config.tf        config bucket + objects, delivered to the tasks by the init container
 ├── {prometheus,alertmanager,loki,tempo,grafana,alloy,exporters}.tf  task definitions and services
 ├── grafana.tf       ALB target group, listener rule, Route53 alias for grafana.<domain>
 ├── cost.tf          Cost and Usage Report bucket + report definition, daily budget task
 ├── rds.tf           scheduled SQL Server metrics task
-├── dashboards/      platform.json services.json cost.json (auto-provisioned)
-├── scripts/         budget_report.py, mssql_metrics.py (shipped to the tasks through SSM)
+├── collector.tf     scheduled ECS collector (cluster/service state, service logs)
+├── dashboards/      platform.json services.json cost.json ecs.json (auto-provisioned)
+├── scripts/         budget_report.py, mssql_metrics.py, ecs_metrics.py, ecs_logs.py
 ├── checkov.yml trivy.yml   scan configuration used by the monitoring pipeline
 └── tests/           terraform test suites (mock_provider, no AWS calls)
 ```
@@ -83,10 +91,12 @@ monitoring/
 ## Configuration flow
 
 Config is data, not images: `locals.tf` renders each component's file, `config.tf`
-publishes them to SSM Parameter Store (`/agrovesto-monitoring/<component>/<path>`,
-all `SecureString`, encrypted with the stack CMK), and a small `aws-cli` init
-container writes them onto the EFS volume at `/config/<path>` before the component
-starts. Changing a value therefore needs a redeploy:
+publishes them as objects in the CMK-encrypted config bucket
+(`config/<component>/<path>`), and a small `aws-cli` init container syncs them onto
+the EFS volume at `/config/<path>` before the component starts. S3 rather than SSM
+parameter values because the dashboards and scripts are larger than the 4 KB
+(standard) and 8 KB (advanced) Parameter Store limits; the generated Grafana admin
+password stays an SSM `SecureString`. Changing a value therefore needs a redeploy:
 
 ```bash
 aws ecs update-service --cluster agrovesto-monitoring \
@@ -116,7 +126,9 @@ to your office/VPN ranges.
 
 ## Onboarding a service
 
-1. **Logs** — ship them to the Alloy gateway instead of CloudWatch:
+1. **Logs** — nothing to do if the task keeps the `awslogs` driver: the ECS
+   collector ships the prod log groups into Loki every two minutes (below). To
+   drop CloudWatch out of the path, push to the Alloy gateway instead:
    - Loki push API: `http://alloy.monitoring.internal:3100/loki/api/v1/push`
    - OTLP logs: `http://alloy.monitoring.internal:4318/v1/logs`
    Label `service=<name>`; the services dashboard assumes `source="app"` plus a
@@ -135,7 +147,7 @@ to your office/VPN ranges.
 
 ## Alerts
 
-Rules live in three Prometheus files, all delivered through SSM:
+Rules live in four Prometheus files, all delivered with the rest of the config:
 
 - `platform.yml` — uptime (`ProbeFailing`, `ProbeSlow`, `TlsCertificateExpiring`)
   and component health (`MonitoringTargetDown`).
@@ -143,6 +155,9 @@ Rules live in three Prometheus files, all delivered through SSM:
   `budget_alert_ratio` of `monthly_budget_usd`) and `CostReportStale`.
 - `database.yml` — `MssqlUnreachable`, `MssqlMetricsStale`, `MssqlLowDiskSpace`,
   `MssqlBlockedSessions`, `MssqlDeadlockSpike`.
+- `ecs.yml` — `EcsMetricsMissing`, `EcsCollectorFailing`, `EcsServiceShortOfTasks`,
+  `EcsServiceTasksPending`, `EcsDeploymentFailed`, `EcsTasksStopping`,
+  `EcsLogShipperStalled`.
 
 `alert_email` + `alert_smtp_host` + `alert_smtp_user` (+ the
 `TF_VAR_alert_smtp_password` secret) enable email delivery;
@@ -165,6 +180,37 @@ out.
 
 The first data point needs one CUR delivery, so the panels stay empty for about a
 day after the first apply.
+
+## ECS services and cluster (no Container Insights)
+
+One scheduled task (`agrovesto-monitoring-ecs-collector`, every two minutes by
+default) does two jobs:
+
+1. **Cluster and service state** — `ecs_metrics.py` reads the ECS API
+   (`ListServices`/`DescribeServices`, `ListTasks`/`DescribeTasks`) and pushes
+   `ecs_up`, `ecs_cluster_services`, `ecs_cluster_running_tasks`,
+   `ecs_cluster_pending_tasks`, the per-service `ecs_service_desired_count`,
+   `ecs_service_running_count`, `ecs_service_pending_count`,
+   `ecs_service_rollout_state`, `ecs_service_deployment_failed` and
+   `ecs_stopped_tasks{stop_code}` to Pushgateway under `job="ecs"`. The `ecs.yml`
+   rules and the **ECS platform** dashboard read them.
+2. **Task logs** — `ecs_logs.py` reads the prod log groups under
+   `/ecs/<project>-<environment>` with `FilterLogEvents`, ships new lines to Loki
+   as `{source="app", service="<service>"}` and checkpoints its position on the
+   EFS volume, pushing `ecs_logs_shipped_total`,
+   `ecs_logs_last_event_timestamp_seconds` and `ecs_logs_scrape_timestamp_seconds`
+   under `job="ecs-logs"`.
+
+Nothing is queried through CloudWatch dashboards, alarms, metric filters or
+Insights: the services keep the `awslogs` driver, CloudWatch Logs is only the sink
+it already writes to, and an OSS shipper reads it. To keep logs out of CloudWatch
+entirely, either add a FireLens sidecar per service (OSS Fluent Bit to Loki, about
+$7/month per task at 0.25 vCPU / 0.5 GB) or have the service push straight to
+Alloy, then set `enable_ecs_log_shipping = false`.
+
+Task CPU and memory are deliberately not collected: on Fargate without Container
+Insights they exist only in the CloudWatch ECS namespace, so the dashboard leans on
+service/task state, the blackbox probes and each service's own OTLP metrics.
 
 ## RDS (SQL Server) metrics
 
@@ -208,9 +254,11 @@ SonarQube, plan on pull requests, apply on `main`. Every step is blocking — no
 - **Retention vs volume.** Loki's filesystem retention is 30 days and Prometheus
   keeps 15 days / 10 GB. Both write to the EFS volume, which grows
   elastically; the `mssql` access point exists so the metrics task can read the
-  config volume without mounting the whole file system read-write.
-- **Alertmanager config can contain credentials** (SMTP password), which is why
-  every SSM parameter is a `SecureString` encrypted with the stack CMK.
+  config volume without mounting the whole file system read-write, and `collector`
+  holds the log shipper's checkpoint so a restart never re-ships lines.
+- **Alertmanager config can contain credentials** (SMTP password), which is why the
+  config bucket is CMK-encrypted and the one secret that ECS injects directly (the
+  Grafana admin password) stays an SSM `SecureString`.
 - **EFS transit encryption is on** for every task, so the mount target opens 2996
   (stunnel) as well as 2049.
 - **No CloudWatch dependency for signals.** The only CloudWatch resources are the

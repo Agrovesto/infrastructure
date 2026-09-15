@@ -28,12 +28,7 @@ resource "aws_ecs_task_definition" "blackbox" {
   }
 
   container_definitions = jsonencode([
-    merge(local.init_container, {
-      environment = concat(
-        local.init_container.environment,
-        [{ name = "PARAM_PATH", value = "${local.param}/blackbox" }]
-      )
-    }),
+    local.init_container,
     {
       name      = "blackbox"
       image     = local.images.blackbox

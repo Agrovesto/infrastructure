@@ -30,6 +30,7 @@ locals {
     pushgateway  = "prom/pushgateway:${var.pushgateway_version}"
     awscli       = "public.ecr.aws/aws-cli/aws-cli:${var.awscli_version}"
     mssql        = "python:${var.python_version}"
+    collector    = "python:${var.python_version}"
     budget       = "python:${var.python_version}"
   }
 
@@ -52,13 +53,8 @@ locals {
   # Config-fetch command: one parameter per file, written as <mount>/config/<rel>.
   config_fetch_command = [
     "set -euo pipefail",
-    "dest=/config/config",
-    "mkdir -p \"$dest\"",
-    "for name in $(aws ssm get-parameters-by-path --path \"$PARAM_PATH\" --recursive --region \"$AWS_REGION\" --query 'Parameters[*].Name' --output text); do",
-    "  rel=\"$${name#\"$PARAM_PATH\"/}\"",
-    "  mkdir -p \"$dest/$(dirname \"$rel\")\"",
-    "  aws ssm get-parameter --name \"$name\" --with-decryption --region \"$AWS_REGION\" --query Parameter.Value --output text > \"$dest/$rel\"",
-    "done",
+    "mkdir -p /config/config",
+    "aws s3 sync \"s3://$CONFIG_BUCKET/config\" /config/config --delete --region \"$AWS_REGION\"",
   ]
 
   # One awslogs config per component, all in the stack's log group.
@@ -78,6 +74,7 @@ locals {
     user      = "0"
     environment = [
       { name = "AWS_REGION", value = var.aws_region },
+      { name = "CONFIG_BUCKET", value = aws_s3_bucket.config.bucket },
     ]
     command = ["/bin/sh", "-c", join("\n", local.config_fetch_command)]
     logConfiguration = {
@@ -254,6 +251,68 @@ locals {
             annotations:
               summary: "Deadlocks on the prod SQL Server"
               description: "{{ $value }} deadlocks in the last 15m"
+  EOT
+
+  prometheus_ecs_rules = <<-EOT
+    groups:
+      - name: ecs
+        rules:
+          - alert: EcsMetricsMissing
+            expr: absent(ecs_up)
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "The ECS collector has not reported for 10m"
+
+          - alert: EcsCollectorFailing
+            expr: ecs_up == 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The ECS collector cannot read the cluster state"
+
+          - alert: EcsServiceShortOfTasks
+            expr: ecs_service_running_count < ecs_service_desired_count
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.service }} is running fewer tasks than it wants"
+              description: "{{ $value }} task(s) missing on {{ $labels.cluster }}"
+
+          - alert: EcsServiceTasksPending
+            expr: ecs_service_pending_count > 0
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} has tasks stuck in PENDING for 15m"
+
+          - alert: EcsDeploymentFailed
+            expr: ecs_service_deployment_failed == 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.service }} deployment failed or rolled back"
+
+          - alert: EcsTasksStopping
+            expr: ecs_stopped_tasks{stop_code=~"TaskFailed.*|CannotPullContainer.*|OutOfMemoryError.*"} > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} tasks are stopping with {{ $labels.stop_code }}"
+
+          - alert: EcsLogShipperStalled
+            expr: time() - ecs_logs_scrape_timestamp_seconds > 900
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ECS log shipping into Loki has stalled"
   EOT
 
   prometheus_cost_rules = <<-EOT

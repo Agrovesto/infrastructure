@@ -253,6 +253,45 @@ run "database_metrics_are_scheduled" {
   }
 }
 
+run "ecs_collector_is_scheduled" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ecs_task_definition.collector) == 1 && aws_ecs_task_definition.collector[0].family == "agrovesto-monitoring-ecs-collector"
+    error_message = "The ECS collector task must exist."
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.collector[0].network_mode == "awsvpc" && contains(aws_ecs_task_definition.collector[0].requires_compatibilities, "FARGATE")
+    error_message = "The ECS collector must run as an awsvpc Fargate task."
+  }
+
+  assert {
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "The collector must run the ECS metrics script and the log shipper."
+  }
+
+  assert {
+    condition     = strcontains(aws_s3_object.config["collector/ecs_metrics.py"].content, "ecs_cluster_running_tasks")
+    error_message = "The ECS metrics script must be published for the collector."
+  }
+
+  assert {
+    condition     = one(aws_efs_access_point.monitoring["collector"].root_directory).path == "/collector"
+    error_message = "The collector needs its own access point so its checkpoint survives restarts."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.collector[0].schedule_expression == "rate(2 minutes)" && aws_cloudwatch_event_target.collector[0].rule == aws_cloudwatch_event_rule.collector[0].name
+    error_message = "The collector must be scheduled by EventBridge."
+  }
+
+  assert {
+    condition     = strcontains(local.prometheus_ecs_rules, "EcsServiceShortOfTasks") && strcontains(local.prometheus_ecs_rules, "EcsLogShipperStalled")
+    error_message = "The ECS rules must cover task shortfall and stalled log shipping."
+  }
+}
+
 run "scheduled_tasks_can_be_turned_off" {
   command = plan
 
@@ -267,17 +306,17 @@ run "scheduled_tasks_can_be_turned_off" {
   }
 
   assert {
-    condition     = length(aws_ecs_task_definition.budget) == 0 && length(aws_ecs_task_definition.mssql_metrics) == 0
-    error_message = "Neither scheduled task must be created when both are off."
+    condition     = length(aws_ecs_task_definition.budget) == 0 && length(aws_ecs_task_definition.mssql_metrics) == 0 && length(aws_ecs_task_definition.collector) == 1
+    error_message = "The cost and database tasks must be gone while the ECS collector stays."
   }
 
   assert {
-    condition     = length(aws_iam_role.events) == 0
-    error_message = "The scheduler role is only needed by the scheduled tasks."
+    condition     = length(aws_iam_role.events) == 1
+    error_message = "The scheduler role is still needed by the ECS collector."
   }
 
   assert {
-    condition     = length(aws_ssm_parameter.config) == 14
-    error_message = "Without RDS monitoring the metrics script and its rules are not published."
+    condition     = length(aws_s3_object.config) == 18
+    error_message = "Without RDS monitoring the database script and rules are not published."
   }
 }
