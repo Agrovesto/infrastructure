@@ -37,7 +37,7 @@ locals {
     "collector/ecs_metrics.py"    = file("${path.module}/scripts/ecs_metrics.py")
     "prometheus/rules/ecs.yml"    = local.prometheus_ecs_rules
     "grafana/dashboards/ecs.json" = file("${path.module}/dashboards/ecs.json")
-  }, var.enable_ecs_log_shipping ? {
+    }, var.enable_ecs_log_shipping ? {
     "collector/ecs_logs.py" = file("${path.module}/scripts/ecs_logs.py")
   } : {}) : {}
 

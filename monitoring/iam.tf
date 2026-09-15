@@ -116,63 +116,63 @@ resource "aws_iam_role_policy" "task" {
         ]
         Resource = ["*"]
       }
-    ],
-    var.enable_cost_monitoring ? [
-      {
-        Sid      = "ReadCostAndUsageReport"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:ListBucket"]
-        Resource = ["arn:aws:s3:::${local.cur_bucket}", "arn:aws:s3:::${local.cur_bucket}/*"]
-      }
-    ] : [],
-    var.enable_ecs_monitoring ? [
-      {
-        Sid      = "ListEcsResources"
-        Effect   = "Allow"
-        Action   = ["ecs:ListClusters", "ecs:ListServices", "ecs:ListTasks"]
-        Resource = ["*"]
-      },
-      {
-        Sid    = "DescribeEcsResources"
-        Effect = "Allow"
-        Action = ["ecs:DescribeClusters", "ecs:DescribeServices", "ecs:DescribeTasks"]
-        Resource = [
-          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.ecs_cluster}",
-          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${local.ecs_cluster}/*",
-          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${local.ecs_cluster}/*"
-        ]
-      }
-    ] : [],
-    var.enable_ecs_log_shipping ? [
-      {
-        Sid      = "ListLogGroups"
-        Effect   = "Allow"
-        Action   = ["logs:DescribeLogGroups"]
-        Resource = ["*"]
-      },
-      {
-        Sid      = "ReadServiceLogs"
-        Effect   = "Allow"
-        Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
-        Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
-      }
-    ] : [],
-    local.mssql_enabled ? [
-      {
-        Sid      = "ReadDatabaseSecret"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
-      },
-      {
-        Sid      = "DecryptDatabaseSecret"
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt"]
-        Resource = ["*"]
-        Condition = {
-          StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+      ],
+      var.enable_cost_monitoring ? [
+        {
+          Sid      = "ReadCostAndUsageReport"
+          Effect   = "Allow"
+          Action   = ["s3:GetObject", "s3:ListBucket"]
+          Resource = ["arn:aws:s3:::${local.cur_bucket}", "arn:aws:s3:::${local.cur_bucket}/*"]
         }
-      }
+      ] : [],
+      var.enable_ecs_monitoring ? [
+        {
+          Sid      = "ListEcsResources"
+          Effect   = "Allow"
+          Action   = ["ecs:ListClusters", "ecs:ListServices", "ecs:ListTasks"]
+          Resource = ["*"]
+        },
+        {
+          Sid    = "DescribeEcsResources"
+          Effect = "Allow"
+          Action = ["ecs:DescribeClusters", "ecs:DescribeServices", "ecs:DescribeTasks"]
+          Resource = [
+            "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.ecs_cluster}",
+            "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${local.ecs_cluster}/*",
+            "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${local.ecs_cluster}/*"
+          ]
+        }
+      ] : [],
+      var.enable_ecs_log_shipping ? [
+        {
+          Sid      = "ListLogGroups"
+          Effect   = "Allow"
+          Action   = ["logs:DescribeLogGroups"]
+          Resource = ["*"]
+        },
+        {
+          Sid      = "ReadServiceLogs"
+          Effect   = "Allow"
+          Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
+          Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
+        }
+      ] : [],
+      local.mssql_enabled ? [
+        {
+          Sid      = "ReadDatabaseSecret"
+          Effect   = "Allow"
+          Action   = ["secretsmanager:GetSecretValue"]
+          Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
+        },
+        {
+          Sid      = "DecryptDatabaseSecret"
+          Effect   = "Allow"
+          Action   = ["kms:Decrypt"]
+          Resource = ["*"]
+          Condition = {
+            StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+          }
+        }
     ] : [])
   })
 }
