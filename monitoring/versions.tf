@@ -14,7 +14,7 @@ terraform {
 
   backend "s3" {
     bucket = "nomaos-tfstate-221434544570-eu-west-1"
-    key    = "monitoring/bootstrap.tfstate"
+    key    = "prod/bootstrap.tfstate"
     region = "eu-west-1"
   }
 }

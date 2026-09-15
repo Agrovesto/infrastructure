@@ -28,11 +28,11 @@ budget_alert_ratio     = 0.8
 
 # Uptime probes (blackbox exporter). Add or remove entries freely.
 probe_targets = {
-  wallet          = "https://wallet.nomaos.com/"
+  wallet          = "https://wallet-api.nomaos.com/"
   onboarding      = "https://onboarding-api.nomaos.com/"
-  input           = "https://input.nomaos.com/"
-  moneval         = "https://moneval.nomaos.com/"
-  serviceprovider = "https://serviceprovider.nomaos.com/"
+  input           = "https://input-api.nomaos.com/"
+  moneval         = "https://moneval-api.nomaos.com/"
+  serviceprovider = "https://serviceprovider-api.nomaos.com/"
   vault           = "https://vault.nomaos.com/v1/sys/health"
   grafana         = "https://grafana.nomaos.com/api/health"
 }
