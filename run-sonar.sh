@@ -11,7 +11,7 @@ if [ -z "$SONAR_TOKEN" ]; then
   echo ""
 fi
 
-BRANCH_NAME="devops"
+BRANCH_NAME="${SONAR_BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo devops)}"
 
 echo "========================================================"
 echo " Starting SonarQube baseline scan for branch: ${BRANCH_NAME}"
@@ -35,6 +35,13 @@ if command -v sonar-scanner &> /dev/null; then
     -Dproject.settings=sonar-project-prod.properties \
     -Dsonar.branch.name="${BRANCH_NAME}"
 
+  echo "--> Scanning MONITORING..."
+  sonar-scanner \
+    -Dsonar.host.url="${SONAR_HOST_URL}" \
+    -Dsonar.token="${SONAR_TOKEN}" \
+    -Dproject.settings=sonar-project-monitoring.properties \
+    -Dsonar.branch.name="${BRANCH_NAME}"
+
 else
   echo "sonar-scanner CLI not found, using Docker container..."
 
@@ -54,6 +61,15 @@ else
     -v "$(pwd):/usr/src" \
     sonarsource/sonar-scanner-cli:latest \
     -Dproject.settings=sonar-project-prod.properties \
+    -Dsonar.branch.name="${BRANCH_NAME}"
+
+  echo "--> Scanning MONITORING..."
+  docker run --rm \
+    -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+    -e SONAR_TOKEN="${SONAR_TOKEN}" \
+    -v "$(pwd):/usr/src" \
+    sonarsource/sonar-scanner-cli:latest \
+    -Dproject.settings=sonar-project-monitoring.properties \
     -Dsonar.branch.name="${BRANCH_NAME}"
 fi
 

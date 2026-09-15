@@ -87,9 +87,15 @@ MSSQL SA password must meet SQL Server complexity rules. Vault root token in **d
 The pipeline is authored at the repository root as **`dev.workflow.yml`** and
 runs every Terraform command from this folder (`TF_WORKING_DIR: "dev"`).
 
-- **Pull requests** (to `dev`): Checkov + Trivy scans (SARIF → code scanning)
-  and a read-only `terraform plan` posted as a PR comment.
+- **Every run**: `terraform fmt -check -recursive`, Checkov and Trivy
+  (SARIF → code scanning) and `terraform test` with a resource-coverage gate
+  (`TF_COVERAGE_FAIL_UNDER`, 60 here). Nothing in the pipeline is
+  `continue-on-error`, so a finding fails the job.
+- **Pull requests** (to `dev`): a read-only `terraform plan` posted as a PR
+  comment, plus an Infracost cost diff once `INFRACOST_API_KEY` is set.
 - **Push to `dev`**: applies the dev stack after the same checks.
+- SonarQube reports as its own project (`sonar-project-dev.properties`) and is
+  skipped, with a warning, until `SONAR_TOKEN` exists.
 - The runner needs AWS OIDC (`AWS_ROLE_ARN_DEV` secret). Non-secret required
   variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) are
   supplied by the committed `terraform.auto.tfvars`; the MSSQL SA password is
