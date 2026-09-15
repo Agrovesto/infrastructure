@@ -58,7 +58,6 @@ override_data {
 
 variables {
   ami_id            = "ami-0123456789abcdef0"
-  ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly"
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
