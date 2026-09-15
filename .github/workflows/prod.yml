@@ -1,5 +1,3 @@
-# Canonical copy of the prod pipeline. Install with:
-#   cp prod.workflow.yml .github/workflows/prod.yml   (the automation token cannot push .github/workflows).
 name: "Terraform CI/CD Pipeline (Prod)"
 
 on:
