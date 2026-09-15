@@ -150,7 +150,7 @@ run "security_groups_only_open_what_is_needed" {
   }
 
   assert {
-    condition     = alltrue([
+    condition = alltrue([
       aws_security_group_rule.efs_tls_internal.from_port == 2996,
       aws_security_group_rule.efs_tls_grafana.from_port == 2996
     ])
