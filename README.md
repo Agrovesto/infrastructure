@@ -161,3 +161,20 @@ files.
 cd dev   # or: cd prod
 terraform init && terraform plan
 ```
+
+## Cost estimates
+
+Every stack in this repository is priced by one Infracost config, so the whole
+repo can be costed locally with a single command (needs the Infracost CLI and a
+free API key; no AWS credentials):
+
+```bash
+./scripts/infracost.sh
+```
+
+It runs `infracost.yml` (bootstrap, dev, prod, monitoring), prints the
+per-project table and then adds the costs Infracost cannot price — scheduled
+Fargate tasks, Cloud Map, in-use public IPv4 addresses, internet egress — from
+`infracost-extras.json`, for one combined monthly figure. Usage assumptions live
+in `infracost-usage/*.yml`; the method, the extras ledger and the per-resource
+reasoning are in `docs/infracost.md`.

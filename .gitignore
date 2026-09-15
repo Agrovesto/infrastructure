@@ -21,5 +21,8 @@ coverage.md
 __pycache__/
 *.pyc
 
+# Infracost local cost runs (scripts/infracost.sh)
+.infracost/
+
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
