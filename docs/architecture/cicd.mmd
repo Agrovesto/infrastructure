@@ -1,0 +1,105 @@
+%% Diagram 3 of 3 - pipelines, credentials and Terraform state.
+%% Three pipelines, each triggered only by edits inside its own folder.
+%% Runtime and boundaries: architecture.mmd. Telemetry: telemetry.mmd.
+flowchart LR
+
+  subgraph github["GitHub - Agrovesto/infrastructure"]
+    direction TB
+    main["branch main<br/>apply on merge"]
+    pr["pull request #19<br/>devops generation"]
+    wfdev["dev.yml<br/>paths dev/**"]
+    wfprod["prod.yml<br/>paths prod/**"]
+    wfmon["monitoring.yml<br/>paths monitoring/**"]
+    sonar["SonarQube server<br/>agrovesto-infrastructure-dev<br/>-prod, -monitoring"]
+  end
+
+  subgraph stages["Stages in every pipeline"]
+    direction TB
+    fmt["terraform fmt -check -recursive"]
+    sec["checkov + trivy"]
+    test["terraform test<br/>mock providers, no AWS credentials"]
+    cov["coverage gate 95 percent"]
+    infracost["Infracost cost comment<br/>infracost.yml"]
+    plan["terraform plan"]
+    apply["terraform apply"]
+  end
+
+  subgraph state["Terraform state"]
+    direction TB
+    bootroot["bootstrap root<br/>LOCAL state file"]
+    prodroot["prod root<br/>workspace prod"]
+    monroot["monitoring root<br/>workspace monitoring"]
+    devroot["dev root<br/>default workspace"]
+    statebucket["S3 nomaos-tfstate-221434544570-eu-west-1<br/>key prod/bootstrap.tfstate"]
+    devbucket["S3 nomaos-tfstate-353833416626-eu-west-1<br/>key dev/bootstrap.tfstate"]
+    guard["workspace guard step<br/>fails if the workspace is missing"]
+  end
+
+  subgraph prodacct["AWS account 221434544570 - prod"]
+    direction TB
+    oidc["IAM OIDC provider<br/>token.actions.githubusercontent.com"]
+    roledev["deploy role dev"]
+    roleprod["deploy role prod"]
+    prodres["prod resources<br/>VPC, ALB, ECS, RDS, EFS, ECR"]
+    monres["monitoring resources<br/>ECS cluster monitoring, EFS, CUR, SES"]
+  end
+
+  subgraph devacct["AWS account 353833416626 - dev"]
+    direction TB
+    roledev2["deploy role dev"]
+    devres["dev resources<br/>VPC, EC2, Amplify, ECR, S3"]
+  end
+
+  pr -->|"push"| wfdev
+  pr -->|"push"| wfprod
+  pr -->|"push"| wfmon
+  main -->|"merge"| wfdev
+  main -->|"merge"| wfprod
+  main -->|"merge"| wfmon
+  wfdev -->|"runs"| fmt
+  wfprod -->|"runs"| fmt
+  wfmon -->|"runs"| fmt
+  fmt -->|"then"| sec
+  sec -->|"then"| test
+  test -->|"then"| cov
+  cov -->|"then"| infracost
+  infracost -->|"then"| plan
+  plan -->|"on main only"| apply
+  wfmon -->|"scanner CLI 7.2"| sonar
+  wfdev -->|"scanner CLI 7.2"| sonar
+  wfprod -->|"scanner CLI 7.2"| sonar
+
+  apply -->|"OIDC assume role"| oidc
+  oidc -.->|"short-lived credentials"| roledev
+  oidc -.->|"short-lived credentials"| roleprod
+  oidc -.->|"short-lived credentials"| roledev2
+  roledev -->|"dev/** changes"| devres
+  roleprod -->|"prod/** changes"| prodres
+  roledev2 -->|"dev/** changes"| devres
+  roleprod -->|"monitoring/** changes"| monres
+
+  bootroot -->|"creates once"| statebucket
+  bootroot -->|"creates once"| devbucket
+  bootroot -->|"creates once"| oidc
+  devroot -->|"state object"| devbucket
+  prodroot -->|"state object"| statebucket
+  monroot -.->|"same object, different workspace"| statebucket
+  guard -.->|"enforced before plan and apply"| monroot
+  guard -.->|"enforced before plan and apply"| prodroot
+
+  subgraph legend["Key"]
+    l1["solid = deployed today"]
+    l2["dashed = planned or disabled"]
+  end
+
+classDef ci fill:#e0f2f1,stroke:#00695c,color:#004d40
+classDef managed fill:#fff3e0,stroke:#ef6c00,color:#3e2723
+classDef data fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+classDef compute fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+classDef planned fill:#fafafa,stroke:#9e9e9e,stroke-dasharray:5,color:#616161
+
+class main,pr,wfdev,wfprod,wfmon,sonar,fmt,sec,test,cov,infracost,plan,apply ci
+class oidc,roledev,roleprod,roledev2,infracost managed
+class statebucket,devbucket data
+class bootroot,prodroot,monroot,devroot,guard,prodres,monres,devres compute
+class l2 planned
