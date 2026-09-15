@@ -5,12 +5,12 @@ name: "Terraform CI/CD Pipeline (Dev)"
 on:
   pull_request:
     branches:
-      - dev
+      - main
     paths:
       - "dev/**"
   push:
     branches:
-      - dev
+      - main
     paths:
       - "dev/**"
 
