@@ -468,6 +468,10 @@ run "monthly_report_is_mailed" {
 run "the_report_task_may_send_mail" {
   command = apply
 
+  variables {
+    report_recipients = ["finops@nomaos.com"]
+  }
+
   assert {
     condition     = strcontains(jsonencode(aws_iam_role_policy.task.policy), "ses:SendRawEmail")
     error_message = "The report task must be allowed to send mail."
