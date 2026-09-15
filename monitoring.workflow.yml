@@ -274,7 +274,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-monitoring.properties
+          args: -Dproject.settings=sonar-project-monitoring.properties -Dsonar.branch.name=${{ github.head_ref || github.ref_name }}
 
       - name: SonarQube Summary
         if: always()
