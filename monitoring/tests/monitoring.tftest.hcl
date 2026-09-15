@@ -200,8 +200,13 @@ run "cost_pipeline_is_wired" {
   command = plan
 
   assert {
-    condition     = aws_cur_report_definition.daily[0].report_name == "agrovesto-prod-cur"
+    condition     = aws_cur_report_definition.daily[0].report_name == var.cur_report_name
     error_message = "The CUR report name must match the path the report script reads."
+  }
+
+  assert {
+    condition     = strcontains(aws_ecs_task_definition.budget[0].container_definitions, "CUR_REPORT_NAME") && strcontains(aws_ecs_task_definition.budget[0].container_definitions, var.cur_report_name)
+    error_message = "The budget task must read the report the definition delivers."
   }
 
   assert {

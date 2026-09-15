@@ -222,7 +222,7 @@ run "cloud_map_publishes_component_endpoints" {
   }
 
   assert {
-    condition     = aws_ecs_cluster.monitoring.setting[0].value == "disabled"
+    condition     = one(aws_ecs_cluster.monitoring.setting).value == "disabled"
     error_message = "Container Insights must stay off: this stack replaces it."
   }
 
