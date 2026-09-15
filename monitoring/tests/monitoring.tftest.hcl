@@ -85,7 +85,7 @@ run "components_run_on_fargate_with_their_own_state" {
   }
 
   assert {
-    condition     = aws_ecs_service.loki.launch_type == "FARGATE" && aws_ecs_service.tempo.launch_type == "FARGATE"
+    condition     = aws_ecs_service.loki[0].launch_type == "FARGATE" && aws_ecs_service.tempo[0].launch_type == "FARGATE"
     error_message = "Loki and Tempo must not be interrupted by Spot reclaims."
   }
 

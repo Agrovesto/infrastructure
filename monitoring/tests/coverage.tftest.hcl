@@ -80,8 +80,8 @@ run "every_task_definition_is_complete" {
 
   assert {
     condition = alltrue([
-      aws_ecs_task_definition.loki.cpu != null,
-      aws_ecs_task_definition.tempo.cpu != null,
+      aws_ecs_task_definition.loki[0].cpu != null,
+      aws_ecs_task_definition.tempo[0].cpu != null,
       aws_ecs_task_definition.grafana.cpu != null,
       aws_ecs_task_definition.alloy.cpu != null,
       aws_ecs_task_definition.blackbox.cpu != null
@@ -91,8 +91,8 @@ run "every_task_definition_is_complete" {
 
   assert {
     condition = alltrue([
-      strcontains(jsonencode(aws_ecs_task_definition.loki.container_definitions), "grafana/loki:"),
-      strcontains(jsonencode(aws_ecs_task_definition.tempo.container_definitions), "grafana/tempo:"),
+      strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "grafana/loki:"),
+      strcontains(jsonencode(aws_ecs_task_definition.tempo[0].container_definitions), "grafana/tempo:"),
       strcontains(jsonencode(aws_ecs_task_definition.alloy.container_definitions), "grafana/alloy:"),
       strcontains(jsonencode(aws_ecs_task_definition.blackbox.container_definitions), "prom/blackbox-exporter:")
     ])
@@ -105,7 +105,7 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki.container_definitions), "grafana/loki:")
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "grafana/loki:")
     error_message = "Loki must run the pinned upstream image."
   }
 
@@ -124,7 +124,7 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki.container_definitions), "3100")
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "3100")
     error_message = "Loki must expose its push and query API."
   }
 }
