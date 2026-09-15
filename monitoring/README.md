@@ -15,7 +15,7 @@ enhanced monitoring, AWS Budgets.
 | Prometheus | `prom/prometheus` | 9090 | Metrics storage, recording/alert rules, scrape config |
 | Alertmanager | `prom/alertmanager` | 9093 | Alert routing (email / webhook), grouping, silences |
 | Loki | `grafana/loki` | 3100 | Log storage and query (TSDB filesystem, 30 days) |
-| Tempo | `grafana/tempo` | 3200 / 4317 / 4318 | Trace storage and OTLP ingest |
+| Tempo | `grafana/tempo` | 3200 / 4317 / 4318 | Trace storage, OTLP ingest and span metrics (metrics-generator, remote-written to Prometheus) |
 | Grafana OSS | `grafana/grafana-oss` | 3000 | Dashboards, datasource provisioning, alert view |
 | Alloy | `grafana/alloy` | 3100 / 4317 / 4318 / 12345 | Telemetry gateway: OTLP receiver, Loki push API, self-metrics |
 | blackbox-exporter | `prom/blackbox-exporter` | 9115 | Synthetic uptime/TLS probes |
@@ -123,7 +123,10 @@ to your office/VPN ranges.
    `service` label for the error-rate panels.
 2. **Traces** — send OTLP to `alloy.monitoring.internal:4317` (gRPC) or `:4318`
    (HTTP). Tempo keeps 336 hours; the Grafana Loki datasource links `trace_id=...`
-   to Tempo automatically.
+   to Tempo automatically. Tempo's metrics-generator turns those spans into
+   `traces_spanmetrics_calls_total` / `traces_spanmetrics_latency_*` series, which it
+   remote-writes into Prometheus (the "Spans by service" panel and the Tempo
+   datasource's trace-to-metrics links read them there).
 3. **Metrics** — expose a Prometheus endpoint on the task's port and add it to
    `local.prometheus_config`; the internal security group already allows 9090,
    3100, 3200, 4317-4318, 9091, 9093, 9115 and 12345 inside the VPC.

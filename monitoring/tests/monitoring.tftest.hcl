@@ -123,6 +123,20 @@ run "dashboards_and_datasources_are_provisioned" {
   }
 }
 
+run "traces_are_exported_as_span_metrics" {
+  command = plan
+
+  assert {
+    condition     = strcontains(local.tempo_config, "span_metrics") && strcontains(local.tempo_config, "/api/v1/write")
+    error_message = "Tempo must generate span metrics and remote-write them to Prometheus."
+  }
+
+  assert {
+    condition     = strcontains(local.tempo_config, "processors:") && strcontains(local.tempo_config, "span-metrics")
+    error_message = "The generator processors must be enabled, otherwise no span metrics are produced."
+  }
+}
+
 run "grafana_is_reachable_through_the_prod_alb_only" {
   command = plan
 

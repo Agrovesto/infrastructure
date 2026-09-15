@@ -429,6 +429,23 @@ locals {
           path: /tempo/blocks
         wal:
           path: /tempo/wal
+
+    metrics_generator:
+      registry:
+        external_labels:
+          source: tempo
+      storage:
+        path: /tempo/generator/wal
+        remote_write:
+          - url: ${local.endpoints.prometheus}/api/v1/write
+      processor:
+        span_metrics: {}
+
+    overrides:
+      defaults:
+        metrics_generator:
+          processors:
+            - span-metrics
   EOT
 
   # --- Alloy: single OTLP + Loki-push ingestion gateway -----------------------------
