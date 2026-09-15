@@ -296,18 +296,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   infracost:
-
     name: "Infracost Cost Estimate"
-
     needs:
       - terraform-plan
-
     if: github.event_name == 'pull_request'
-
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Check Infracost API Key
         id: infracost
         env:
