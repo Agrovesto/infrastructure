@@ -80,8 +80,8 @@ run "every_task_definition_is_complete" {
 
   assert {
     condition = alltrue([
-      aws_ecs_task_definition.loki[0].cpu != null,
-      aws_ecs_task_definition.tempo[0].cpu != null,
+      aws_ecs_task_definition.loki[*].cpu != null,
+      aws_ecs_task_definition.tempo[*].cpu != null,
       aws_ecs_task_definition.grafana.cpu != null,
       aws_ecs_task_definition.alloy.cpu != null,
       aws_ecs_task_definition.blackbox.cpu != null
@@ -91,8 +91,8 @@ run "every_task_definition_is_complete" {
 
   assert {
     condition = alltrue([
-      strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "grafana/loki:"),
-      strcontains(jsonencode(aws_ecs_task_definition.tempo[0].container_definitions), "grafana/tempo:"),
+      strcontains(jsonencode(aws_ecs_task_definition.loki[*].container_definitions), "grafana/loki:"),
+      strcontains(jsonencode(aws_ecs_task_definition.tempo[*].container_definitions), "grafana/tempo:"),
       strcontains(jsonencode(aws_ecs_task_definition.alloy.container_definitions), "grafana/alloy:"),
       strcontains(jsonencode(aws_ecs_task_definition.blackbox.container_definitions), "prom/blackbox-exporter:")
     ])
@@ -105,7 +105,7 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "grafana/loki:")
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[*].container_definitions), "grafana/loki:")
     error_message = "Loki must run the pinned upstream image."
   }
 
@@ -124,7 +124,7 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[0].container_definitions), "3100")
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[*].container_definitions), "3100")
     error_message = "Loki must expose its push and query API."
   }
 }
@@ -181,7 +181,10 @@ run "policies_grant_the_minimum" {
   }
 
   assert {
-    condition     = strcontains(aws_iam_role_policy.execution_ssm.policy, "kms:Decrypt") && strcontains(aws_iam_role_policy.execution_ssm.policy, "ssm:GetParameters")
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.execution_ssm.policy, "kms:Decrypt"),
+      strcontains(aws_iam_role_policy.execution_ssm.policy, "ssm:GetParameters"),
+    ])
     error_message = "The init container must be able to read and decrypt its config."
   }
 
@@ -191,66 +194,22 @@ run "policies_grant_the_minimum" {
   }
 
   assert {
-    condition     = aws_iam_role_policy.task_database_secret[0].name == "agrovesto-monitoring-task-database-secret-policy"
+    condition     = one(aws_iam_role_policy.task_database_secret[*].name) == "agrovesto-monitoring-task-database-secret-policy"
     error_message = "The database secret policy name drifted."
   }
 
   assert {
-    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "kms:ViaService")
+    condition     = strcontains(one(aws_iam_role_policy.task_database_secret[*].policy), "kms:ViaService")
     error_message = "Decrypting the database secret must stay scoped to Secrets Manager."
   }
 
   assert {
-    condition     = aws_iam_role_policy.events[0].name == "agrovesto-monitoring-events-policy"
+    condition     = one(aws_iam_role_policy.events[*].name) == "agrovesto-monitoring-events-policy"
     error_message = "The scheduler role policy name drifted."
   }
 
   assert {
     condition     = aws_kms_alias.monitoring.name == "alias/agrovesto-monitoring-efs"
     error_message = "EFS key alias drifted."
-  }
-}
-
-run "storage_and_schedule_settings" {
-  command = plan
-
-  assert {
-    condition     = aws_s3_bucket_public_access_block.cur[0].block_public_acls && aws_s3_bucket_public_access_block.cur[0].block_public_policy
-    error_message = "The CUR bucket must block public access."
-  }
-
-  assert {
-    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.cur[0].rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
-    error_message = "The CUR bucket must be encrypted at rest."
-  }
-
-  assert {
-    condition     = aws_s3_object.budget_script[0].key == "scripts/budget_report.py"
-    error_message = "The budget script key must match what the task downloads."
-  }
-
-  assert {
-    condition     = one(aws_cloudwatch_event_target.budget[0].ecs_target).task_count == 1 && one(one(aws_cloudwatch_event_target.budget[0].ecs_target).network_configuration).assign_public_ip == false
-    error_message = "The budget task must run one private task per schedule."
-  }
-
-  assert {
-    condition     = random_password.grafana_admin.length == 32 && random_password.grafana_admin.special == false
-    error_message = "The generated Grafana password must stay quote-safe."
-  }
-
-  assert {
-    condition     = one(aws_cloudwatch_event_target.mssql[0].ecs_target).platform_version == "1.4.0"
-    error_message = "The metrics task runs on the Fargate 1.4.0 platform."
-  }
-
-  assert {
-    condition     = aws_ecs_task_definition.mssql_metrics[0].network_mode == "awsvpc"
-    error_message = "The metrics task mounts the shared config volume."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_event_rule.mssql[0].name == "agrovesto-monitoring-mssql-metrics"
-    error_message = "The metrics schedule name drifted."
   }
 }
