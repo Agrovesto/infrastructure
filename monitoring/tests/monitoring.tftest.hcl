@@ -1,6 +1,69 @@
 # Component task definitions, services, Grafana ingress and the cost pipeline.
 
-mock_provider "aws" {}
+mock_provider "aws" {
+  # Mock values are generated strings, but the provider validates several
+  # attributes as ARNs. Pin them so an apply run reaches the assertions.
+  mock_resource "aws_ecs_cluster" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:cluster/agrovesto-monitoring"
+    }
+  }
+  mock_resource "aws_ecs_task_definition" {
+    defaults = {
+      arn = "arn:aws:ecs:eu-west-1:123456789012:task-definition/agrovesto-monitoring-report:1"
+    }
+  }
+  mock_resource "aws_efs_file_system" {
+    defaults = {
+      arn = "arn:aws:elasticfilesystem:eu-west-1:123456789012:file-system/fs-0123456789abcdef0"
+    }
+  }
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:role/agrovesto-monitoring-task"
+    }
+  }
+  mock_resource "aws_kms_key" {
+    defaults = {
+      arn = "arn:aws:kms:eu-west-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+    }
+  }
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/agrovesto-monitoring-grafana/1234567890abcdef"
+    }
+  }
+  mock_resource "aws_s3_bucket" {
+    defaults = {
+      arn = "arn:aws:s3:::agrovesto-monitoring-config"
+    }
+  }
+  mock_resource "aws_service_discovery_service" {
+    defaults = {
+      arn = "arn:aws:servicediscovery:eu-west-1:123456789012:service/srv-0123456789abcdef"
+    }
+  }
+  mock_resource "aws_ses_domain_identity" {
+    defaults = {
+      arn = "arn:aws:ses:eu-west-1:123456789012:identity/nomaos.com"
+    }
+  }
+  mock_resource "aws_ssm_parameter" {
+    defaults = {
+      arn = "arn:aws:ssm:eu-west-1:123456789012:parameter/agrovesto/monitoring/grafana-admin"
+    }
+  }
+  mock_data "aws_lb" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:loadbalancer/app/agrovesto-prod/1234567890abcdef"
+    }
+  }
+  mock_data "aws_lb_listener" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener/app/agrovesto-prod/1234567890abcdef/1234567890abcdef"
+    }
+  }
+}
 
 # The cost resources use the us-east-1 provider alias; without a mock for it the
 # test would configure the real provider and ask for credentials.
