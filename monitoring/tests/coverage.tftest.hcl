@@ -191,6 +191,16 @@ run "policies_grant_the_minimum" {
   }
 
   assert {
+    condition     = aws_iam_role_policy.task_database_secret[0].name == "agrovesto-monitoring-task-database-secret-policy"
+    error_message = "The database secret policy name drifted."
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "kms:ViaService")
+    error_message = "Decrypting the database secret must stay scoped to Secrets Manager."
+  }
+
+  assert {
     condition     = aws_iam_role_policy.events[0].name == "agrovesto-monitoring-events-policy"
     error_message = "The scheduler role policy name drifted."
   }

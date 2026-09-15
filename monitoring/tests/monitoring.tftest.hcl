@@ -254,6 +254,11 @@ run "database_metrics_are_scheduled" {
   }
 
   assert {
+    condition     = length(aws_iam_role_policy.task_database_secret) == 1
+    error_message = "The metrics task needs the policy that reads the database secret."
+  }
+
+  assert {
     condition     = aws_iam_role_policy.events[0].name == "agrovesto-monitoring-events-policy"
     error_message = "The scheduler policy must exist for the metrics task."
   }
@@ -319,6 +324,11 @@ run "scheduled_tasks_can_be_turned_off" {
   assert {
     condition     = length(aws_iam_role.events) == 1
     error_message = "The scheduler role is still needed by the ECS collector."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.task_database_secret) == 0
+    error_message = "Without RDS monitoring the database secret policy must go."
   }
 
   assert {

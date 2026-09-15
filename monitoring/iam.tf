@@ -156,24 +156,39 @@ resource "aws_iam_role_policy" "task" {
           Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
           Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
         }
-      ] : [],
-      local.mssql_enabled ? [
-        {
-          Sid      = "ReadDatabaseSecret"
-          Effect   = "Allow"
-          Action   = ["secretsmanager:GetSecretValue"]
-          Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
-        },
-        {
-          Sid      = "DecryptDatabaseSecret"
-          Effect   = "Allow"
-          Action   = ["kms:Decrypt"]
-          Resource = ["*"]
-          Condition = {
-            StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
-          }
-        }
     ] : [])
+  })
+}
+
+# The SQL Server metrics task reads the database master secret. This lives in
+# its own inline policy because the kms:Decrypt statement carries a Condition,
+# and a statement with an extra attribute would force Terraform to unify the
+# task policy's whole statement list into a type it cannot build.
+resource "aws_iam_role_policy" "task_database_secret" {
+  count = local.mssql_enabled ? 1 : 0
+
+  name = "${local.name}-task-database-secret-policy"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
+      },
+      {
+        Sid      = "DecryptDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+        }
+      }
+    ]
   })
 }
 
