@@ -136,7 +136,7 @@ run "security_groups_only_open_what_is_needed" {
   }
 
   assert {
-    condition     = aws_security_group_rule.internal_prometheus.cidr_blocks == ["10.0.0.0/16"]
+    condition     = toset(aws_security_group_rule.internal_prometheus.cidr_blocks) == toset(["10.0.0.0/16"])
     error_message = "Prometheus must only accept traffic from the VPC."
   }
 
@@ -276,13 +276,17 @@ run "config_is_published_for_the_init_container" {
   }
 
   assert {
-    condition     = strcontains(local.prometheus_config, "blackbox.monitoring.internal:9115")
-    error_message = "Probes must be routed through the blackbox exporter."
-  }
-
-  assert {
-    condition     = strcontains(local.prometheus_config, "wallet.nomaos.com")
-    error_message = "Default probes must cover the prod services."
+    condition = alltrue([
+      strcontains(local.prometheus_config, "blackbox.monitoring.internal:9115"),
+      strcontains(local.prometheus_config, "grafana.nomaos.com"),
+      strcontains(local.prometheus_config, "input-api.nomaos.com"),
+      strcontains(local.prometheus_config, "moneval-api.nomaos.com"),
+      strcontains(local.prometheus_config, "onboarding-api.nomaos.com"),
+      strcontains(local.prometheus_config, "serviceprovider-api.nomaos.com"),
+      strcontains(local.prometheus_config, "vault.nomaos.com"),
+      strcontains(local.prometheus_config, "wallet-api.nomaos.com"),
+    ])
+    error_message = "Default probes must cover all prod services via blackbox exporter."
   }
 
   assert {
@@ -291,7 +295,11 @@ run "config_is_published_for_the_init_container" {
   }
 
   assert {
-    condition     = strcontains(local.prometheus_rds_rules, "mssql_up") && strcontains(local.prometheus_rds_rules, "MssqlDeadlockSpike") && strcontains(local.prometheus_rds_rules, "MssqlDatabaseNearSizeLimit")
+    condition = alltrue([
+      strcontains(local.prometheus_rds_rules, "mssql_up"),
+      strcontains(local.prometheus_rds_rules, "MssqlDeadlockSpike"),
+      strcontains(local.prometheus_rds_rules, "MssqlDatabaseNearSizeLimit"),
+    ])
     error_message = "The database rules must cover reachability and deadlocks."
   }
 }
