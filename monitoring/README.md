@@ -41,21 +41,22 @@ Rough monthly order of magnitude (eu-west-1 on-demand prices, ARM64):
 
 | Item | Approx. |
 | --- | --- |
-| 7 always-on tasks (~0.25 vCPU / 0.5–1 GB each) | ~$55–70 |
-| One Zone EFS, a few GB plus IA transition | ~$2 |
-| KMS key (EFS + config bucket) | ~$1 |
-| Prometheus 10 GB volume on EFS, 15 day retention | included above |
-| Scheduled jobs (hourly SQL Server task ~30 s, daily CUR task) | <$1 |
+| Prometheus, Loki, Tempo, Grafana (0.5 vCPU / 1 GB each, $16.22) | ~$65 |
+| Alertmanager, Alloy, blackbox, Pushgateway (0.25 vCPU / 0.5 GB each, $8.11) | ~$32 |
+| One Zone EFS, ~25 GB plus IA transition | ~$4 |
 | ECS collector task, every 2 minutes (~45 s per run, 0.25 vCPU / 0.5 GB) | ~$3 |
-| CUR bucket storage (Parquet, 400 day lifecycle) | <$0.5 |
-| Config bucket (a few KB) | ~$0 |
-| **Total** | **~$65–80** |
+| KMS key, config bucket, CUR Parquet, component logs | ~$2.50 |
+| Scheduled jobs (hourly SQL Server task ~30 s, daily CUR task) | <$0.10 |
+| **Total** | **~$105–110** |
+
+Eight always-on tasks, not seven: at the `service_sizing` defaults four of them run 0.5 vCPU / 1 GB
+($16.22 each) and four 0.25 vCPU / 0.5 GB ($8.11 each), which is $97 of the total.
 
 Levers, in order of effect:
 
 - `use_fargate_spot = true` moves Alloy, blackbox and Pushgateway (the tasks that
-  can be interrupted) to Fargate Spot; Prometheus, Loki, Tempo, Grafana and
-  Alertmanager stay on demand so WAL/TSDB writes are never cut short.
+  can be interrupted) to Fargate Spot, ~$17/month at current sizes; Prometheus, Loki,
+  Tempo, Grafana and Alertmanager stay on demand so WAL/TSDB writes are never cut short.
 - `service_sizing` shrinks or grows each component independently.
 - `metrics_retention` / `metrics_retention_size` cap Prometheus; `logs_retention_hours`
   and `traces_retention_hours` cap Loki and Tempo.
