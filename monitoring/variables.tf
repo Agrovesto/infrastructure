@@ -232,13 +232,13 @@ variable "probe_targets" {
   type        = map(string)
 
   default = {
-    wallet           = "https://wallet.nomaos.com/"
-    onboarding       = "https://onboarding-api.nomaos.com/"
-    input            = "https://input.nomaos.com/"
-    moneval          = "https://moneval.nomaos.com/"
-    serviceprovider  = "https://serviceprovider.nomaos.com/"
-    vault            = "https://vault.nomaos.com/v1/sys/health"
-    grafana          = "https://grafana.nomaos.com/api/health"
+    wallet          = "https://wallet.nomaos.com/"
+    onboarding      = "https://onboarding-api.nomaos.com/"
+    input           = "https://input.nomaos.com/"
+    moneval         = "https://moneval.nomaos.com/"
+    serviceprovider = "https://serviceprovider.nomaos.com/"
+    vault           = "https://vault.nomaos.com/v1/sys/health"
+    grafana         = "https://grafana.nomaos.com/api/health"
   }
 }
 

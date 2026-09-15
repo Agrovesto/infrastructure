@@ -141,10 +141,10 @@ resource "random_password" "grafana_admin" {
 }
 
 resource "aws_ssm_parameter" "grafana_admin_password" {
-  name       = "${local.param}/grafana/admin-password"
-  type       = "SecureString"
-  value      = random_password.grafana_admin.result
-  key_id     = "alias/${local.name}-efs"
+  name   = "${local.param}/grafana/admin-password"
+  type   = "SecureString"
+  value  = random_password.grafana_admin.result
+  key_id = "alias/${local.name}-efs"
 
   tags = local.tags
 }
