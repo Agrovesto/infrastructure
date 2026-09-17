@@ -196,11 +196,20 @@ runs every Terraform command from this folder (`TF_WORKING_DIR: "dev"`).
   (SARIF → code scanning) and `terraform test` with a resource-coverage gate
   (`TF_COVERAGE_FAIL_UNDER`, 60 here). Nothing in the pipeline is
   `continue-on-error`, so a finding fails the job.
-- **Pull requests** (to `dev`): a read-only `terraform plan` posted as a PR
-  comment, plus an Infracost cost diff once `INFRACOST_API_KEY` is set.
+- **Pull requests** (to `dev`): `init` + `validate` + a read-only `terraform plan`
+  posted as a PR comment. `validate` is also what catches a missing
+  `file()`/`templatefile()` input, which is why `TF_ROOT_FILES` and
+  `TF_TEMPLATES` list every file the render needs (`logging.tf`,
+  `host_config.tf`, the six `.tftpl` files) — a deleted template then fails the
+  named check instead of failing at boot.
 - **Push to `dev`**: applies the dev stack after the same checks.
+- Cost: no Infracost job in this pipeline. Estimates come from `infracost.yml` +
+  `scripts/infracost.sh` (see `docs/infracost.md`), which covers all four stacks
+  at once and needs the key only on the developer's machine.
 - SonarQube reports as its own project (`sonar-project-dev.properties`) and is
   skipped, with a warning, until `SONAR_TOKEN` exists.
+- The file is a trigger path itself (`paths: [dev/**, dev.workflow.yml]`), so
+  installing or editing the pipeline re-runs it.
 - The runner needs AWS OIDC (`AWS_ROLE_ARN_DEV` secret). Non-secret required
   variables (`domain_name`, `amplify_apps`, `apis`, `mssql_databases`, …) are
   supplied by the committed `terraform.auto.tfvars`; the MSSQL SA password is
@@ -212,10 +221,11 @@ Install it into GitHub Actions with:
 cp dev.workflow.yml .github/workflows/dev.yml
 ```
 
-> Heads-up: the checked-in `.github/workflows/dev.yml` still points at the old
-> flat-repository layout and is now stale — replace it with
-> `dev.workflow.yml` (the automation token has no `workflows` permission, so
-> it cannot be updated by CI itself).
+> The two files are meant to stay byte-identical, and only the root copy is ever
+> edited: the automation token has no `workflows` permission, so
+> `.github/workflows/dev.yml` can only be updated by hand — CI cannot commit its
+> own pipeline. That also means the installed copy is only as fresh as the last
+> `cp`, so diff the two before concluding a pipeline change did not land.
 
 See `ci-cd-quickstart.md` for the full pipeline walkthrough
 (secrets, variables, troubleshooting).
