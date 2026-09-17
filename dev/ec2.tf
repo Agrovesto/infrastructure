@@ -22,17 +22,28 @@ resource "aws_instance" "app" {
     tags = merge(local.tags, { Name = "${local.name}-os-apps" })
   }
 
+  # Only bootstrap logic is in here. The rendered files themselves — compose
+  # project, nginx.conf, the SQL bootstrap, the logging stack's config — are
+  # objects in aws_s3_bucket.host_config and this script syncs them, because EC2
+  # caps user data at 16 KB raw and none of that config belongs in metadata.
+  # See dev/host_config.tf.
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    mssql_device   = var.mssql_volume_device
-    sa_password    = var.mssql_sa_password
-    backup_bucket  = aws_s3_bucket.backup.bucket
-    aws_region     = var.aws_region
-    ecr_registry   = local.ecr_registry
-    docker_compose = local.docker_compose
-    nginx_conf     = local.nginx_conf
-    init_sql       = local.init_sql
-    db_list        = join(" ", var.mssql_databases)
+    mssql_device       = var.mssql_volume_device
+    sa_password        = var.mssql_sa_password
+    backup_bucket      = aws_s3_bucket.backup.bucket
+    aws_region         = var.aws_region
+    ecr_registry       = local.ecr_registry
+    db_list            = join(" ", var.mssql_databases)
+    host_config_bucket = local.host_config_bucket
+
+    logging                = var.logging
+    logging_root           = local.logging_root
+    grafana_admin_password = var.logging.grafana_admin_password
   })
+
+  # user_data learns the bucket as a rendered string, which is no dependency at
+  # all, so say it explicitly: the sync has to find the objects already there.
+  depends_on = [aws_s3_object.host_config]
 
   metadata_options {
     http_tokens = "required"

@@ -1,0 +1,30 @@
+# Used by the monitoring pipeline (canonical copy: monitoring.workflow.yml,
+# installed as .github/workflows/monitoring.yml) via `config_file: monitoring/checkov.yml`.
+# Checkov only auto-discovers `.checkov.yaml`, so the pipeline passes this file
+# explicitly and the step is blocking (no soft_fail).
+framework:
+  - terraform
+
+skip-check:
+  - CKV_AWS_65  # Container Insights is off on purpose: this stack is the open-source replacement for it
+  - CKV_AWS_338 # 30-day retention on the components' own logs, which are also shipped to Loki with its own retention
+  - CKV_AWS_158 # Component log groups use the AWS-managed CloudWatch Logs key; the sensitive configs live in CMK-encrypted SSM parameters
+  - CKV_AWS_145 # CUR bucket uses SSE-S3; a CMK would have to live in us-east-1 too, for a bucket holding only the cost report
+  - CKV_AWS_21  # CUR delivery overwrites its own objects; versioning only adds storage cost
+  - CKV_AWS_18  # No second bucket to log into
+  - CKV_AWS_144 # Cross-region replication doubles storage cost
+  - CKV2_AWS_62 # No event consumers for the CUR bucket
+  - CKV2_AWS_6  # False positive: the bucket is count-gated, which checkov's graph checks cannot index (the same pattern without count passes); aws_s3_bucket_public_access_block.cur exists
+  - CKV2_AWS_61 # False positive: same count-gating; aws_s3_bucket_lifecycle_configuration.cur expires reports after 400 days
+  - CKV_AWS_336 # Prometheus/Loki/Tempo write their WAL and TSDB outside the mounted volume; the writable paths differ per image
+  - CKV_AWS_378 # TLS terminates at the prod ALB; ALB -> task traffic is plain HTTP inside the VPC (standard Fargate pattern)
+  - CKV_AWS_382 # Egress is needed for image pulls, AWS APIs and the public uptime probes
+  - CKV_AWS_109 # KMS key policies must use Resource "*" (the policy is on the key itself); the principal is the account root only
+  - CKV_AWS_111 # see above
+  - CKV_AWS_356 # see above
+  - CKV_AWS_107 # KMS key policy grants kms:* to the account root by design; IAM policies scope the actual grants
+  - CKV_AWS_108 # see above
+  - CKV_AWS_110 # see above
+
+compact: true
+quiet: false

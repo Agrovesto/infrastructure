@@ -36,6 +36,9 @@ prod/tests/
 dev/tests/
   ec2.tftest.hcl              app host, volumes, Elastic IP
   platform.tftest.hcl         VPC, scheduler, backups, ECR, Amplify, DNS
+  logging.tftest.hcl          on-host logging stack: volume + config objects,
+                              the six compose services, the Alloy pipeline, the
+                              nginx vhost and its allow list, and the off switch
 ```
 
 ## What they actually protect
@@ -59,6 +62,23 @@ enable/disable toggles (`enable_vault`, `run_db_init`, `manage_dns`,
 
 ## Notes
 
+- Three things cost attempts to learn, and each has a line in a dev test now:
+  - **A run's `variables` block applies to the whole run**, not from its position
+    onwards. One run cannot assert both the committed default and an override of
+    the same variable — that is why `logging.tftest.hcl` has `json_log_services`
+    and `json_log_services_extended`, and `retention` and
+    `retention_shared_for_every_stream`, as pairs.
+  - Under `command = plan`, `aws_s3_bucket.x[0].id` is **unknown** (it is
+    Optional+Computed and only `id`-referenced), so an assertion against it fails
+    for a reason that has nothing to do with the config. Assert through
+    `.bucket` / `.bucket_prefix`-style attributes that come from the config —
+    `local.host_config_bucket` is exactly such a value, which is why
+    `logging.tf` writes `bucket = aws_s3_bucket.host_config.bucket`.
+  - `strcontains(rendered_text, "\"quoted\"")` is brittle through
+    `templatefile` + HCL: `\"` survives into the rendered file, so a quoted
+    fragment may or may not appear as written. Assert on the *local*
+    (`local.logging_json_services == "nginx"`) or on a quote-free substring
+    (`{service=~`), not on a quoted phrase inside the rendered text.
 - Assertions avoid values that are only known after apply (ARNs, endpoints,
   DNS names). Two runs in `prod/tests/compute.tftest.hcl` use
   `command = apply` because they inspect the rendered `container_definitions`
@@ -78,7 +98,7 @@ enable/disable toggles (`enable_vault`, `run_db_init`, `manage_dns`,
   | `log_retention_days = 30` | 365 | `prod/tests/{compute,vault,vpc}.tftest.hcl` |
   | `mssql_multi_az = false` | true | `prod/tests/rds.tftest.hcl` |
   | `mssql_enabled_cloudwatch_logs_exports = ["error"]` | error + agent | `prod/tests/rds.tftest.hcl` → `express_log_exports` |
-  | `instance_type = "t3.medium"` | t3.xlarge | `dev/tests/ec2.tftest.hcl` |
+  | `instance_type = "t3.large"` | t3.medium | `dev/tests/ec2.tftest.hcl` |
 
   **Rule:** when you change a value in `terraform.auto.tfvars` only, either
   move the value into the variable's `default` or add it to the test file's

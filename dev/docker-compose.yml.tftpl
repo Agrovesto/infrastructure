@@ -1,3 +1,18 @@
+# =============================================================================
+# docker-compose for the dev EC2 host — rendered by Terraform
+#
+# dev/locals.tf feeds this template; the result is uploaded as the object
+# compose/docker-compose.yml in the host config bucket (dev/host_config.tf) and
+# user_data.sh.tftpl syncs it down to /opt/agrovesto/compose/docker-compose.yml
+# at boot. Edit the template, not the file on the host - though an experiment on
+# the host is one `docker compose up -d` away, see dev/README.md.
+#
+# The services after `vault` are the on-host logging & metrics stack (Loki,
+# Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of this
+# compose project on purpose: they share the docker network with the apps, which
+# is how Grafana reaches Loki and how Alloy reaches the docker daemon. No AWS
+# service is involved in any of it.
+# =============================================================================
 services:
   nginx:
     image: nginx:1.27-alpine
@@ -53,3 +68,177 @@ services:
       - "127.0.0.1:${vault.host_port}:8200"
     command: server -dev
     restart: unless-stopped
+%{ if logging.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Logging & metrics. Every published port is on 127.0.0.1: the security group
+  # has no ingress for them either, so access is `ssh -L` or the Grafana vhost
+  # in nginx.conf. Each container is limited so it cannot starve SQL Server.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Log store: single binary, filesystem storage on the logging volume, its own
+  # retention in config.yml. No image ships a shell or wget, so there is no
+  # health check here — the same trade-off the prod monitoring stack makes.
+  loki:
+    image: ${logging.loki_image}
+    container_name: agrovesto-loki
+    command:
+      - -config.file=/loki/config.yml
+      - -target=all
+    user: "10001"
+    ports:
+      - "127.0.0.1:${logging.loki_port}:3100"
+    volumes:
+      # The whole directory is writable: /loki holds config.yml, the TSDB
+      # chunks, the WAL and the compactor's working files.
+      - ${logging_root}/loki:/loki
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["loki"]}"
+    mem_limit: ${logging.memory_limits_mb["loki"]}M
+
+  # The collector: tails docker logs + journald, parses them, pushes to Loki.
+  # Runs as root: the docker socket has to be writable and the sealed journal
+  # files are only readable by root and the systemd-journal group. Both host
+  # mounts are read-only except the socket. That access is why this stack belongs
+  # on a dev box and why prod ships its logs to the monitoring/ stack instead.
+  alloy:
+    image: ${logging.alloy_image}
+    container_name: agrovesto-alloy
+    user: "0"
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      # 12345: Prometheus scrape + Alloy's debug UI.
+      # 3101: the Loki push API, for an app that would rather send its own logs.
+      - "127.0.0.1:${logging.alloy_port}:12345"
+      - "127.0.0.1:${logging.alloy_push_port}:3101"
+    volumes:
+      - ${logging_root}/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Positions file, so a container restart resumes instead of re-reading.
+      - ${logging_root}/alloy/data:/var/lib/alloy/data
+      # Not :ro — every HTTP request is a write() against the socket, so a
+      # read-only bind mount makes the API unreadable.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    restart: unless-stopped
+    depends_on:
+      - loki
+    cpus: "${logging.cpu_limits["alloy"]}"
+    mem_limit: ${logging.memory_limits_mb["alloy"]}M
+
+  # The UI: Explore for LogQL, the two provisioned dashboards, and the
+  # read-only Prometheus browser. Data is on the logging volume so dashboards
+  # and the admin password survive an instance replacement.
+  grafana:
+    image: ${logging.grafana_image}
+    container_name: agrovesto-grafana
+    user: "472"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${logging.grafana_admin_user}"
+      GF_SECURITY_ADMIN_PASSWORD: "$${GRAFANA_ADMIN_PASSWORD}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_FEED_ENABLED: "false"
+      GF_LOG_LEVEL: "warn"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/dev-logs.json"
+    ports:
+      - "127.0.0.1:${logging.grafana_port}:3000"
+    volumes:
+      - ${logging_root}/grafana/data:/var/lib/grafana
+      - ${logging_root}/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${logging_root}/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - prometheus
+    cpus: "${logging.cpu_limits["grafana"]}"
+    mem_limit: ${logging.memory_limits_mb["grafana"]}M
+
+  # Metrics: the box and every container. Retention is bounded twice over - by
+  # age and by bytes - so a busy week cannot fill the logging volume.
+  prometheus:
+    image: ${logging.prometheus_image}
+    container_name: agrovesto-prometheus
+    user: "65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${logging.prometheus_retention}
+      - --storage.tsdb.retention.size=${logging.prometheus_retention_size}
+    ports:
+      - "127.0.0.1:${logging.prometheus_port}:9090"
+    volumes:
+      - ${logging_root}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${logging_root}/prometheus/data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["prometheus"]}"
+    mem_limit: ${logging.memory_limits_mb["prometheus"]}M
+
+  # Per-container CPU / memory / network, read from the cgroups.
+  cadvisor:
+    image: ${logging.cadvisor_image}
+    container_name: agrovesto-cadvisor
+    command:
+      - --docker_only=true
+      - --store_container_labels=false
+      - --housekeeping_interval=30s
+      - --max_housekeeping_interval=2m
+      - --event_ttl=10m
+    ports:
+      - "127.0.0.1:${logging.cadvisor_port}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["cadvisor"]}"
+    mem_limit: ${logging.memory_limits_mb["cadvisor"]}M
+
+  # Host metrics: CPU, memory, disk, load, filesystem.
+  node-exporter:
+    image: ${logging.node_exporter_image}
+    container_name: agrovesto-node-exporter
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --web.listen-address=:9100
+      # Host paths node_exporter should not stat (container overlays are noise).
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker)($$|/)
+    ports:
+      - "127.0.0.1:${logging.node_exporter_port}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9100/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["node-exporter"]}"
+    mem_limit: ${logging.memory_limits_mb["node-exporter"]}M
+%{ endif ~}

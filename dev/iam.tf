@@ -1,5 +1,7 @@
 # =============================================================================
-# IAM — EC2 host role (S3 backups + SSM + logs) and scheduler role
+# IAM — EC2 host role (MSSQL backups, the boot-time config read, SSM) and the
+# scheduler role. No CloudWatch Logs grants and no log driver anywhere in this
+# stack: the app logs are collected on the host itself (dev/logging.tf).
 # =============================================================================
 
 resource "aws_iam_role" "ec2" {

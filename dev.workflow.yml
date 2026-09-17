@@ -107,8 +107,8 @@ env:
   TF_WORKING_DIR: "dev"
 
   # Files that must exist for this to be a valid Terraform root module.
-  TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
-  TF_TEMPLATES: "user_data.sh.tftpl docker-compose.yml.tftpl nginx.conf.tftpl"
+  TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf logging.tf host_config.tf"
+  TF_TEMPLATES: "user_data.sh.tftpl docker-compose.yml.tftpl nginx.conf.tftpl loki-config.yml.tftpl alloy-config.alloy.tftpl prometheus.yml.tftpl grafana-datasources.yml.tftpl"
 
   # MSSQL
   TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD_DEV }}

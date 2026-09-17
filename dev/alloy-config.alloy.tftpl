@@ -1,0 +1,193 @@
+# =============================================================================
+# Grafana Alloy — the collector on the dev EC2 host
+#
+# Rendered by Terraform (dev/locals.tf), uploaded as the object
+# logging/alloy/config.alloy in the host config bucket (dev/host_config.tf) and
+# synced by user_data to /opt/agrovesto/logging/alloy/config.alloy on every boot.
+#
+# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+# Iterate there instead - `docker compose restart alloy` after editing the file
+# makes a change visible without a Terraform run, and apply makes it final.
+#
+# Three inputs, one output:
+#
+#   docker containers (the 5 APIs, Vault, SQL Server, nginx access log)
+#   journald         (sshd, kernel, cloud-init, unit failures)
+#   Loki push API    (an app that logs straight to Alloy, port ${push_port})
+#                            -> loki.process -> Loki on 127.0.0.1:3100
+# =============================================================================
+
+logging {
+  level = "warn"
+}
+
+// Serving on 0.0.0.0 is harmless: the port is published on 127.0.0.1 only and
+// the security group has no ingress for it. Prometheus scrapes it from inside
+// the docker network.
+http {
+  listen_address = "0.0.0.0"
+  listen_port    = ${metrics_port}
+}
+
+// -----------------------------------------------------------------------------
+// 1. Container logs
+//
+// Alloy talks to the docker daemon through its socket, so nothing has to be
+// mounted into the app containers and no logging driver has to change: the
+// json-file logs the daemon already writes are tailed in place.
+// -----------------------------------------------------------------------------
+
+discovery.docker "host" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.host.output
+
+  // agrovesto-wallet -> wallet, so a dashboard can group by `service`.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(agrovesto-)?(.+)"
+    target_label  = "service"
+    replacement   = "$2"
+  }
+
+  rule {
+    source_labels = ["service"]
+    regex         = "${join("|", observability_services)}"
+    action        = "drop"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+
+  rule {
+    target_label = "host"
+    replacement  = "${hostname}"
+  }
+}
+
+loki.source.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.containers.output
+  labels           = {}
+  refresh_interval = "30s"
+  forward_to       = [loki.process.lines.receiver]
+}
+
+// -----------------------------------------------------------------------------
+// 2. systemd journal
+//
+// Reads the journal files directly (they are mounted read-only into the
+// container) instead of through the journald socket, so a restart of Alloy
+// resumes from its own positions file. `max_age` keeps a reboot of the box from
+// re-shipping months of history into Loki.
+// -----------------------------------------------------------------------------
+
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "priority"
+  }
+}
+
+loki.source.journal "host" {
+  path          = "/var/log/journal"
+  max_age       = "${journal_max_age}"
+  labels        = { job = "journal", host = "${hostname}" }
+  relabel_rules = loki.relabel.journal.rules
+  forward_to    = [loki.process.lines.receiver]
+}
+
+// -----------------------------------------------------------------------------
+// 3. One place where lines are parsed and labelled
+//
+// Both branches are gated by a selector, so a pipeline never tries to parse a
+// line that is not in the format it expects: unmatched lines are stored
+// verbatim and are still fully searchable with LogQL.
+// -----------------------------------------------------------------------------
+
+loki.process "lines" {
+  forward_to = [loki.write.loki.receiver]
+
+  // nginx writes one JSON object per request (`log_format agrovesto_json` in
+  // nginx.conf), which lands on the container's stdout and therefore in its
+  // docker log. Add a service to `logging.json_log_services` when it starts
+  // emitting JSON of its own (e.g. ASP.NET Core with the JSON console
+  // formatter) and its fields follow the same path.
+  //
+  // Only `status`, `method`, `component` and `level` become labels: the URI,
+  // the client IP and the user agent stay in the line, where LogQL can still
+  // filter and aggregate on them without blowing up the index.
+  stage.match {
+    selector      = "{service=~\"${json_log_services}\"} |~ \"^[{].*[}]$\""
+    pipeline_name = "json"
+
+    stage.json {
+      expressions = {
+        component = "component"
+        level     = "level"
+        status    = "status"
+        method    = "method"
+      }
+    }
+
+    stage.labels {
+      values = {
+        component = ""
+        level     = ""
+        status    = ""
+        method    = ""
+      }
+    }
+  }
+
+  // The .NET console logger prefixes every line with its level
+  // ("fail: Some.Namespace[0]"). Promoting it costs one label.
+  stage.match {
+    selector      = "{job=\"docker\"} |~ \"^(trce|dbug|info|warn|fail|crit): \""
+    pipeline_name = "dotnet-level"
+
+    stage.regex {
+      expression = "^(?P<app_level>trce|dbug|info|warn|fail|crit): "
+    }
+
+    stage.labels {
+      values = { level = "app_level" }
+    }
+  }
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "${loki_url}/loki/api/v1/push"
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 4. Optional: apps that push their own logs
+//
+// Containers on this host push to http://alloy:${push_port}/loki/api/v1/push,
+// anything else to http://127.0.0.1:${push_port}/loki/api/v1/push (SSH tunnel).
+// Serilog.Sinks.Grafana.Loki works against this endpoint as-is, which is how an
+// API can log with correlation ids without going through stdout.
+// -----------------------------------------------------------------------------
+
+loki.source.api "push" {
+  http {
+    listen_address = "0.0.0.0"
+    listen_port    = ${push_port}
+  }
+
+  labels     = { job = "loki-push", host = "${hostname}" }
+  forward_to = [loki.process.lines.receiver]
+}

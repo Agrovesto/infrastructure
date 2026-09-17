@@ -1,0 +1,100 @@
+# =============================================================================
+# Loki — single binary, filesystem storage, on the dev EC2 host
+#
+# Rendered by Terraform (dev/locals.tf), uploaded as the object
+# logging/loki/config.yml in the host config bucket (dev/host_config.tf) and
+# synced by user_data to /opt/agrovesto/logging/loki/config.yml on every boot.
+#
+# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+# Iterate there instead - `docker compose restart loki` after editing the file
+# makes a change visible without a Terraform run, and apply then makes it final.
+# =============================================================
+
+# =============================================================================
+
+# Single tenant: there is no auth in front of Loki, which is why the container
+# only listens on 127.0.0.1 (see docker-compose) and queries come from Grafana
+# over the docker network.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Retention. The compactor deletes anything older than this, so the volume
+  # cannot grow without bound — the box has one small gp3 disk for logs.
+  retention_period: ${retention_hours}h
+
+  # Ingest budget for a 2 vCPU host that also runs SQL Server: 4 MB/s of lines
+  # overall, 1 MB/s per stream, and reject anything older than a week so a
+  # misconfigured client cannot backfill the volume.
+  ingestion_rate_mb: ${ingestion_rate_mb}
+  ingestion_burst_size_mb: ${ingestion_burst_mb}
+  per_stream_rate_limit: ${stream_rate_mb}MB
+  per_stream_rate_limit_burst: ${stream_burst_mb}MB
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+  # Long lines (stack traces, SQL batches) are truncated, not rejected.
+  max_line_size: 256KB
+  max_line_size_truncate: true
+
+  # Query budget: keep a dashboard query from pinning the box.
+  max_query_series: 5000
+  max_query_length: ${max_query_length_hours}h
+  max_entries_limit_per_query: ${max_entries}
+
+  allow_structured_metadata: true
+%{ if length(retention_streams) > 0 ~}
+
+  # Per-stream overrides, applied by priority (higher priority wins). The
+  # housekeeping streams are kept for less time than the application logs.
+  retention_stream:
+%{ for s in retention_streams ~}
+    - priority: 1
+      label_selector: ${jsonencode(s.selector)}
+      period: ${s.period}h
+%{ endfor ~}
+%{ endif ~}
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+  compaction_interval: 10m
+  deletion_mode: filter-and-delete
+
+querier:
+  max_concurrent: ${querier_max_concurrent}
+
+ingester:
+  # Bigger, fewer chunks: less index work and less disk on a small volume.
+  chunk_idle_period: 30m
+  chunk_target_size: 1572864
+  max_chunk_age: 1h
+
+analytics:
+  reporting_enabled: false

@@ -28,10 +28,6 @@ override_data {
   }
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 override_data {
   target = data.aws_iam_policy_document.ec2_assume
   values = {
@@ -60,17 +56,12 @@ override_data {
   }
 }
 
-<<<<<<< HEAD
-=======
->>>>>>> 96e8155 (fix(ci): override data.aws_ami.ubuntu in dev test suite and set sonar.defaultBranch=devops)
-=======
->>>>>>> a23f5ed (fix(terraform): fix string concatenation in prod/locals.tf and policy document fallbacks for mock mode)
 variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
-  mssql_sa_password = "Str0ng!TestOnly"
+  mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
-  instance_type     = "t3.medium"
+  instance_type     = "t3.large"
 
   apis = {
     wallet = {
@@ -124,8 +115,8 @@ run "instance" {
   command = plan
 
   assert {
-    condition     = aws_instance.app.instance_type == "t3.medium"
-    error_message = "The dev host runs on t3.medium (2 vCPU / 4 GiB)."
+    condition     = aws_instance.app.instance_type == "t3.large"
+    error_message = "The dev host runs on t3.large (2 vCPU / 8 GiB), which is what the logging stack on it needs."
   }
 
   assert {

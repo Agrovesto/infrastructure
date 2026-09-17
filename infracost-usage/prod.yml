@@ -1,0 +1,107 @@
+# prod/ — the application stack: 5 API Fargate services + Vault, SQL Server
+# Express on db.t3.micro, one ALB (which also fronts Grafana), one NAT gateway,
+# two Route53 zones, ECR, log groups, flow logs.
+#
+# Traffic figures are low-traffic planning numbers, not measurements: change
+# them here and every number moves with them. Fargate service hours are priced
+# by Infracost automatically from `cpu`/`memory`/`desired_count`.
+version: 0.1
+
+resource_type_default_usage:
+  # Any log group I have not pinned below. Retention is 30 days, so storage
+  # tracks ingestion.
+  aws_cloudwatch_log_group:
+    storage_gb: 0.6
+    monthly_data_ingested_gb: 0.6
+    monthly_data_scanned_gb: 0
+  # 5 API repos, ~1 GB of ARM64 images each.
+  aws_ecr_repository:
+    storage_gb: 1
+  # Vault's raft data volume; under a gigabyte.
+  aws_efs_file_system:
+    storage_gb: 1
+    infrequent_access_storage_gb: 0
+    monthly_infrequent_access_read_gb: 0
+    monthly_infrequent_access_write_gb: 0
+  # db.t3.micro, 20 GB gp3: gp3 IOPS are included, backups within 100% of the
+  # allocated storage are free, Performance Insights is off, and no CPU-credit
+  # bursting is assumed.
+  aws_db_instance:
+    additional_backup_storage_gb: 0
+    monthly_standard_io_requests: 0
+    monthly_additional_performance_insights_requests: 0
+    monthly_cpu_credit_hrs: 0
+  # DNS answers for the app hosts, the probes and Grafana.
+  aws_route53_record:
+    monthly_standard_queries: 20000
+
+resource_usage:
+  # 50 GB/month through the NAT gateway on top of its hourly charge.
+  'aws_nat_gateway.main[*]':
+    monthly_data_processed_gb: 50
+
+  # ~50 GB/month through the ALB is 0.07 GB/hour. Capacity units are the highest
+  # of the four components and are billed per LCU-hour, so 50 new connections a
+  # second (= 2 LCU) dominates: ~2 LCU-hours, the planning figure behind the
+  # ~$32/month ALB line.
+  aws_lb.main:
+    new_connections: 50
+    active_connections: 3000
+    processed_bytes_gb: 0.07
+    rule_evaluations: 1000
+
+  # 20 GB gp3, single-AZ, SQL Server Express (no licence fee), 30-day automated
+  # backups.
+  aws_db_instance.mssql:
+    additional_backup_storage_gb: 0
+    monthly_standard_io_requests: 0
+    monthly_additional_performance_insights_requests: 0
+    monthly_cpu_credit_hrs: 0
+
+  # 5 repos, IMMUTABLE tags, newest 5 kept. 1 GB each.
+  'aws_ecr_repository.services[*]':
+    storage_gb: 1
+
+  # ALB access logs: one object per 5 minutes per load balancer (~8,600 PUTs a
+  # month), kept 90 days, so storage is roughly three months of logs.
+  aws_s3_bucket.alb_logs:
+    object_tags: 0
+    standard:
+      storage_gb: 3
+      monthly_tier_1_requests: 9000
+      monthly_tier_2_requests: 50000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
+
+  # Task definitions pull the DB master password on every deployment and ECS
+  # Exec fetches it per session: ~100k GetSecretValue calls a month.
+  aws_secretsmanager_secret.mssql_master:
+    monthly_requests: 100000
+
+  # Vault's raft storage, multi-AZ EFS. Usage is per file system, the access
+  # point and mount targets are free.
+  'aws_efs_file_system.vault[*]':
+    storage_gb: 1
+    infrequent_access_storage_gb: 0
+    monthly_infrequent_access_read_gb: 0
+    monthly_infrequent_access_write_gb: 0
+
+  # VPC flow logs land in CloudWatch Logs: ~1.4 GB/month. This is where the
+  # aws_flow_log cost lives — publishing a flow log itself is free.
+  aws_cloudwatch_log_group.flow_logs:
+    storage_gb: 1.4
+    monthly_data_ingested_gb: 1.4
+    monthly_data_scanned_gb: 0
+
+  # Vault's own logs, ~100 MB/month.
+  'aws_cloudwatch_log_group.vault[*]':
+    storage_gb: 0.1
+    monthly_data_ingested_gb: 0.1
+    monthly_data_scanned_gb: 0
+
+  # 5 API services, ~300 MB of container logs each (1.5 GB in total), 30-day
+  # retention.
+  'aws_cloudwatch_log_group.services[*]':
+    storage_gb: 0.3
+    monthly_data_ingested_gb: 0.3
+    monthly_data_scanned_gb: 0

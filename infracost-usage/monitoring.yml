@@ -1,0 +1,68 @@
+# monitoring/ — the open-source observability stack: 5 Fargate services
+# (Prometheus, Loki, Tempo, Grafana, and the "edge" task that carries Alloy,
+# Alertmanager, blackbox-exporter and Pushgateway) on one shared One Zone EFS
+# file system, plus four scheduled Fargate tasks and two buckets.
+#
+# The scheduled tasks (collector, SQL Server metrics, CUR budget, monthly
+# report) are `aws_ecs_task_definition`s that EventBridge runs — there is no
+# service for Infracost to price, so they are itemised in
+# infracost-extras.json. Service discovery, SES and the CUR definition are not
+# priced either; see the same file.
+version: 0.1
+
+resource_type_default_usage:
+  # State and configuration objects: small, few requests.
+  aws_s3_bucket:
+    object_tags: 0
+    standard:
+      storage_gb: 0.1
+      monthly_tier_1_requests: 2000
+      monthly_tier_2_requests: 20000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
+  # DNS is cached for 10 s; the scrapes and probes answer from the private zone.
+  aws_route53_record:
+    monthly_standard_queries: 20000
+
+resource_usage:
+  # TSDB blocks, WAL, Loki chunks, Tempo blocks, Grafana's SQLite: ~25 GB.
+  # Deliberately conservative — the file system's AFTER_30_DAYS lifecycle moves
+  # cold data to One Zone-IA (~$0.013/GB against $0.16/GB in Standard).
+  aws_efs_file_system.monitoring:
+    storage_gb: 25
+    infrequent_access_storage_gb: 0
+    monthly_infrequent_access_read_gb: 0
+    monthly_infrequent_access_write_gb: 0
+
+  # Rendered component config, dashboards and probe configs, rewritten on every
+  # apply.
+  aws_s3_bucket.config:
+    object_tags: 0
+    standard:
+      storage_gb: 0.05
+      monthly_tier_1_requests: 2000
+      monthly_tier_2_requests: 20000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
+
+  # Daily CUR Parquet, rewritten in place, expiring after 400 days.
+  'aws_s3_bucket.cur[*]':
+    object_tags: 0
+    standard:
+      storage_gb: 0.5
+      monthly_tier_1_requests: 5000
+      monthly_tier_2_requests: 50000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
+
+  # Every component's container logs in one group (~1 GB/month), 30 days.
+  aws_cloudwatch_log_group.monitoring:
+    storage_gb: 1
+    monthly_data_ingested_gb: 1
+    monthly_data_scanned_gb: 0
+
+  # Grafana's admin password as a SecureString parameter; standard parameters
+  # themselves are free, the API interactions above the free tier are not.
+  aws_ssm_parameter.grafana_admin_password:
+    monthly_api_interactions: 10000
+    parameter_storage_hrs: 730
