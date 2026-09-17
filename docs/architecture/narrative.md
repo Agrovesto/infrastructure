@@ -40,7 +40,8 @@ describe are listed separately at the end.
   the **prod** zone; dev runs `manage_dns = false` and creates no zone of its
   own. Those records are filled from dev stack outputs after an apply.
 - Traffic lands on the dev Elastic IP and is terminated by nginx 1.27-alpine on
-  the t3.medium host, which forwards to the five containers on 5001–5005.
+  the t3.large host, which forwards to the five containers on 5001–5005 — and to
+  Grafana on `dev-logs`, the logging UI of the stack below.
 - The React front ends never touch the host: Amplify serves them from its CDN,
   with two branches and domains attached.
 
@@ -53,6 +54,10 @@ describe are listed separately at the end.
   30 days on EFS.
 - The monitoring stack's own logs stay in CloudWatch Logs; they are not
   duplicated into Loki, so a broken ingest path is still visible.
+- Dev is the opposite on purpose: no CloudWatch Logs at all. Alloy on the dev
+  host tails the docker `json-file` logs and journald, pushes them to Loki on
+  `127.0.0.1:3100` of the same box, and Grafana queries that. Nothing is
+  ingested, indexed or charged by AWS (see `dev/README.md`).
 
 ### Metric path
 
@@ -168,10 +173,11 @@ line).
 
 | Node | Service | Key configuration | Cost |
 | --- | --- | --- | ---: |
-| EC2 t3.medium | Compute | 2 vCPU / 4 GiB, docker compose host, EIP, SSM only (no SSH, no bastion) | ≈ $11.86 of the ≈ $29 |
-| EBS | Storage | 50 GB root + 50 GB data, gp3 | ≈ $8.80 of the ≈ $29 |
+| EC2 t3.large | Compute | 2 vCPU / 8 GiB, docker compose host, EIP, SSM Session Manager and SSH from `allowed_ssh_cidrs` (no bastion) | ≈ $22 of the ≈ $35, at the ≈ 260 h/month the scheduler allows |
+| EBS | Storage | 50 GB root + 50 GB data + 20 GB for the log stores, gp3 | ≈ $10 of the ≈ $35 |
 | nginx + 5 API containers | Runtime | reverse proxy on 443 → containers on 5001–5005 | — |
 | SQL Server container | Database | 5 databases on the data volume | — |
+| Logging + metrics containers | Observability | Loki, Alloy, Grafana, Prometheus, cAdvisor, node-exporter — on-host, no CloudWatch | — |
 | Vault container | Secrets | dev secrets | — |
 | EventBridge Scheduler | Scheduling | start 08:00, stop 20:00, Mon–Fri, Africa/Lagos (≈ 260 h/month) | — |
 | ECR | Images | 5 dev repos, MUTABLE tags, 3 kept | — |

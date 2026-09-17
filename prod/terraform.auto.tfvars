@@ -162,7 +162,11 @@ db_size_alarm_enabled = false
 #   "dev-input.api"           = "<dev EC2 Elastic IP>"
 #   "dev-moneval-api"         = "<dev EC2 Elastic IP>"
 #   "dev-serviceprovider-api" = "<dev EC2 Elastic IP>"
-#   "dev-vault"           = "<dev EC2 Elastic IP>"
+#   "dev-vault"                = "<dev EC2 Elastic IP>"
+#   # The dev logging stack's Grafana (nginx vhost on the dev host). Without this
+#   # record the UI is still reachable through the SSH tunnel printed by
+#   # `terraform -chdir=../dev output logging_access`.
+#   "dev-logs"                 = "<dev EC2 Elastic IP>"
 # }
 # extra_cname_records = {
 #   "landing.dev"    = "dev.<landing Amplify default domain>"

@@ -5,7 +5,8 @@ environment**; each folder is a self-contained, flat Terraform root module.
 
 ```
 .
-├── dev/                     # dev account — EC2 + docker (nginx, 5 APIs, Vault, MSSQL on EC2)
+├── dev/                     # dev account — EC2 + docker (nginx, 5 APIs, Vault, MSSQL,
+│   │                        # and the on-host Loki/Alloy/Grafana + Prometheus logging stack)
 │   ├── *.tf, *.tftpl, terraform.auto.tfvars
 │   ├── checkov.yml  trivy.yml  trust-policy.json
 │   └── README.md  ci-cd-quickstart.md
@@ -40,7 +41,7 @@ environment**; each folder is a self-contained, flat Terraform root module.
 
 | Folder | Account | What it creates | Workflow |
 | --- | --- | --- | --- |
-| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases), S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `dev.workflow.yml` → applies on push to `dev` |
+| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases) plus its own **logging and metrics stack on that same host** — Alloy tails the container logs and journald into Loki, Grafana queries them, Prometheus scrapes cAdvisor and node-exporter. No CloudWatch Logs or metrics in dev. S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `dev.workflow.yml` → applies on push to `dev` |
 | `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services **+ HashiCorp Vault** in private subnets (**single-AZ for now**), 5 ECR repos, RDS SQL Server (single-AZ for now) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `prod.workflow.yml` → applies on push to `main` |
 | `monitoring/` | prod | Open-source observability for the prod stack: Prometheus, Alertmanager, Loki, Tempo, Grafana OSS, Alloy (OTLP + Loki push), blackbox uptime probes and Pushgateway on Fargate, a Cost and Usage Report + DuckDB budget job, and an hourly SQL Server DMV metrics job. No CloudWatch alarms/dashboards, Container Insights, X-Ray, Performance Insights, RDS enhanced monitoring or AWS Budgets — see `monitoring/README.md` | `monitoring.workflow.yml` → applies on push to `main` |
 

@@ -173,14 +173,19 @@ Native (non-monitoring) alerts, currently OFF
 === DEV ACCOUNT (353833416626), root `dev` — the application ===
 - VPC with a single public subnet, Internet Gateway, route table, one security
   group; default security group locked down.
-- EC2 t3.medium (2 vCPU / 4 GiB) with an Elastic IP, 50 GB gp3 root volume plus
-  a 50 GB gp3 data volume for SQL Server, instance profile with SSM Session
-  Manager access (no SSH, no bastion, no load balancer).
+- EC2 t3.large (2 vCPU / 8 GiB) with an Elastic IP, a 50 GB gp3 root volume, a
+  50 GB gp3 data volume for SQL Server and a 20 GB gp3 volume for the log
+  stores, instance profile with SSM Session Manager access plus SSH from
+  `allowed_ssh_cidrs` (no bastion, no load balancer).
 - Docker Compose stack on that host: nginx 1.27-alpine reverse proxy in front of
   five ASP.NET API containers (wallet 5001, onboarding 5002, input 5003, moneval
   5004, serviceprovider 5005 — placeholder images today), a SQL Server
   container holding the five databases (wallet, onboarding, input, moneval,
-  serviceprovider) and a Vault container.
+  serviceprovider), a Vault container, and the on-host logging and metrics stack
+  — Alloy tailing the docker logs and journald into Loki, Grafana, Prometheus
+  with cAdvisor and node-exporter. Same compose project, no CloudWatch Logs or
+  Container Insights anywhere in dev. Grafana is the only one of them nginx
+  serves publicly (`dev-logs`, IP-allowlisted); the rest bind 127.0.0.1.
 - EventBridge Scheduler keeps cost down: start 08:00, stop 20:00, Monday to
   Friday, Africa/Lagos — roughly 260 running hours a month.
 - ECR repos agrovesto-dev-<svc> ×5 (MUTABLE tags, 3 kept); Amplify hosts two

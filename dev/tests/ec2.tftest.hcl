@@ -61,7 +61,7 @@ variables {
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
   mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
-  instance_type     = "t3.medium"
+  instance_type     = "t3.large"
 
   apis = {
     wallet = {
@@ -115,8 +115,8 @@ run "instance" {
   command = plan
 
   assert {
-    condition     = aws_instance.app.instance_type == "t3.medium"
-    error_message = "The dev host runs on t3.medium (2 vCPU / 4 GiB)."
+    condition     = aws_instance.app.instance_type == "t3.large"
+    error_message = "The dev host runs on t3.large (2 vCPU / 8 GiB), which is what the logging stack on it needs."
   }
 
   assert {

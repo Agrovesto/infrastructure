@@ -1,0 +1,56 @@
+# =============================================================================
+# Prometheus — host and container metrics on the dev EC2 host
+#
+# Rendered by Terraform (dev/locals.tf), uploaded as the object
+# logging/prometheus/prometheus.yml in the host config bucket
+# (dev/host_config.tf) and synced by user_data to
+# /opt/agrovesto/logging/prometheus/prometheus.yml on every boot.
+#
+# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+# Iterate there instead - `docker compose restart prometheus` after editing the
+# file makes a change visible without a Terraform run, and apply makes it final.
+#
+#
+# Five scrape targets, all on the docker network. There is no service discovery
+# and no remote write: this is a single box and the TSDB on the logging volume
+# is the store.
+# =============================================================================
+
+global:
+  scrape_interval: ${scrape_interval}s
+  scrape_timeout: 10s
+  evaluation_interval: 60s
+  external_labels:
+    stack: ${project}-${environment}
+    host: ${hostname}
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # CPU, memory, disk, load, filesystem — the box itself.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:${node_exporter_port}"]
+
+  # Per-container CPU / memory / network, from the cgroup of each container
+  # including the six observability ones. This is what answers "did wallet or
+  # mssql eat the box".
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:${cadvisor_port}"]
+
+  # Loki and Alloy report their own ingest, drop and query counters here, so
+  # "are my logs still flowing" is a graph and not a guess.
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: alloy
+    static_configs:
+      - targets: ["alloy:${metrics_port}"]
+
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:${grafana_port}"]

@@ -37,25 +37,39 @@ data "aws_iam_policy_document" "ec2_assume" {
 }
 
 data "aws_iam_policy_document" "ec2" {
-  #checkov:skip=CKV_AWS_111: ssmmessages/ec2messages and logs:CreateLogGroup offer no resource-level permissions, so Resource "*" is required by AWS
-  #checkov:skip=CKV_AWS_356: ssmmessages/ec2messages and logs:CreateLogGroup offer no resource-level permissions, so Resource "*" is required by AWS
+  #checkov:skip=CKV_AWS_111: ssmmessages/ec2messages offer no resource-level permissions, so Resource "*" is required by AWS
+  #checkov:skip=CKV_AWS_356: ssmmessages/ec2messages offer no resource-level permissions, so Resource "*" is required by AWS
   statement {
     sid       = "MssqlBackupS3"
     actions   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket", "s3:DeleteObject"]
     resources = [aws_s3_bucket.backup.arn, "${aws_s3_bucket.backup.arn}/*"]
   }
 
+  # SSM agent only. There is deliberately no logs:* here: the app logs are read
+  # off the docker daemon on this host and stored in Loki on this host, so the
+  # instance has no business talking to CloudWatch Logs (see dev/logging.tf).
+  # The one S3 read below is the config pull at boot, not a log shipping path.
   statement {
-    sid = "SsmAndLogs"
+    sid = "SsmAgent"
     actions = [
       "ssm:UpdateInstanceInformation",
       "ssmmessages:*",
-      "ec2messages:*",
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
+      "ec2messages:*"
     ]
     resources = ["*"]
+  }
+
+  # The single read of the rendered host config at boot (dev/host_config.tf).
+  # Read-only, and the bucket name is fixed by local.host_config_bucket, so this
+  # is not a way to enumerate the account's buckets.
+  statement {
+    sid     = "HostConfigS3"
+    actions = ["s3:GetObject", "s3:ListBucket"]
+
+    resources = [
+      aws_s3_bucket.host_config.arn,
+      "${aws_s3_bucket.host_config.arn}/*",
+    ]
   }
 
   # Docker login on the EC2 host (user_data) — GetAuthorizationToken has no

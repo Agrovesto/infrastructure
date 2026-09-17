@@ -105,3 +105,35 @@ output "scheduler" {
     stop  = aws_scheduler_schedule.stop.arn
   }
 }
+
+# =============================================================================
+# Logging & metrics on the host
+# =============================================================================
+
+output "grafana_url" {
+  description = "Empty when logging.enabled = false or expose_via_nginx = false. Served by nginx on the box's port 80 and limited to logging.allowed_cidrs - with the default empty allow list the vhost answers 127.0.0.1 only, so use the tunnel below."
+  value       = var.logging.enabled && var.logging.expose_via_nginx ? "http://${local.grafana_fqdn}" : ""
+}
+
+output "logging_access" {
+  description = "How to reach the UI and the raw APIs from a laptop"
+  value = var.logging.enabled ? {
+    ssh_tunnel = "ssh -N -L ${var.logging.grafana_port}:127.0.0.1:${var.logging.grafana_port} -L ${var.logging.loki_port}:127.0.0.1:${var.logging.loki_port} -L ${var.logging.prometheus_port}:127.0.0.1:${var.logging.prometheus_port} ubuntu@${local.ec2_public_ip}"
+    grafana    = "http://localhost:${var.logging.grafana_port}  (user ${var.logging.grafana_admin_user}; password is var.logging.grafana_admin_password)"
+    loki_query = "http://localhost:${var.logging.loki_port}/loki/api/v1/query_range?query=%7Bjob%3D%22docker%22%7D&limit=20"
+    alloy_ui   = "http://localhost:${var.logging.alloy_port}/  (component graph - the way to see whether a collector is actually reading)"
+  } : {}
+}
+
+output "logging_summary" {
+  description = "What the on-host logging stack keeps and where"
+  value = var.logging.enabled ? {
+    data_dir             = local.logging_root
+    volume_gb            = var.logging.volume_size_gb
+    loki_retention       = "${var.logging.loki_retention_days}d (journald + nginx: ${var.logging.system_retention_days}d)"
+    prometheus_retention = "${var.logging.prometheus_retention}, ${var.logging.prometheus_retention_size} cap"
+    parsed_as_json       = local.logging_json_services
+    grafana_cidrs        = local.logging_grafana.cidrs
+    self_scrape_dropped  = local.logging_own_services
+  } : {}
+}

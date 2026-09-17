@@ -2,17 +2,22 @@
 #   cp dev.workflow.yml .github/workflows/dev.yml   (the automation token cannot push .github/workflows).
 name: "Terraform CI/CD Pipeline (Dev)"
 
+#  "dev.workflow.yml" is itself a trigger path: installing this file into
+#  .github/workflows/ (or editing the canonical copy) has to re-run the pipeline
+#  it configures, not only edits under dev/.
 on:
   pull_request:
     branches:
       - main
     paths:
       - "dev/**"
+      - "dev.workflow.yml"
   push:
     branches:
       - main
     paths:
       - "dev/**"
+      - "dev.workflow.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,8 +35,8 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_COVERAGE_FAIL_UNDER: "60"
   TF_WORKING_DIR: "dev"
-  TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf"
-  TF_TEMPLATES: "user_data.sh.tftpl docker-compose.yml.tftpl nginx.conf.tftpl"
+  TF_ROOT_FILES: "versions.tf variables.tf locals.tf outputs.tf logging.tf host_config.tf"
+  TF_TEMPLATES: "user_data.sh.tftpl docker-compose.yml.tftpl nginx.conf.tftpl loki-config.yml.tftpl alloy-config.alloy.tftpl prometheus.yml.tftpl grafana-datasources.yml.tftpl"
   TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD_DEV }}
 
 jobs:

@@ -68,19 +68,21 @@ flowchart LR
       direction TB
       digw["Internet Gateway"]
       deip["Elastic IP"]
-      decs["EC2 instance t3.medium"]
+      decs["EC2 instance t3.large"]
       subgraph dhost["docker compose on the host"]
         dnginx["nginx 1.27-alpine<br/>reverse proxy"]
         dapis["5 API containers<br/>5001 to 5005"]
         dmssql["SQL Server container<br/>5 databases"]
         dvault["vault container"]
+        dlogs["logging + metrics<br/>loki, alloy, grafana<br/>prometheus, cadvisor,<br/>node-exporter"]
       end
-      droot["50 GB root + 50 GB data<br/>gp3"]
+      droot["50 GB root + 50 GB data<br/>+ 20 GB logs, gp3"]
     end
     subgraph dshared["Account services"]
       direction TB
       decr["ECR<br/>5 repos, MUTABLE"]
       ds3["S3 bucket<br/>SQL dumps, 14-day expiry"]
+      ds3cfg["S3 bucket<br/>rendered host config"]
       dsched["EventBridge Scheduler<br/>start 08:00, stop 20:00, Mon to Fri"]
       damplify["Amplify apps<br/>2 branches + domains"]
     end
@@ -105,6 +107,12 @@ flowchart LR
   dnginx -->|"HTTP 5001 to 5005"| dapis
   dapis -->|"TDS 1433"| dmssql
   dapis -->|"HTTP 8200"| dvault
+  dnginx -->|"HTTP 3000 vhost dev-logs"| dlogs
+  dapis -->|"docker json-file logs"| dlogs
+  dmssql -->|"docker json-file logs"| dlogs
+  decs -->|"journald, read-only"| dlogs
+  ds3cfg -.->|"aws s3 sync at boot"| decs
+  dlogs -->|"writes to the logs volume"| droot
   decs -->|"EBS attach"| droot
   dsched -->|"EC2 start / stop API calls"| decs
   r53 -.->|"dev hostnames, values typed in by hand"| deip
@@ -145,8 +153,8 @@ classDef observability fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
 classDef planned fill:#fafafa,stroke:#9e9e9e,stroke-dasharray:5,color:#616161
 
 class users,r53,acm,amplify internet
-class igw,natgw,alb,ecr,sm,kms,s3logs,cwl,cloudmap,ssm,digw,deip,decs,decr,ds3,dsched,damplify managed
+class igw,natgw,alb,ecr,sm,kms,s3logs,cwl,cloudmap,ssm,digw,deip,decs,decr,ds3,ds3cfg,dsched,damplify managed
 class api1,api2,api3,api4,api5,vaultsvc,dnginx,dapis,dvault,droot,dmssql,rds compute
 class efs_mon,efs_vault data
-class prom,loki,tempo,grafana,edgetask observability
+class prom,loki,tempo,grafana,edgetask,dlogs observability
 class l2 planned

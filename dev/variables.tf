@@ -322,3 +322,141 @@ variable "extra_alias_records" {
   }))
   default = {}
 }
+
+# -----------------------------------------------------------------------------
+# Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+#
+# The whole stack runs as docker containers on the app EC2 instance: it is
+# rendered into user_data by dev/locals.tf, so there is no separate host, no
+# EKS/ECS, and no AWS logging service involved. Set logging.enabled = false to
+# take every bit of it out of the plan.
+# -----------------------------------------------------------------------------
+
+variable "logging" {
+  description = <<-EOT
+    On-host logging and metrics: Loki stores the logs and answers LogQL, Alloy
+    collects them (docker containers + journald + an optional push endpoint),
+    Grafana visualises and queries them, and Prometheus/cAdvisor/node-exporter
+    add the host and per-container metrics the dashboards sit on top of.
+  EOT
+
+  type = object({
+    enabled = optional(bool, true)
+
+    # Pinned to the same versions the prod monitoring/ stack runs, so a query
+    # that works here works there. No :latest — a rebuilt container must not
+    # change what the dev logs look like.
+    loki_image          = optional(string, "grafana/loki:3.4.2")
+    alloy_image         = optional(string, "grafana/alloy:v1.6.1")
+    grafana_image       = optional(string, "grafana/grafana-oss:11.5.2")
+    prometheus_image    = optional(string, "prom/prometheus:v3.1.0")
+    cadvisor_image      = optional(string, "ghcr.io/google/cadvisor:v0.57.0")
+    node_exporter_image = optional(string, "prom/node-exporter:v1.9.1")
+
+    # Published on 127.0.0.1 on the host only, and the security group has no
+    # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
+    loki_port          = optional(number, 3100)
+    alloy_port         = optional(number, 12345)
+    alloy_push_port    = optional(number, 3101)
+    grafana_port       = optional(number, 3000)
+    prometheus_port    = optional(number, 9090)
+    cadvisor_port      = optional(number, 8080)
+    node_exporter_port = optional(number, 9100)
+
+    # --- reaching the UI ------------------------------------------------------
+    expose_via_nginx  = optional(bool, true)
+    grafana_subdomain = optional(string, "dev-logs")
+
+    # Sources allowed to reach the Grafana vhost through nginx. Empty means
+    # 127.0.0.1 only — the UI is then reachable over an SSH tunnel and from
+    # nowhere else. Add one CIDR per office/VPN exit to open it up; nothing here
+    # is ever exposed without a login, since Grafana keeps its own auth.
+    allowed_cidrs = optional(list(string), [])
+
+    # --- retention ------------------------------------------------------------
+    # Loki's compactor and Prometheus' TSDB delete on these numbers; the volume
+    # they live on is small on purpose (see volume_size_gb).
+    loki_retention_days       = optional(number, 14)
+    system_retention_days     = optional(number, 5)
+    prometheus_retention      = optional(string, "14d")
+    prometheus_retention_size = optional(string, "3GB")
+
+    # --- ingest budget ---------------------------------------------------------
+    # This box is 2 vCPU / 4 GiB and SQL Server lives here too, so the numbers
+    # below are deliberately small: a logger that misbehaves gets rate-limited by
+    # Loki rather than taking the APIs down with it.
+    loki_ingestion_rate_mb  = optional(number, 4)
+    loki_stream_rate_mb     = optional(number, 1)
+    loki_max_entries        = optional(number, 2000)
+    querier_max_concurrent  = optional(number, 2)
+    scrape_interval_seconds = optional(number, 30)
+    journal_max_age         = optional(string, "12h")
+    journal_max_use         = optional(string, "500M")
+
+    # Services whose log lines are one JSON object each (nginx is always one of
+    # them, because of the access log format in nginx.conf). Their fields become
+    # Loki labels; anything not listed stays a plain line, which is still fully
+    # searchable — only less aggregateable.
+    json_log_services = optional(list(string), [])
+
+    # --- disk ------------------------------------------------------------------
+    # A volume of its own, so a replacement of the instance does not throw the
+    # logs away and log I/O never competes with SQL Server's data files.
+    volume_size_gb = optional(number, 20)
+    volume_device  = optional(string, "/dev/sdg")
+
+    # Per-container caps, one entry per observability container. These are the
+    # difference between "the logging stack is cheap to run" and "the box died".
+    cpu_limits = optional(map(string), {
+      loki          = "0.50"
+      alloy         = "0.25"
+      grafana       = "0.50"
+      prometheus    = "0.50"
+      cadvisor      = "0.25"
+      node-exporter = "0.10"
+    })
+    memory_limits_mb = optional(map(number), {
+      loki          = 384
+      alloy         = 192
+      grafana       = 192
+      prometheus    = 384
+      cadvisor      = 128
+      node-exporter = 48
+    })
+
+    # --- the containers' own logs ---------------------------------------------
+    # Docker's json-file rotation, set daemon-wide in user_data. The collector
+    # reads those files, so they have to exist and have to stay small.
+    docker_log_max_size  = optional(string, "10m")
+    docker_log_max_files = optional(number, 3)
+
+    # --- Grafana ----------------------------------------------------------------
+    grafana_admin_user     = optional(string, "admin")
+    grafana_admin_password = optional(string, "agrovesto-dev") # ggignore - dev-only default, override via TF_VAR_logging
+  })
+
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for k in ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter"] :
+      contains(keys(var.logging.cpu_limits), k) && contains(keys(var.logging.memory_limits_mb), k)
+    ])
+    error_message = "cpu_limits and memory_limits_mb need one entry per observability container: loki, alloy, grafana, prometheus, cadvisor, node-exporter."
+  }
+
+  validation {
+    condition     = var.logging.loki_retention_days >= 1 && var.logging.system_retention_days >= 1 && var.logging.system_retention_days <= var.logging.loki_retention_days
+    error_message = "retention must be at least 1 day, and the system streams (journald, nginx) cannot be kept longer than loki_retention_days."
+  }
+
+  validation {
+    condition     = alltrue([for c in var.logging.allowed_cidrs : can(cidrhost(c, 0))])
+    error_message = "logging.allowed_cidrs entries must be IPv4 CIDRs, e.g. \"10.0.0.0/16\" or \"203.0.113.7/32\"."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.logging.grafana_subdomain))
+    error_message = "grafana_subdomain must be a single DNS label (lowercase letters, digits and dashes)."
+  }
+}

@@ -8,10 +8,24 @@ apt-get install -y docker.io git xfsprogs curl
 systemctl enable --now docker
 usermod -aG docker ubuntu
 
-# CloudWatch agent (installed only, matches previous behaviour — no config written)
-curl -fsSL https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o /tmp/cw-agent.deb
-dpkg -i /tmp/cw-agent.deb || apt-get install -f -y
-rm -f /tmp/cw-agent.deb
+# Container logs are bounded at the daemon level: json-file with rotation keeps
+# ${logging.docker_log_max_files} x ${logging.docker_log_max_size} per container, so an app that
+# logs hard cannot fill the root volume. The collector on this host reads exactly
+# those files, which is why no service needs a logging driver of its own.
+mkdir -p /etc/docker
+cat >/etc/docker/daemon.json <<'DAEMON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "${logging.docker_log_max_size}",
+    "max-file": "${logging.docker_log_max_files}"
+  }
+}
+DAEMON
+systemctl restart docker
+
+# No CloudWatch agent and no CloudWatch Logs: collecting, storing and querying
+# logs all happen on this host (dev/logging.tf, docker-compose.yml.tftpl).
 
 # Docker Compose plugin
 mkdir -p /usr/local/lib/docker/cli-plugins
@@ -19,52 +33,120 @@ curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-comp
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-# Wait for MSSQL data volume and format if needed
-DATA_DEV="${mssql_device}"
-# NVMe mapping on nitro: /dev/sdf -> /dev/nvme1n1 typically
-if [ ! -b "$DATA_DEV" ]; then
-  DATA_DEV=/dev/nvme1n1
-fi
+# -----------------------------------------------------------------------------
+# Data disks
+#
+# format_and_mount <mount-point> <device> [device...] waits for the first device
+# that shows up, builds an XFS filesystem only when the disk is raw, and records
+# it in fstab by UUID. Re-running it never destroys existing data, which is what
+# makes replacing the instance survivable: both volumes outlive it.
+#
+# NVMe naming on Nitro: the root disk is nvme0n1, then the EBS volumes in
+# attachment order (mssql, then logging) — /dev/sdf and friends are the
+# Xen-compatible names, so both spellings are probed.
+# -----------------------------------------------------------------------------
+format_and_mount() {
+  local mountpoint="$1"
+  shift
 
-for i in $(seq 1 30); do
-  [ -b "$DATA_DEV" ] && break
-  sleep 5
-done
+  local dev=""
+  local i cand
+  for i in $(seq 1 30); do
+    for cand in "$@"; do
+      if [ -b "$cand" ]; then
+        dev="$cand"
+        break 2
+      fi
+    done
+    sleep 5
+  done
 
-if ! blkid "$DATA_DEV"; then
-  mkfs.xfs "$DATA_DEV"
-fi
+  if [ -z "$dev" ]; then
+    echo "WARN: no volume attached for $mountpoint (looked for: $*)" >&2
+    return 1
+  fi
 
-mkdir -p /data/mssql
-UUID=$(blkid -s UUID -o value "$DATA_DEV")
-grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /data/mssql xfs defaults,nofail 0 2" >> /etc/fstab
-mount -a
+  blkid "$dev" >/dev/null 2>&1 || mkfs.xfs -f "$dev"
+  mkdir -p "$mountpoint"
+
+  local uuid
+  uuid=$(blkid -s UUID -o value "$dev")
+  grep -q "$uuid" /etc/fstab || echo "UUID=$uuid $mountpoint xfs defaults,nofail 0 2" >>/etc/fstab
+  mount -a
+}
+
+format_and_mount /data/mssql "${mssql_device}" /dev/nvme1n1 /dev/xvdf /dev/sdf ||
+  echo "WARN: SQL Server data volume missing; /data/mssql stays on the root disk" >&2
 chown -R 10001:0 /data/mssql || true
+%{ if logging.enabled ~}
 
-mkdir -p /opt/agrovesto/{nginx,compose,vault,scripts}
+# The journal has to be persistent for the collector to read it from a container:
+# a cloud image keeps it in /run (RAM) by default, so a reboot loses the boot log.
+mkdir -p /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/agrovesto.conf <<'JOURNALD'
+[Journal]
+Storage=persistent
+SystemMaxUse=${logging.journal_max_use}
+JOURNALD
+mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal || true
+systemctl restart systemd-journald
+journalctl --flush || true
+
+# Loki's chunks, the Prometheus TSDB and Grafana's sqlite live here, so a
+# replacement of the instance does not throw away the logs already in.
+if ! format_and_mount "${logging_root}" "${logging.volume_device}" /dev/nvme2n1 /dev/xvdg /dev/sdg; then
+  echo "WARN: logging volume missing; the stores stay on the root disk (retention still caps them)" >&2
+fi
+%{ endif ~}
+
+# -----------------------------------------------------------------------------
+# Host config
+#
+# Every rendered file this box needs is one object per file in this stack's config
+# bucket (dev/host_config.tf): the compose project, nginx.conf, the SQL bootstrap
+# and, when logging is on, the collectors' configs and Grafana's provisioning.
+#
+# They are pulled rather than inlined because EC2 caps instance user data at 16 KB
+# and the compose file outgrows that on its own once the logging stack is in it —
+# the side benefit is that none of it lands in instance metadata. Object keys are
+# the paths on disk, so one sync lays out /opt/agrovesto.
+# -----------------------------------------------------------------------------
+mkdir -p /opt/agrovesto
+aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}" --only-show-errors
+test -s /opt/agrovesto/compose/docker-compose.yml || {
+  echo "FATAL: host config did not sync from s3://${host_config_bucket}" >&2
+  exit 1
+}
+%{ if logging.enabled ~}
+
+# Every directory a compose bind mount points at, so docker never has to create
+# one as root:config.yml lands in loki/, the WAL and TSDB next to it; alloy/ holds
+# config.alloy plus its positions/state; the grafana/ tree is what the container
+# mounts read-only except for its sqlite data dir.
+mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+
+# The images run as their own users, and a bind mount keeps host ownership, so
+# each store has to be handed to the uid its image drops to.
+chown -R 10001:10001 "${logging_root}/loki"
+chown -R 65534:65534 "${logging_root}/prometheus"
+chown -R 472:472 "${logging_root}/grafana"
+%{ endif ~}
+
+# Secrets are kept out of the rendered files: compose resolves $${MSSQL_SA_PASSWORD}
+# and $${GRAFANA_ADMIN_PASSWORD} from this .env at run time.
+mkdir -p /opt/agrovesto/{compose,scripts}
 cat >/opt/agrovesto/compose/.env <<'ENVEOF'
 MSSQL_SA_PASSWORD=${sa_password}
 BACKUP_BUCKET=${backup_bucket}
 AWS_REGION=${aws_region}
+%{ if logging.enabled ~}
+GRAFANA_ADMIN_PASSWORD=${grafana_admin_password}
+%{ endif ~}
 ENVEOF
 chmod 600 /opt/agrovesto/compose/.env
 
-cat >/opt/agrovesto/compose/docker-compose.yml <<'COMPOSE'
-${docker_compose}
-COMPOSE
-
-cat >/etc/nginx-agrovesto.conf <<'NGX'
-${nginx_conf}
-NGX
-# nginx runs as a container; copy into compose volume
-mkdir -p /opt/agrovesto/nginx/conf.d
-cp /etc/nginx-agrovesto.conf /opt/agrovesto/nginx/nginx.conf
-
-# init databases script
-cat >/opt/agrovesto/scripts/init-dbs.sql <<'SQL'
-${init_sql}
-SQL
-
+# One-shot database bootstrap; compose has no init container of its own.
 cat >/opt/agrovesto/scripts/init-mssql.sh <<'INIT'
 #!/bin/bash
 set -euo pipefail
@@ -76,7 +158,7 @@ done
 INIT
 chmod +x /opt/agrovesto/scripts/init-mssql.sh
 
-# daily backup to S3
+# Daily backup to S3 (the bucket itself is Terraform's; see dev/s3_backup.tf).
 cat >/opt/agrovesto/scripts/backup-mssql.sh <<'BKP'
 #!/bin/bash
 set -euo pipefail
@@ -92,7 +174,7 @@ aws s3 sync /data/mssql/backup "s3://$BACKUP_BUCKET/mssql/$STAMP/" --region "$AW
 find /data/mssql/backup -type f -mtime +3 -delete || true
 BKP
 chmod +x /opt/agrovesto/scripts/backup-mssql.sh
-echo "0 2 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" > /etc/cron.d/mssql-backup
+echo "0 2 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" >/etc/cron.d/mssql-backup
 
 cd /opt/agrovesto/compose
 # Authenticate to this account's ECR so compose can pull the agrovesto-dev-* API images
