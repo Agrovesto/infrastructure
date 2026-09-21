@@ -160,7 +160,6 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
-        continue-on-error: true
 
       # -----------------------------------------------------------------------
       # Checkov
@@ -176,7 +175,7 @@ jobs:
           config_file: prod/checkov.yml
           output_format: cli,sarif
           output_file_path: console,results.sarif
-          soft_fail: true
+          soft_fail: false
 
       # -----------------------------------------------------------------------
       # Store Checkov SARIF
@@ -210,8 +209,6 @@ jobs:
           output: trivy-report.txt
           severity: CRITICAL,HIGH
           exit-code: "1"
-
-        continue-on-error: true
 
       # -----------------------------------------------------------------------
       # Store Trivy Report
@@ -517,8 +514,6 @@ jobs:
 
         if: steps.sonar.outputs.configured == 'true'
 
-        continue-on-error: true
-
         uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9 # v5.3.0
 
         env:
@@ -527,7 +522,11 @@ jobs:
 
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-prod.properties -Dsonar.defaultBranch=devops
+          args: >-
+            -Dproject.settings=sonar-project-prod.properties
+            -Dsonar.defaultBranch=devops
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
 
       # -----------------------------------------------------------------------
       # Summary
