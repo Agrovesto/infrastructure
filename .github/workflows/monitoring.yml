@@ -1,5 +1,3 @@
-# Canonical copy of the monitoring pipeline. Install with:
-#   cp monitoring.workflow.yml .github/workflows/monitoring.yml   (the automation token cannot push .github/workflows).
 name: "Terraform CI/CD Pipeline (Monitoring)"
 
 on:
@@ -60,6 +58,7 @@ jobs:
           config_file: monitoring/checkov.yml
           output_format: cli,sarif
           output_file_path: console,results.sarif
+          soft_fail: false
 
       - name: Store Checkov Report
         if: always()
@@ -275,7 +274,11 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: .
-          args: -Dproject.settings=sonar-project-monitoring.properties -Dsonar.branch.name=${{ github.head_ref || github.ref_name }}
+          args: >-
+            -Dproject.settings=sonar-project-monitoring.properties
+            -Dsonar.branch.name=${{ github.head_ref || github.ref_name }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
 
       - name: SonarQube Summary
         if: always()

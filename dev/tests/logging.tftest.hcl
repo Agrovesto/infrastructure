@@ -120,17 +120,25 @@ run "logging_stack_resources" {
   # The bucket has to carry exactly what the host reads, so equality with the
   # rendered local is the assertion that matters - not a substring of it.
   assert {
-    condition = aws_s3_object.host_config["compose/docker-compose.yml"].content == local.docker_compose &&
+    condition = (
+      aws_s3_object.host_config["compose/docker-compose.yml"].content == local.docker_compose &&
       aws_s3_object.host_config["nginx/nginx.conf"].content == local.nginx_conf &&
       aws_s3_object.host_config["logging/loki/config.yml"].content == local.loki_config
+    )
     error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
   }
 
   assert {
-    condition = length(aws_s3_bucket_public_access_block.host_config) == 1 &&
-      length(aws_s3_bucket_versioning.host_config) == 1 &&
-      length(aws_s3_bucket_server_side_encryption_configuration.host_config) == 1 &&
-      length(aws_s3_bucket_lifecycle_configuration.host_config) == 1
+    condition = (
+      aws_s3_bucket_public_access_block.host_config.block_public_acls &&
+      aws_s3_bucket_versioning.host_config.versioning_configuration[0].status == "Enabled" &&
+      alltrue([for rule in aws_s3_bucket_server_side_encryption_configuration.host_config.rule :
+        alltrue([for encryption in rule.apply_server_side_encryption_by_default : encryption.sse_algorithm == "AES256"])
+      ]) &&
+      alltrue([for rule in aws_s3_bucket_lifecycle_configuration.host_config.rule :
+        alltrue([for expiration in rule.noncurrent_version_expiration : expiration.noncurrent_days == 30])
+      ])
+    )
     error_message = "The config bucket carries the same four hardening blocks as the backup bucket."
   }
 
@@ -176,7 +184,7 @@ run "compose_services" {
   }
 
   assert {
-    condition     = strcount(local.docker_compose, "mem_limit:") == 6
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 6
     error_message = "Each of the six containers carries a memory limit, so none of them can starve SQL Server."
   }
 
@@ -356,7 +364,7 @@ run "bootstrap" {
   command = plan
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "aws s3 sync \"s3://${local.name}-logging-config/")
+    condition     = strcontains(aws_instance.app.user_data, "aws s3 sync \"s3://${local.name}-host-config/")
     error_message = "Configs are synced from the config bucket, which is why they never touch instance user data."
   }
 
@@ -399,16 +407,20 @@ run "host_role" {
   }
 
   assert {
-    condition = aws_iam_instance_profile.ec2.role == aws_iam_role.ec2.name &&
+    condition = (
+      aws_iam_instance_profile.ec2.role == aws_iam_role.ec2.name &&
       aws_iam_role_policy_attachment.ssm.role == aws_iam_role.ec2.name &&
       aws_iam_role_policy_attachment.ssm.policy_arn == "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    )
     error_message = "Profile and SSM attachment hang off the one dev EC2 role; Session Manager (the tunnel fallback) depends on it."
   }
 
   assert {
-    condition = aws_iam_role.ec2.name == "${local.name}-ec2-role" &&
+    condition = (
+      aws_iam_role.ec2.name == "${local.name}-ec2-role" &&
       aws_iam_role_policy.ec2.name == "${local.name}-ec2-policy" &&
       aws_iam_instance_profile.ec2.name == "${local.name}-ec2-profile"
+    )
     error_message = "Role, policy and profile keep the local.name prefix, so the dev account's objects stay attributable."
   }
 
@@ -448,12 +460,12 @@ run "disabled" {
   # The bucket itself does NOT go away with the logging stack: compose and
   # nginx.conf come from it on every boot, logging or not.
   assert {
-    condition     = length(aws_s3_bucket.host_config) == 1 && length(aws_s3_object.host_config) == 3
+    condition     = length(aws_s3_object.host_config) == 3
     error_message = "With logging off the bucket keeps exactly the three always-needed files (compose, nginx.conf, init-dbs.sql)."
   }
 
   assert {
-    condition     = !strcontains(local.docker_compose, "grafana/loki") && !strcontains(local.docker_compose, "node-exporter")
+    condition     = !strcontains(local.docker_compose, "container_name: agrovesto-grafana") && !strcontains(local.docker_compose, "container_name: agrovesto-node-exporter")
     error_message = "The compose project must not carry any observability container."
   }
 

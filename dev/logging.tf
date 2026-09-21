@@ -53,5 +53,4 @@ resource "aws_volume_attachment" "logging" {
   # that blocks the apply. The scheduler stops the box every evening anyway.
   stop_instance_before_detaching = true
 
-  tags = merge(local.tags, { Name = "${local.name}-logging-data" })
 }

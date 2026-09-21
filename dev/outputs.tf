@@ -122,7 +122,7 @@ output "logging_access" {
     grafana    = "http://localhost:${var.logging.grafana_port}  (user ${var.logging.grafana_admin_user}; password is var.logging.grafana_admin_password)"
     loki_query = "http://localhost:${var.logging.loki_port}/loki/api/v1/query_range?query=%7Bjob%3D%22docker%22%7D&limit=20"
     alloy_ui   = "http://localhost:${var.logging.alloy_port}/  (component graph - the way to see whether a collector is actually reading)"
-  } : {}
+  } : null
 }
 
 output "logging_summary" {
@@ -135,5 +135,5 @@ output "logging_summary" {
     parsed_as_json       = local.logging_json_services
     grafana_cidrs        = local.logging_grafana.cidrs
     self_scrape_dropped  = local.logging_own_services
-  } : {}
+  } : null
 }

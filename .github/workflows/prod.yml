@@ -14,25 +14,13 @@
 # LAYOUT: the repo now holds one folder per environment — dev/ (dev stack)
 # and prod/ (prod stack) — each a self-contained flat Terraform root module.
 # This workflow only touches prod/ (TF_WORKING_DIR = "prod"); the dev pipeline
-# is dev.workflow.yml.
+# is .github/workflows/dev.yml.
 #
 # STAGES: 1 security-scan (fmt, Checkov, Trivy) -> 2 terraform-test (terraform
 # test + resource coverage, gated on TF_COVERAGE_FAIL_UNDER) -> 3
 # sonarqube-scan -> 4 terraform-plan (PR comment) -> 5 terraform-apply.
 # Stages 2 and 3 gate 4 and 5.
 #
-# INSTALL: this file is the canonical copy of the pipeline. Merging it does
-# NOT change what GitHub Actions runs -- the copy below has to be made by hand:
-#
-#     cp prod.workflow.yml .github/workflows/prod.yml
-#     git add .github/workflows/prod.yml && git commit -m "ci: install pipeline" && git push
-#
-# The automation token that manages this repo has no `workflows` permission, so
-# neither it nor an agent can commit into .github/workflows: a push touching
-# those paths is rejected with "refusing to allow a GitHub App to create or
-# update workflow ... without `workflows` permission". Until the copy is made
-# the installed .github/workflows/prod.yml keeps running the previous pipeline
-# and keeps failing at Terraform Init.
 # =============================================================================
 
 name: "Terraform CI/CD Pipeline (Prod)"
@@ -52,7 +40,6 @@ on:
 
     paths:
       - "prod/**"
-      - "prod.workflow.yml"
 
   # ---------------------------------------------------------------------------
   # Pushes to main
@@ -63,7 +50,6 @@ on:
 
     paths:
       - "prod/**"
-      - "prod.workflow.yml"
 
 # =============================================================================
 # CONCURRENCY

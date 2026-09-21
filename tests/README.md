@@ -141,7 +141,7 @@ static, so it needs no `terraform` binary and no AWS credentials, and it will
 not notice an assertion that references a resource but checks nothing about it.
 
 Use it as a ratchet: when you add tests, raise `TF_COVERAGE_FAIL_UNDER` in
-`dev.workflow.yml` / `prod.workflow.yml` (and their installed twins) to the new
+`.github/workflows/dev.yml` / `.github/workflows/prod.yml` to the new
 measured value. The lowest-hanging gaps today are the `aws_iam_policy_document`
 data blocks in both `data.tf` files and `dev/iam.tf` (0% — nothing in the dev
 suite references IAM at all).

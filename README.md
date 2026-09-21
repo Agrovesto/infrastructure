@@ -21,9 +21,6 @@ environment**; each folder is a self-contained, flat Terraform root module.
 │   ├── dashboards/          # Grafana dashboards provisioned through SSM + EFS
 │   ├── scripts/             # budget_report.py, mssql_metrics.py
 │   └── tests/               # terraform test suites (mock_provider, no AWS calls)
-├── dev.workflow.yml         # dev CI/CD pipeline — copy into .github/workflows/dev.yml
-├── prod.workflow.yml        # prod CI/CD pipeline — copy into .github/workflows/prod.yml
-├── monitoring.workflow.yml  # monitoring CI/CD pipeline — copy into .github/workflows/monitoring.yml
 ├── sonar-project-dev.properties         # SonarQube scope for the dev pipeline
 ├── sonar-project-prod.properties        # SonarQube scope for the prod pipeline
 ├── sonar-project-monitoring.properties  # SonarQube scope for the monitoring pipeline
@@ -34,16 +31,16 @@ environment**; each folder is a self-contained, flat Terraform root module.
 ├── bootstrap/               # run-once (manual, local state): prod tfstate S3 bucket,
 │   │                        # GitHub OIDC provider + Terraform deploy role -> AWS_ROLE_ARN_PROD
 │   └── README.md
-└── .github/workflows/       # installed workflows (managed manually, see below)
+└── .github/workflows/       # active dev, prod, and monitoring CI/CD workflows
 ```
 
 ## Environments
 
 | Folder | Account | What it creates | Workflow |
 | --- | --- | --- | --- |
-| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases) plus its own **logging and metrics stack on that same host** — Alloy tails the container logs and journald into Loki, Grafana queries them, Prometheus scrapes cAdvisor and node-exporter. No CloudWatch Logs or metrics in dev. S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `dev.workflow.yml` → applies on push to `dev` |
-| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services **+ HashiCorp Vault** in private subnets (**single-AZ for now**), 5 ECR repos, RDS SQL Server (single-AZ for now) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `prod.workflow.yml` → applies on push to `main` |
-| `monitoring/` | prod | Open-source observability for the prod stack: Prometheus, Alertmanager, Loki, Tempo, Grafana OSS, Alloy (OTLP + Loki push), blackbox uptime probes and Pushgateway on Fargate, a Cost and Usage Report + DuckDB budget job, and an hourly SQL Server DMV metrics job. No CloudWatch alarms/dashboards, Container Insights, X-Ray, Performance Insights, RDS enhanced monitoring or AWS Budgets — see `monitoring/README.md` | `monitoring.workflow.yml` → applies on push to `main` |
+| `dev/` | dev | Amplify frontends, single public EC2 running nginx + docker (5 APIs, Vault, SQL Server 2022 with 5 databases) plus its own **logging and metrics stack on that same host** — Alloy tails the container logs and journald into Loki, Grafana queries them, Prometheus scrapes cAdvisor and node-exporter. No CloudWatch Logs or metrics in dev. S3 backups, EventBridge start/stop scheduler. **No DNS** — see below | `.github/workflows/dev.yml` → applies on push to `dev` |
+| `prod/` | prod | VPC with public + private/db subnets and NAT, internet-facing ALB (HTTPS, ACM wildcard), 5 ECS Fargate services **+ HashiCorp Vault** in private subnets (**single-AZ for now**), 5 ECR repos, RDS SQL Server (single-AZ for now) with the same 5 databases, **all of Route53**: the hosted zone + prod aliases + dev records | `.github/workflows/prod.yml` → applies on push to `main` |
+| `monitoring/` | prod | Open-source observability for the prod stack: Prometheus, Alertmanager, Loki, Tempo, Grafana OSS, Alloy (OTLP + Loki push), blackbox uptime probes and Pushgateway on Fargate, a Cost and Usage Report + DuckDB budget job, and an hourly SQL Server DMV metrics job. No CloudWatch alarms/dashboards, Container Insights, X-Ray, Performance Insights, RDS enhanced monitoring or AWS Budgets — see `monitoring/README.md` | `.github/workflows/monitoring.yml` → applies on push to `main` |
 
 Service names and database names are identical in both accounts (dev naming
 convention): `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`.
@@ -82,24 +79,9 @@ cd bootstrap && terraform init && AWS_PROFILE=prod-admin terraform apply
 See `bootstrap/README.md` for the full runbook (policy choices, trust
 patterns, CLI alternative).
 
-## Installing the GitHub Actions workflows
+## GitHub Actions workflows
 
-> **Merging a change to `*.workflow.yml` does not change CI.** GitHub Actions
-> runs the files under `.github/workflows/`, and the token that manages this
-> repo has no `workflows` permission — pushes touching those paths are rejected
-> outright. Every pipeline change therefore has to be installed by hand, by
-> someone whose credentials do have that permission.
-
-The automation token that manages this repo has **no `workflows` permission**,
-so the pipelines live at the repository root as canonical copies and are
-installed into `.github/workflows/` by hand:
-
-```bash
-cp dev.workflow.yml        .github/workflows/dev.yml         # repoints dev CI at ./dev
-cp prod.workflow.yml       .github/workflows/prod.yml        # deploys ./prod to the prod account
-cp monitoring.workflow.yml .github/workflows/monitoring.yml  # deploys ./monitoring to the prod account
-git add .github/workflows && git commit -m "ci: install pipelines" && git push
-```
+GitHub Actions runs the version-controlled workflows in `.github/workflows/`.
 
 - **Dev workflow** triggers on PRs/pushes to the `dev` branch that touch
   `dev/**`; Terraform runs with `TF_WORKING_DIR=dev`; assumes the role in the
@@ -113,10 +95,6 @@ git add .github/workflows && git commit -m "ci: install pipelines" && git push
   touch `monitoring/**`; Terraform runs with `TF_WORKING_DIR=monitoring`;
   assumes the role in the `AWS_ROLE_ARN_PROD` secret (the stack lives in the
   prod account). Resource coverage is gated at 95%.
-
-> The currently installed `.github/workflows/dev.yml` still targets the old
-> flat layout; replace it as above after merging this change. The monitoring
-> pipeline has never been installed, so `monitoring/**` currently has no CI.
 
 ### Pipeline stages
 
