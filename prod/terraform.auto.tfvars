@@ -120,10 +120,9 @@ ecs_autoscaling_requests_per_task = 1000
 # Upgrade path (never in-place): snapshot -> restore as sqlserver-web or
 # sqlserver-se on db.m7i.large -> rename to keep the endpoint. Trigger: any
 # single database approaching 8 GB, or the day you need Multi-AZ.
-mssql_engine                   = "sqlserver-ex"
-mssql_instance_class           = "db.t3.micro"
-mssql_allocated_storage_gb     = 20
-mssql_max_allocated_storage_gb = 50
+mssql_engine         = "sqlserver-ex"
+mssql_instance_class = "db.t3.micro"
+# Storage: see the Adoption section at the end (values of migration-prod).
 
 # Express has no SQL Server Agent, so there is no agent log to publish.
 mssql_enabled_cloudwatch_logs_exports = ["error"]
@@ -172,3 +171,38 @@ db_size_alarm_enabled = false
 #   "landing.dev"    = "dev.<landing Amplify default domain>"
 #   "onboarding.dev" = "dev.<onboarding Amplify default domain>"
 # }
+
+# =============================================================================
+# Adoption of existing resources (imports/RUNBOOK.md, discovery 2026-09-23)
+# Every value below is the REAL value of the adopted resource. Many of these
+# attributes are ForceNew, so changing one means replacing the resource.
+# =============================================================================
+
+# --- Network: vpc-0016f521bae08f4ff ------------------------------------------
+vpc_cidr              = "172.96.0.0/16"
+public_subnet_cidrs   = ["172.96.0.0/24", "172.96.1.0/24"]   # existing, IGW-routed
+database_subnet_cidrs = ["172.96.2.0/24", "172.96.3.0/24"]   # existing, hold migration-prod
+private_subnet_cidrs  = ["172.96.11.0/24", "172.96.12.0/24"] # NEW (ECS tasks), behind the new NAT
+
+# The default SG carries 8 live rules and is attached to migration-prod and
+# the noma-agx EC2 host. Do not strip it; it is imported as legacy, as-is.
+manage_default_security_group = false
+
+# --- RDS: migration-prod -------------------------------------------------------
+mssql_identifier               = "migration-prod"
+mssql_engine_version           = "15.00.4445.1.v1"
+mssql_allocated_storage_gb     = 50
+mssql_max_allocated_storage_gb = 63
+mssql_storage_type             = "gp2"
+mssql_master_username          = "agrovesto"
+mssql_subnet_group_name        = "agxdb2subnetgroup"
+mssql_performance_insights_enabled = false # Express: not supported
+
+# !! migration-prod is NOT encrypted. storage_encrypted is ForceNew, so it must
+# stay false until the planned encrypt-by-restore window (RUNBOOK §4.2).
+mssql_storage_encrypted = false
+
+# Keep the instance's current SGs (default SG + rds-ec2-3) next to the design's
+# RDS SG, so the EC2 -> DB paths in use today keep working. Remove them once
+# the apps connect through the ECS SG.
+mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"]

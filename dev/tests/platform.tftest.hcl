@@ -114,8 +114,8 @@ run "vpc" {
   command = plan
 
   assert {
-    condition     = aws_vpc.main.cidr_block == "10.20.0.0/16"
-    error_message = "Dev VPC uses 10.20.0.0/16 (prod uses 10.30.0.0/16)."
+    condition     = aws_vpc.main.cidr_block == "172.96.0.0/16"
+    error_message = "Dev VPC is the adopted vpc-0d9b566c353787d53 (172.96.0.0/16); cidr_block is ForceNew."
   }
 
   assert {

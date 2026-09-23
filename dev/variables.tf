@@ -252,6 +252,8 @@ variable "enable_ec2_scheduler" {
 variable "amplify_apps" {
   description = "Amplify frontends. Add another map key to create a new app."
   type = map(object({
+    name                  = optional(string) # defaults to the map key; set to an adopted app's real name
+    platform              = optional(string, "WEB")
     repository            = string
     branch                = optional(string, "main")
     subdomain             = string
@@ -459,4 +461,10 @@ variable "logging" {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.logging.grafana_subdomain))
     error_message = "grafana_subdomain must be a single DNS label (lowercase letters, digits and dashes)."
   }
+}
+
+variable "manage_default_security_group" {
+  description = "Strip the VPC default security group to deny-all. false when the adopted VPC's default SG still carries live traffic."
+  type        = bool
+  default     = true
 }

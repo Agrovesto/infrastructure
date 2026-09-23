@@ -327,13 +327,6 @@ import {
 
 
 # --- aws_db_subnet_group ---------------------------------------------------
-# arn:aws:rds:eu-west-1:221434544570:subgrp:agxdb2subnetgroup
-# NOTE: if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead
-import {
-  to = aws_db_subnet_group.legacy_agxdb2subnetgroup
-  id = "agxdb2subnetgroup"
-}
-
 # arn:aws:rds:eu-west-1:221434544570:subgrp:agxdbsubnetgroup
 # NOTE: if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead
 import {
@@ -352,40 +345,58 @@ import {
 # --- aws_default_network_acl -----------------------------------------------
 # arn:aws:ec2:eu-west-1:221434544570:network-acl/acl-06b37d7639de1e948
 # NOTE: the VPC's default NACL; generated config must list its subnet_ids
-# import {
-#   to = aws_default_network_acl.legacy_acl_06b37d7639de1e948
-#   id = "acl-06b37d7639de1e948"
-# }
+import {
+  to = aws_default_network_acl.legacy_acl_06b37d7639de1e948
+  id = "acl-06b37d7639de1e948"
+}
+
+
+# --- aws_default_route_table -----------------------------------------------
+# arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa0841a7b7dac5db
+# NOTE: the VPC's main route table (no subnets associated)
+import {
+  to = aws_default_route_table.legacy_main_rtb_0fa0841a7b7dac5db
+  id = "vpc-0016f521bae08f4ff"
+}
+
+
+# --- aws_default_security_group --------------------------------------------
+# arn:aws:ec2:eu-west-1:221434544570:security-group/sg-05a2722a050c1109b
+# NOTE: default SG with LIVE rules (attached to migration-prod + EC2): kept as-is, manage_default_security_group = false
+import {
+  to = aws_default_security_group.legacy_default
+  id = "sg-05a2722a050c1109b"
+}
 
 
 # --- aws_dms_endpoint ------------------------------------------------------
 # arn:aws:dms:eu-west-1:221434544570:endpoint:agxdb
-# NOTE: import id is the endpoint identifier, the ARN only shows resource id agxdb
-# import {
-#   to = aws_dms_endpoint.legacy_dms_agxdb
-#   id = "<ENDPOINT_IDENTIFIER>"
-# }
-
-# arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM
-# NOTE: import id is the endpoint identifier, the ARN only shows resource id BSI5NFYJSVELZMYVPFOMJ56MIM
-# import {
-#   to = aws_dms_endpoint.legacy_dms_bsi5nfyjsvelzmyvpfomj56mim
-#   id = "<ENDPOINT_IDENTIFIER>"
-# }
-
-# arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos
-# NOTE: import id is the endpoint identifier, the ARN only shows resource id nomaos
-# import {
-#   to = aws_dms_endpoint.legacy_dms_nomaos
-#   id = "<ENDPOINT_IDENTIFIER>"
-# }
+# NOTE: password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn)
+import {
+  to = aws_dms_endpoint.legacy_agxdb2instance
+  id = "agxdb2instance"
+}
 
 # arn:aws:dms:eu-west-1:221434544570:endpoint:WFZ6YQ2JCJBLLBLRDLCH7XNRWY
-# NOTE: import id is the endpoint identifier, the ARN only shows resource id WFZ6YQ2JCJBLLBLRDLCH7XNRWY
-# import {
-#   to = aws_dms_endpoint.legacy_dms_wfz6yq2jcjbllblrdlch7xnrwy
-#   id = "<ENDPOINT_IDENTIFIER>"
-# }
+# NOTE: password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn)
+import {
+  to = aws_dms_endpoint.legacy_agxdb_snapshot_restore
+  id = "agxdb-snapshot-restore"
+}
+
+# arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM
+# NOTE: password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn)
+import {
+  to = aws_dms_endpoint.legacy_nomaosdbinstance
+  id = "nomaosdbinstance"
+}
+
+# arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos
+# NOTE: password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn)
+import {
+  to = aws_dms_endpoint.legacy_nomaosinstance_snapshot_restore
+  id = "nomaosinstance-snapshot-restore"
+}
 
 
 # --- aws_dms_replication_subnet_group --------------------------------------
@@ -393,15 +404,6 @@ import {
 import {
   to = aws_dms_replication_subnet_group.legacy_default_vpc_0016f521bae08f4ff
   id = "default-vpc-0016f521bae08f4ff"
-}
-
-
-# --- aws_ebs_volume --------------------------------------------------------
-# arn:aws:ec2:eu-west-1:221434544570:volume/vol-019ff51ce045e3490
-# NOTE: root volumes stay with their aws_instance - drop this block if discover.sh marks it ROOT
-import {
-  to = aws_ebs_volume.legacy_vol_019ff51ce045e3490
-  id = "vol-019ff51ce045e3490"
 }
 
 
@@ -422,70 +424,26 @@ import {
 
 
 # --- aws_key_pair ----------------------------------------------------------
-# arn:aws:ec2:eu-west-1:221434544570:key-pair/key-057e0d6c32eb78e4d
-# NOTE: import id is the key NAME, not key-057e0d6c32eb78e4d; discover.sh prints it
-# import {
-#   to = aws_key_pair.legacy_key_057e0d6c32eb78e4d
-#   id = "<KEY_NAME>"
-# }
+# arn:aws:ec2:eu-west-1:221434544570:key-pair/key-0b6382b8152c63533
+# NOTE: public key material only; add lifecycle ignore_changes = [public_key]
+import {
+  to = aws_key_pair.legacy_deployment_ssh
+  id = "deployment-ssh"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:key-pair/key-075e7652029e2c2c5
-# NOTE: import id is the key NAME, not key-075e7652029e2c2c5; discover.sh prints it
-# import {
-#   to = aws_key_pair.legacy_key_075e7652029e2c2c5
-#   id = "<KEY_NAME>"
-# }
+# NOTE: public key material only; add lifecycle ignore_changes = [public_key]
+import {
+  to = aws_key_pair.legacy_noma_agx
+  id = "noma-agx"
+}
 
-# arn:aws:ec2:eu-west-1:221434544570:key-pair/key-0b6382b8152c63533
-# NOTE: import id is the key NAME, not key-0b6382b8152c63533; discover.sh prints it
-# import {
-#   to = aws_key_pair.legacy_key_0b6382b8152c63533
-#   id = "<KEY_NAME>"
-# }
-
-
-# --- aws_kms_key -----------------------------------------------------------
-# arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_05d6e0b6
-#   id = "05d6e0b6-0aef-42ab-9ebc-368642da2498"
-# }
-
-# arn:aws:kms:eu-west-1:221434544570:key/6e98aa83-4990-4fbe-938a-284763dad588
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_6e98aa83
-#   id = "6e98aa83-4990-4fbe-938a-284763dad588"
-# }
-
-# arn:aws:kms:eu-west-1:221434544570:key/89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_89a5cab0
-#   id = "89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35"
-# }
-
-# arn:aws:kms:eu-west-1:221434544570:key/af93b781-7db2-418f-ba53-aaf08a0893ba
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_af93b781
-#   id = "af93b781-7db2-418f-ba53-aaf08a0893ba"
-# }
-
-# arn:aws:kms:eu-west-1:221434544570:key/f844da16-3c57-4ba4-9e09-fcd6af19c9f1
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_f844da16
-#   id = "f844da16-3c57-4ba4-9e09-fcd6af19c9f1"
-# }
-
-# arn:aws:kms:eu-west-1:221434544570:key/fc06a828-b6a4-412a-b5f1-417e4ab693e4
-# NOTE: only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys
-# import {
-#   to = aws_kms_key.legacy_key_fc06a828
-#   id = "fc06a828-b6a4-412a-b5f1-417e4ab693e4"
-# }
+# arn:aws:ec2:eu-west-1:221434544570:key-pair/key-057e0d6c32eb78e4d
+# NOTE: public key material only; add lifecycle ignore_changes = [public_key]
+import {
+  to = aws_key_pair.legacy_rdsjumpserverkeypair
+  id = "rdsjumpserverkeypair"
+}
 
 
 # --- aws_lambda_function ---------------------------------------------------
@@ -542,40 +500,12 @@ import {
 
 
 # --- aws_route_table -------------------------------------------------------
-# arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0530eb261b38f735b
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_route_table.legacy_rtb_0530eb261b38f735b
-#   id = "rtb-0530eb261b38f735b"
-# }
-
 # arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0614ed06de1bc1d89
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_route_table.legacy_rtb_0614ed06de1bc1d89
-#   id = "rtb-0614ed06de1bc1d89"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-084528a52ec739f38
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_route_table.legacy_rtb_084528a52ec739f38
-#   id = "rtb-084528a52ec739f38"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa0841a7b7dac5db
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_route_table.legacy_rtb_0fa0841a7b7dac5db
-#   id = "rtb-0fa0841a7b7dac5db"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa42099da11b78e9
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_route_table.legacy_rtb_0fa42099da11b78e9
-#   id = "rtb-0fa42099da11b78e9"
-# }
+# NOTE: not used by the new design; review for deletion after cut-over
+import {
+  to = aws_route_table.legacy_rtb_0614ed06de1bc1d89
+  id = "rtb-0614ed06de1bc1d89"
+}
 
 
 # --- aws_s3_bucket ---------------------------------------------------------
@@ -628,95 +558,76 @@ import {
 
 # --- aws_security_group ----------------------------------------------------
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0121823b5aba80621
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0121823b5aba80621
-#   id = "sg-0121823b5aba80621"
-# }
+import {
+  to = aws_security_group.legacy_sg_0121823b5aba80621
+  id = "sg-0121823b5aba80621"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-044858bb412fc2aa0
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_044858bb412fc2aa0
-#   id = "sg-044858bb412fc2aa0"
-# }
+import {
+  to = aws_security_group.legacy_sg_044858bb412fc2aa0
+  id = "sg-044858bb412fc2aa0"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-04778d7bdb8e2c026
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_04778d7bdb8e2c026
-#   id = "sg-04778d7bdb8e2c026"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:security-group/sg-05a2722a050c1109b
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_05a2722a050c1109b
-#   id = "sg-05a2722a050c1109b"
-# }
+import {
+  to = aws_security_group.legacy_sg_04778d7bdb8e2c026
+  id = "sg-04778d7bdb8e2c026"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-06e44543a37f56828
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_06e44543a37f56828
-#   id = "sg-06e44543a37f56828"
-# }
+import {
+  to = aws_security_group.legacy_sg_06e44543a37f56828
+  id = "sg-06e44543a37f56828"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-072ebb62525423c86
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_072ebb62525423c86
-#   id = "sg-072ebb62525423c86"
-# }
+import {
+  to = aws_security_group.legacy_sg_072ebb62525423c86
+  id = "sg-072ebb62525423c86"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-094939b554d597e4a
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_094939b554d597e4a
-#   id = "sg-094939b554d597e4a"
-# }
+import {
+  to = aws_security_group.legacy_sg_094939b554d597e4a
+  id = "sg-094939b554d597e4a"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-09e61cfd83551d0ec
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_09e61cfd83551d0ec
-#   id = "sg-09e61cfd83551d0ec"
-# }
+import {
+  to = aws_security_group.legacy_sg_09e61cfd83551d0ec
+  id = "sg-09e61cfd83551d0ec"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0b555edfc6d445a18
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0b555edfc6d445a18
-#   id = "sg-0b555edfc6d445a18"
-# }
+import {
+  to = aws_security_group.legacy_sg_0b555edfc6d445a18
+  id = "sg-0b555edfc6d445a18"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0bfbddac52a0a2b89
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0bfbddac52a0a2b89
-#   id = "sg-0bfbddac52a0a2b89"
-# }
+import {
+  to = aws_security_group.legacy_sg_0bfbddac52a0a2b89
+  id = "sg-0bfbddac52a0a2b89"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0df9c118433af39dd
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0df9c118433af39dd
-#   id = "sg-0df9c118433af39dd"
-# }
+import {
+  to = aws_security_group.legacy_sg_0df9c118433af39dd
+  id = "sg-0df9c118433af39dd"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0e4ef41f521e66695
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0e4ef41f521e66695
-#   id = "sg-0e4ef41f521e66695"
-# }
+import {
+  to = aws_security_group.legacy_sg_0e4ef41f521e66695
+  id = "sg-0e4ef41f521e66695"
+}
 
 # arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0f208f7733ec29fbd
-# NOTE: if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it
-# import {
-#   to = aws_security_group.legacy_sg_0f208f7733ec29fbd
-#   id = "sg-0f208f7733ec29fbd"
-# }
+import {
+  to = aws_security_group.legacy_sg_0f208f7733ec29fbd
+  id = "sg-0f208f7733ec29fbd"
+}
 
 
 # --- aws_sesv2_configuration_set -------------------------------------------
@@ -760,33 +671,3 @@ import {
   to = aws_sns_topic.legacy_amplify_d24hrz6o3pnmne_main
   id = "arn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main"
 }
-
-
-# --- aws_subnet ------------------------------------------------------------
-# arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-00ee6901e53783c86
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_subnet.legacy_subnet_00ee6901e53783c86
-#   id = "subnet-00ee6901e53783c86"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-084f21457f316c44c
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_subnet.legacy_subnet_084f21457f316c44c
-#   id = "subnet-084f21457f316c44c"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0b808deeaf8391867
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_subnet.legacy_subnet_0b808deeaf8391867
-#   id = "subnet-0b808deeaf8391867"
-# }
-
-# arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0e169f40c70cdfe8b
-# NOTE: child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh
-# import {
-#   to = aws_subnet.legacy_subnet_0e169f40c70cdfe8b
-#   id = "subnet-0e169f40c70cdfe8b"
-# }

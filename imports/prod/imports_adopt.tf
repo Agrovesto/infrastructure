@@ -1,12 +1,11 @@
 # =============================================================================
 # PROD (221434544570) — ADOPT existing resources into the NEW design's addresses
-#
-# Staged into prod/ by `imports/stage.sh prod` (never committed there).
-# Commented slots need an ID from `imports/discover.sh prod`. See RUNBOOK §4.
+# Values come from imports/discovery-prod.txt (2026-09-23).
+# Matching tfvars: prod/terraform.auto.tfvars, "Adoption" section.
+# Staged by `imports/stage.sh prod`; unstage after the first clean apply.
 # =============================================================================
 
-# --- Network -----------------------------------------------------------------
-# vpc_cidr in prod/terraform.auto.tfvars MUST equal this VPC's CIDR.
+# --- Network: vpc-0016f521bae08f4ff  172.96.0.0/16 ------------------------------
 import {
   to = aws_vpc.main
   id = "vpc-0016f521bae08f4ff"
@@ -17,60 +16,103 @@ import {
   id = "igw-07275a1a62726a4c8"
 }
 
-# import {
-#   to = aws_default_security_group.default
-#   id = "sg-XXXXXXXX"
-# }
+# Public: the two IGW-routed subnets.
+import {
+  to = aws_subnet.public[0]
+  id = "subnet-0b808deeaf8391867" # 172.96.0.0/24 eu-west-1a
+}
 
-# The existing VPC has 4 subnets. The new design wants public x2, private x2 and
-# database x2. Map whatever matches: discover.sh shows each subnet's CIDR, AZ
-# and route (IGW = public, NAT/none = private). Set public_subnet_cidrs,
-# private_subnet_cidrs and database_subnet_cidrs so these indexes line up. The
-# design creates any slots with nothing to adopt (e.g. database subnets).
-# import {
-#   to = aws_subnet.public[0]
-#   id = "subnet-XXXXXXXX"
-# }
-# import {
-#   to = aws_subnet.public[1]
-#   id = "subnet-XXXXXXXX"
-# }
-# import {
-#   to = aws_route_table.public
-#   id = "rtb-XXXXXXXX"
-# }
-# import {
-#   to = aws_subnet.private[0]
-#   id = "subnet-XXXXXXXX"
-# }
-# import {
-#   to = aws_subnet.private[1]
-#   id = "subnet-XXXXXXXX"
-# }
+import {
+  to = aws_subnet.public[1]
+  id = "subnet-0e169f40c70cdfe8b" # 172.96.1.0/24 eu-west-1b (noma-agx EC2)
+}
 
-# --- RDS SQL Server ------------------------------------------------------------
-# migration-prod becomes aws_db_instance.mssql. Required tfvars (RUNBOOK §4.2):
-#   mssql_identifier     = "migration-prod"
-#   mssql_engine / mssql_engine_version / mssql_instance_class /
-#   mssql_allocated_storage_gb / mssql_storage_type / mssql_port /
-#   mssql_master_username  = the values discover.sh prints
-# The instance already uses an RDS-managed master secret (rds!db-...), which is
-# exactly what the new code expects - no password ever enters state.
+# The existing public subnets each have their own route table. The design has
+# ONE shared table: adopt rtb-0530… and re-point subnet-0e169… at it. The
+# other table (rtb-0614…) is imported as legacy and can be deleted later.
+import {
+  to = aws_route_table.public
+  id = "rtb-0530eb261b38f735b"
+}
+
+import {
+  to = aws_route_table_association.public[0]
+  id = "subnet-0b808deeaf8391867/rtb-0530eb261b38f735b"
+}
+
+# subnet-0e169… is associated with rtb-0614… today. Importing that association
+# into public[1] makes the plan an in-place ReplaceRouteTableAssociation to
+# rtb-0530…, which has the same IGW route, so there is no connectivity gap.
+import {
+  to = aws_route_table_association.public[1]
+  id = "subnet-0e169f40c70cdfe8b/rtb-0614ed06de1bc1d89"
+}
+
+import {
+  to = aws_route.public_internet
+  id = "rtb-0530eb261b38f735b_0.0.0.0/0"
+}
+
+# Database: the two isolated subnets that migration-prod's subnet group
+# (agxdb2subnetgroup) already uses. Adopting them keeps the instance in place.
+import {
+  to = aws_subnet.database[0]
+  id = "subnet-00ee6901e53783c86" # 172.96.2.0/24 eu-west-1a
+}
+
+import {
+  to = aws_subnet.database[1]
+  id = "subnet-084f21457f316c44c" # 172.96.3.0/24 eu-west-1b
+}
+
+# Their route tables become the design's private tables. They gain the NAT
+# route, and the new private subnets (172.96.11/12.0/24) share them.
+import {
+  to = aws_route_table.private[0]
+  id = "rtb-0fa42099da11b78e9"
+}
+
+import {
+  to = aws_route_table.private[1]
+  id = "rtb-084528a52ec739f38"
+}
+
+import {
+  to = aws_route_table_association.database[0]
+  id = "subnet-00ee6901e53783c86/rtb-0fa42099da11b78e9"
+}
+
+import {
+  to = aws_route_table_association.database[1]
+  id = "subnet-084f21457f316c44c/rtb-084528a52ec739f38"
+}
+
+# --- DNS: both zones already exist -------------------------------------------
+import {
+  to = aws_route53_zone.this[0]
+  id = "Z0208643NZ0W8WF5RQ9F" # nomaos.com
+}
+
+import {
+  to = aws_route53_zone.agrovesto
+  id = "Z00055662LTUSSMS5ZA84" # agrovesto.com
+}
+
+# --- RDS SQL Server: migration-prod -------------------------------------------
 import {
   to = aws_db_instance.mssql
   id = "migration-prod"
 }
 
-# Its subnet group (discover.sh: "RDS ... subnet_group"). The subnet group name
-# is ForceNew on the instance, so adopt it: set mssql_subnet_group_name to it.
-# import {
-#   to = aws_db_subnet_group.mssql
-#   id = "XXXXXXXX"
-# }
+import {
+  to = aws_db_subnet_group.mssql
+  id = "agxdb2subnetgroup"
+}
 
-# Its security group (discover.sh: "RDS ... sg"). Adopted as the RDS SG; rules
-# are then reconciled to "1433 from the ECS SG only" (review the plan!).
-# import {
-#   to = aws_security_group.rds
-#   id = "sg-XXXXXXXX"
-# }
+# NOT adopted:
+#  * ACM *.nomaos.com (5172b3e7…) has no apex SAN, and the design's cert needs
+#    one, so the design creates a new cert. The old one is imported as legacy
+#    (unused, delete later).
+#  * The default SG sg-05a2722a… has 8 live rules and is attached to
+#    migration-prod and the EC2 host, so it is imported as legacy, as-is
+#    (manage_default_security_group = false).

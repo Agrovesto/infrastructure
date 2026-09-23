@@ -2,25 +2,28 @@
 
 Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `imports/RUNBOOK.md` §1.
 
-## DEV (353833416626) — 165 resources
+## DEV (353833416626) — 169 resources
 
-**ADOPT** 4 · **BOOTSTRAP** 1 · **CONFIRM** 28 · **IMPORT** 64 · **SKIP** 64 · **STACK** 4
+**ADOPT** 9 · **BOOTSTRAP** 1 · **IMPORT** 84 · **SKIP** 71 · **STACK** 4
 
 | Decision | Stack | ARN | Terraform address | Note |
 |---|---|---|---|---|
 | ADOPT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d3v79u00ot9glq` |  | aws_amplify_app.this["onboarding"] (imports_adopt.tf) |
 | ADOPT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d3v79u00ot9glq/branches/dev` |  | aws_amplify_branch.this["onboarding"] (imports_adopt.tf) |
+| ADOPT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/dfvk5chhp2iln` |  | aws_amplify_app.this["landing"] (imports_adopt.tf) |
+| ADOPT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/dfvk5chhp2iln/branches/staging` |  | aws_amplify_branch.this["landing"] (imports_adopt.tf) |
 | ADOPT | dev | `arn:aws:ec2:eu-west-1:353833416626:internet-gateway/igw-04e4d65d903b2b67d` |  | aws_internet_gateway.main (imports_adopt.tf) |
+| ADOPT | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-018e7f1b9df073189` |  | aws_route_table.public (+ association and 0.0.0.0/0 route) |
+| ADOPT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-032197de8d143373f` |  | aws_default_security_group.default[0] (no rules today - safe to strip) |
+| ADOPT | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0739cfd4c412deb3f` |  | aws_subnet.public[0] (172.96.0.0/24, eu-west-1a - hosts the app EC2) |
 | ADOPT | dev | `arn:aws:ec2:eu-west-1:353833416626:vpc/vpc-0d9b566c353787d53` |  | aws_vpc.main (imports/<stack>/imports_adopt.tf) |
 | BOOTSTRAP | bootstrap | `arn:aws:s3:::nomaos-tfstate-353833416626-eu-west-1` |  | aws_s3_bucket.state (bootstrap/imports.tf) |
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:image/ami-0f00a1ff1492a226d` | `aws_ami.legacy_ami_0f00a1ff1492a226d` | custom AMI; generated config pins its snapshots |
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:image/ami-0fd912de0c8674a38` | `aws_ami.legacy_ami_0fd912de0c8674a38` | custom AMI; generated config pins its snapshots |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d1grwi75us24mx` | `aws_amplify_app.legacy_d1grwi75us24mx` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d83we1jws50dz` | `aws_amplify_app.legacy_d83we1jws50dz` |  |
-| IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/dfvk5chhp2iln` | `aws_amplify_app.legacy_dfvk5chhp2iln` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d1grwi75us24mx/branches/staging` | `aws_amplify_branch.legacy_d1grwi75us24mx_staging` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d83we1jws50dz/branches/staging` | `aws_amplify_branch.legacy_d83we1jws50dz_staging` |  |
-| IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/dfvk5chhp2iln/branches/staging` | `aws_amplify_branch.legacy_dfvk5chhp2iln_staging` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d1grwi75us24mx/domains/dev-insight.nomaos.com` | `aws_amplify_domain_association.legacy_d1grwi75us24mx_dev_insight_nomaos_com` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/d3v79u00ot9glq/domains/dev-onboarding.nomaos.com` | `aws_amplify_domain_association.legacy_d3v79u00ot9glq_dev_onboarding_nomaos_com` |  |
 | IMPORT | dev | `arn:aws:amplify:eu-west-1:353833416626:apps/dfvk5chhp2iln/domains/dev.nomaos.com` | `aws_amplify_domain_association.legacy_dfvk5chhp2iln_dev_nomaos_com` |  |
@@ -58,13 +61,16 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | IMPORT | dev | `arn:aws:codepipeline:eu-west-1:353833416626:nomaos` | `aws_codepipeline.legacy_nomaos` |  |
 | IMPORT | dev | `arn:aws:rds:eu-west-1:353833416626:subgrp:agxdbsubnetgroup` | `aws_db_subnet_group.legacy_agxdbsubnetgroup` | if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead |
 | IMPORT | dev | `arn:aws:rds:eu-west-1:353833416626:subgrp:nomaosdbsubnetgroup` | `aws_db_subnet_group.legacy_nomaosdbsubnetgroup` | if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead |
-| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-00f63527a001045fa` | `aws_ebs_volume.legacy_vol_00f63527a001045fa` | root volumes stay with their aws_instance - drop this block if discover.sh marks it ROOT |
-| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-082127f70f11b82b9` | `aws_ebs_volume.legacy_vol_082127f70f11b82b9` | root volumes stay with their aws_instance - drop this block if discover.sh marks it ROOT |
-| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-0a13b7e39dd6fb97d` | `aws_ebs_volume.legacy_vol_0a13b7e39dd6fb97d` | root volumes stay with their aws_instance - drop this block if discover.sh marks it ROOT |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:network-acl/acl-0ac9d68464b5edd0a` | `aws_default_network_acl.legacy_acl_0ac9d68464b5edd0a` | the VPC's default NACL; generated config must list its subnet_ids |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-0faede26619f355d8` | `aws_default_route_table.legacy_main_rtb_0faede26619f355d8` | the VPC's main route table (no subnets associated) |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-0a13b7e39dd6fb97d` | `aws_ebs_volume.legacy_vol_0a13b7e39dd6fb97d` |  |
 | IMPORT | dev | `arn:aws:ecr:eu-west-1:353833416626:repository/nomaos` | `aws_ecr_repository.legacy_nomaos` |  |
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:elastic-ip/eipalloc-0b7f04c0906f47a4e` | `aws_eip.legacy_eipalloc_0b7f04c0906f47a4e` |  |
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:instance/i-00af32231113d64f9` | `aws_instance.legacy_i_00af32231113d64f9` |  |
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:instance/i-050358d69e4220585` | `aws_instance.legacy_i_050358d69e4220585` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:key-pair/key-0748e9b8e2b76c283` | `aws_key_pair.legacy_noma_api` | public key material only; add lifecycle ignore_changes = [public_key] |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:key-pair/key-0abcffe745fbd2ac6` | `aws_key_pair.legacy_nomas_api` | public key material only; add lifecycle ignore_changes = [public_key] |
+| IMPORT | dev | `arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6` | `aws_kms_key.legacy_key_31f57b1f` | customer key alias/nomaos-bootstrap-dev |
 | IMPORT | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovesto-infra-deploymen-CustomVpcRestrictDefault-nZX8uP3WCqzp` | `aws_lambda_function.legacy_agrovesto_infra_deploymen_customvpcrestrictdefault_nzx8up3wc` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
 | IMPORT | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovestoinfradeploymentagxdbRotationSingleUser096353C8` | `aws_lambda_function.legacy_agrovestoinfradeploymentagxdbrotationsingleuser096353c8` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
 | IMPORT | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovestoinfradeploymentnomaosdbRotationSingleUser77906076` | `aws_lambda_function.legacy_agrovestoinfradeploymentnomaosdbrotationsingleuser77906076` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
@@ -72,39 +78,30 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:launch-template/lt-014a3e4ca5da5d14f` | `aws_launch_template.legacy_lt_014a3e4ca5da5d14f` |  |
 | IMPORT | dev | `arn:aws:resource-explorer-2:eu-west-1:353833416626:index/5a315ef4-dfcb-47cf-bea0-815907217a6c` | `aws_resourceexplorer2_index.legacy_index` |  |
 | IMPORT | dev | `arn:aws:resource-explorer-2:eu-west-1:353833416626:view/eu-west-1/b9917b43-4a1a-4504-ac28-274a4e9c3b1e` | `aws_resourceexplorer2_view.legacy_view` |  |
+| IMPORT | dev | `route53:hostedzone/Z04841994LNF5EA00ZEG (dev.nomaos.com)` | `aws_route53_zone.legacy_dev_nomaos_com` | delegated sub-zone; dev manages no DNS (manage_dns = false), so kept as legacy |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-04a4e32b4443f50d5` | `aws_route_table.legacy_rtb_04a4e32b4443f50d5` | not used by the new design; review for deletion after cut-over |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-05817e82c2f16f0a4` | `aws_route_table.legacy_rtb_05817e82c2f16f0a4` | not used by the new design; review for deletion after cut-over |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-0fea2a4ff5a3adf0f` | `aws_route_table.legacy_rtb_0fea2a4ff5a3adf0f` | not used by the new design; review for deletion after cut-over |
+| IMPORT | dev | `ec2:association subnet-004a7f9d9cbd53ea4/rtb-0fea2a4ff5a3adf0f (discover.sh)` | `aws_route_table_association.legacy_subnet_004a7f9d9cbd53ea4` | keeps the legacy subnet on its legacy route table |
+| IMPORT | dev | `ec2:association subnet-0304d72cd90dd43d9/rtb-04a4e32b4443f50d5 (discover.sh)` | `aws_route_table_association.legacy_subnet_0304d72cd90dd43d9` | keeps the legacy subnet on its legacy route table |
+| IMPORT | dev | `ec2:association subnet-0309fc43ea380ad6b/rtb-05817e82c2f16f0a4 (discover.sh)` | `aws_route_table_association.legacy_subnet_0309fc43ea380ad6b` | keeps the legacy subnet on its legacy route table |
 | IMPORT | dev | `arn:aws:s3:::agrovesto-storage-dev` | `aws_s3_bucket.legacy_agrovesto_storage_dev` |  |
 | IMPORT | dev | `arn:aws:s3:::codepipeline-eu-west-1-3bf3ec101df5-4d09-9689-376482a069ed` | `aws_s3_bucket.legacy_codepipeline_eu_west_1_3bf3ec101df5_4d09_9689_376482a069ed` |  |
 | IMPORT | dev | `arn:aws:s3:::nomaos-tfstate-logs-353833416626-eu-west-1` | `aws_s3_bucket.legacy_nomaos_tfstate_logs_353833416626_eu_west_1` |  |
 | IMPORT | dev | `arn:aws:secretsmanager:eu-west-1:353833416626:secret:agxDBcredentials-5lcSd1` | `aws_secretsmanager_secret.legacy_agxdbcredentials` | secret metadata only - no aws_secretsmanager_secret_version, so no secret value enters state |
 | IMPORT | dev | `arn:aws:secretsmanager:eu-west-1:353833416626:secret:nomaosDBcredentials-u4Bs7W` | `aws_secretsmanager_secret.legacy_nomaosdbcredentials` | secret metadata only - no aws_secretsmanager_secret_version, so no secret value enters state |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:network-acl/acl-0ac9d68464b5edd0a` | `aws_default_network_acl.legacy_acl_0ac9d68464b5edd0a` | the VPC's default NACL; generated config must list its subnet_ids |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:key-pair/key-0748e9b8e2b76c283` | `aws_key_pair.legacy_key_0748e9b8e2b76c283` | import id is the key NAME, not key-0748e9b8e2b76c283; discover.sh prints it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:key-pair/key-0abcffe745fbd2ac6` | `aws_key_pair.legacy_key_0abcffe745fbd2ac6` | import id is the key NAME, not key-0abcffe745fbd2ac6; discover.sh prints it |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/175a4654-4efd-4714-a330-11354749d045` | `aws_kms_key.legacy_key_175a4654` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/2da3f5ae-f298-4779-b578-daa7a5978e01` | `aws_kms_key.legacy_key_2da3f5ae` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6` | `aws_kms_key.legacy_key_31f57b1f` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/43990620-5942-4f67-92eb-f99ba9c952ef` | `aws_kms_key.legacy_key_43990620` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/738231a4-4e8e-492c-81c6-30ac229cf08d` | `aws_kms_key.legacy_key_738231a4` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:kms:eu-west-1:353833416626:key/f44ceb3c-5117-4052-88a2-d2d265699c01` | `aws_kms_key.legacy_key_f44ceb3c` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-018e7f1b9df073189` | `aws_route_table.legacy_rtb_018e7f1b9df073189` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-04a4e32b4443f50d5` | `aws_route_table.legacy_rtb_04a4e32b4443f50d5` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-05817e82c2f16f0a4` | `aws_route_table.legacy_rtb_05817e82c2f16f0a4` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-0faede26619f355d8` | `aws_route_table.legacy_rtb_0faede26619f355d8` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:route-table/rtb-0fea2a4ff5a3adf0f` | `aws_route_table.legacy_rtb_0fea2a4ff5a3adf0f` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-002ee2d53f67176cb` | `aws_security_group.legacy_sg_002ee2d53f67176cb` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-003093b317e5032f7` | `aws_security_group.legacy_sg_003093b317e5032f7` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-032197de8d143373f` | `aws_security_group.legacy_sg_032197de8d143373f` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-039c167fa924e64ee` | `aws_security_group.legacy_sg_039c167fa924e64ee` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-05943db64467559f0` | `aws_security_group.legacy_sg_05943db64467559f0` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-061cfa042aa584410` | `aws_security_group.legacy_sg_061cfa042aa584410` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0c03238e678039ac4` | `aws_security_group.legacy_sg_0c03238e678039ac4` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0c4d118c6776629d9` | `aws_security_group.legacy_sg_0c4d118c6776629d9` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0d8184650fd775043` | `aws_security_group.legacy_sg_0d8184650fd775043` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0e299611b6b1a93fd` | `aws_security_group.legacy_sg_0e299611b6b1a93fd` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-004a7f9d9cbd53ea4` | `aws_subnet.legacy_subnet_004a7f9d9cbd53ea4` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0304d72cd90dd43d9` | `aws_subnet.legacy_subnet_0304d72cd90dd43d9` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0309fc43ea380ad6b` | `aws_subnet.legacy_subnet_0309fc43ea380ad6b` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0739cfd4c412deb3f` | `aws_subnet.legacy_subnet_0739cfd4c412deb3f` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-002ee2d53f67176cb` | `aws_security_group.legacy_sg_002ee2d53f67176cb` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-003093b317e5032f7` | `aws_security_group.legacy_sg_003093b317e5032f7` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-039c167fa924e64ee` | `aws_security_group.legacy_sg_039c167fa924e64ee` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-05943db64467559f0` | `aws_security_group.legacy_sg_05943db64467559f0` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-061cfa042aa584410` | `aws_security_group.legacy_sg_061cfa042aa584410` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0c03238e678039ac4` | `aws_security_group.legacy_sg_0c03238e678039ac4` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0c4d118c6776629d9` | `aws_security_group.legacy_sg_0c4d118c6776629d9` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0d8184650fd775043` | `aws_security_group.legacy_sg_0d8184650fd775043` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group/sg-0e299611b6b1a93fd` | `aws_security_group.legacy_sg_0e299611b6b1a93fd` |  |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-004a7f9d9cbd53ea4` | `aws_subnet.legacy_subnet_004a7f9d9cbd53ea4` | not used by the new design; review for deletion after cut-over |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0304d72cd90dd43d9` | `aws_subnet.legacy_subnet_0304d72cd90dd43d9` | not used by the new design; review for deletion after cut-over |
+| IMPORT | dev | `arn:aws:ec2:eu-west-1:353833416626:subnet/subnet-0309fc43ea380ad6b` | `aws_subnet.legacy_subnet_0309fc43ea380ad6b` | not used by the new design; review for deletion after cut-over |
 | STACK | dev | `arn:aws:ecr:eu-west-1:353833416626:repository/cdk-hnb659fds-container-assets-353833416626-eu-west-1` |  | owned by CloudFormation stack CDKToolkit* |
 | STACK | dev | `arn:aws:ecs:eu-west-1:353833416626:cluster/agrovesto-dev` |  | owned by CloudFormation stack Infra-ECS-Cluster-agrovesto-dev* |
 | STACK | dev | `arn:aws:s3:::cdk-hnb659fds-assets-353833416626-eu-west-1` |  | owned by CloudFormation stack CDKToolkit* |
@@ -152,9 +149,16 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | SKIP | dev | `arn:aws:ec2:eu-west-1:353833416626:security-group-rule/sgr-0f3ed2f212465c174` |  | inline rule of its security group; captured by the parent aws_security_group import |
 | SKIP | dev | `arn:aws:ec2:eu-west-1:353833416626:snapshot/snap-008f1c1a56ca251b7` |  | backup artifact; retain via lifecycle policy / AWS Backup, not IaC |
 | SKIP | dev | `arn:aws:ec2:eu-west-1:353833416626:snapshot/snap-02bcd30dd064d2166` |  | backup artifact; retain via lifecycle policy / AWS Backup, not IaC |
+| SKIP | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-00f63527a001045fa` |  | root volume: managed through its aws_instance (root_block_device) |
+| SKIP | dev | `arn:aws:ec2:eu-west-1:353833416626:volume/vol-082127f70f11b82b9` |  | root volume: managed through its aws_instance (root_block_device) |
 | SKIP | dev | `arn:aws:elasticache:eu-west-1:353833416626:user:default` |  | AWS default ElastiCache user |
 | SKIP | dev | `arn:aws:events:eu-west-1:353833416626:event-bus/default` |  | AWS default event bus |
 | SKIP | dev | `arn:aws:events:eu-west-1:353833416626:rule/AWSUserNotificationsManagedRule-afo4sbg` |  | rule owned by AWS User Notifications |
+| SKIP | dev | `arn:aws:kms:eu-west-1:353833416626:key/175a4654-4efd-4714-a330-11354749d045` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | dev | `arn:aws:kms:eu-west-1:353833416626:key/2da3f5ae-f298-4779-b578-daa7a5978e01` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | dev | `arn:aws:kms:eu-west-1:353833416626:key/43990620-5942-4f67-92eb-f99ba9c952ef` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | dev | `arn:aws:kms:eu-west-1:353833416626:key/738231a4-4e8e-492c-81c6-30ac229cf08d` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | dev | `arn:aws:kms:eu-west-1:353833416626:key/f44ceb3c-5117-4052-88a2-d2d265699c01` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
 | SKIP | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovesto-infra-deploymen-CustomVpcRestrictDefault-nZX8uP3WCqzp:$LATEST` |  | $LATEST is part of the function, not a separate resource |
 | SKIP | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovestoinfradeploymentagxdbRotationSingleUser096353C8:$LATEST` |  | $LATEST is part of the function, not a separate resource |
 | SKIP | dev | `arn:aws:lambda:eu-west-1:353833416626:function:agrovestoinfradeploymentnomaosdbRotationSingleUser77906076:$LATEST` |  | $LATEST is part of the function, not a separate resource |
@@ -174,15 +178,26 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | SKIP | dev | `arn:aws:ssm:eu-west-1:353833416626:managed-instance/i-00af32231113d64f9` |  | SSM runtime registration of an instance |
 | SKIP | dev | `arn:aws:xray:eu-west-1:353833416626:sampling-rule/Default` |  | AWS default X-Ray sampling rule |
 
-## PROD (221434544570) — 210 resources
+## PROD (221434544570) — 213 resources
 
-**ADOPT** 3 · **BOOTSTRAP** 1 · **CONFIRM** 36 · **IMPORT** 85 · **SKIP** 79 · **STACK** 6
+**ADOPT** 14 · **BOOTSTRAP** 1 · **IMPORT** 106 · **SKIP** 86 · **STACK** 6
 
 | Decision | Stack | ARN | Terraform address | Note |
 |---|---|---|---|---|
 | ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:internet-gateway/igw-07275a1a62726a4c8` |  | aws_internet_gateway.main (imports_adopt.tf) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0530eb261b38f735b` |  | aws_route_table.public |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-084528a52ec739f38` |  | aws_route_table.private[1] (gains the NAT route) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa42099da11b78e9` |  | aws_route_table.private[0] (gains the NAT route) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-00ee6901e53783c86` |  | aws_subnet.database[0] (172.96.2.0/24, eu-west-1a - migration-prod lives here) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-084f21457f316c44c` |  | aws_subnet.database[1] (172.96.3.0/24, eu-west-1b - migration-prod lives here) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0b808deeaf8391867` |  | aws_subnet.public[0] (172.96.0.0/24, eu-west-1a) |
+| ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0e169f40c70cdfe8b` |  | aws_subnet.public[1] (172.96.1.0/24, eu-west-1b) |
 | ADOPT | prod | `arn:aws:ec2:eu-west-1:221434544570:vpc/vpc-0016f521bae08f4ff` |  | aws_vpc.main (imports/<stack>/imports_adopt.tf) |
 | ADOPT | prod | `arn:aws:rds:eu-west-1:221434544570:db:migration-prod` |  | aws_db_instance.mssql (imports_adopt.tf; var.mssql_identifier = migration-prod) |
+| ADOPT | prod | `arn:aws:rds:eu-west-1:221434544570:subgrp:agxdb2subnetgroup` |  | aws_db_subnet_group.mssql (migration-prod's group) |
+| ADOPT | prod | `ec2:association subnet-0e169f40c70cdfe8b/rtb-0614ed06de1bc1d89` |  | aws_route_table_association.public[1] (in-place move to the shared public route table) |
+| ADOPT | prod | `route53:hostedzone/Z00055662LTUSSMS5ZA84 (agrovesto.com)` |  | aws_route53_zone.agrovesto (imports_adopt.tf) |
+| ADOPT | prod | `route53:hostedzone/Z0208643NZ0W8WF5RQ9F (nomaos.com)` |  | aws_route53_zone.this[0] (imports_adopt.tf) |
 | BOOTSTRAP | bootstrap | `arn:aws:s3:::nomaos-tfstate-221434544570-eu-west-1` |  | aws_s3_bucket.state (bootstrap/imports.tf) |
 | IMPORT | monitoring | `arn:aws:logs:eu-west-1:221434544570:log-group:ec2-auth` | `aws_cloudwatch_log_group.legacy_ec2_auth` |  |
 | IMPORT | monitoring | `arn:aws:logs:eu-west-1:221434544570:log-group:ec2-cloud-init` | `aws_cloudwatch_log_group.legacy_ec2_cloud_init` |  |
@@ -242,13 +257,21 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | IMPORT | prod | `arn:aws:codepipeline:eu-west-1:221434544570:noma-api-pipeline` | `aws_codepipeline.legacy_noma_api_pipeline` |  |
 | IMPORT | prod | `arn:aws:codepipeline:eu-west-1:221434544570:noma-new` | `aws_codepipeline.legacy_noma_new` |  |
 | IMPORT | prod | `arn:aws:codestar-connections:eu-west-1:221434544570:connection/54bd9bd5-955a-4415-873e-aa936036f835` | `aws_codestarconnections_connection.legacy_conn_54bd9bd5` |  |
-| IMPORT | prod | `arn:aws:rds:eu-west-1:221434544570:subgrp:agxdb2subnetgroup` | `aws_db_subnet_group.legacy_agxdb2subnetgroup` | if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead |
 | IMPORT | prod | `arn:aws:rds:eu-west-1:221434544570:subgrp:agxdbsubnetgroup` | `aws_db_subnet_group.legacy_agxdbsubnetgroup` | if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead |
 | IMPORT | prod | `arn:aws:rds:eu-west-1:221434544570:subgrp:nomaosdbsubnetgroup` | `aws_db_subnet_group.legacy_nomaosdbsubnetgroup` | if this is migration-prod's subnet group, use the aws_db_subnet_group.mssql slot in imports_adopt.tf instead |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:network-acl/acl-06b37d7639de1e948` | `aws_default_network_acl.legacy_acl_06b37d7639de1e948` | the VPC's default NACL; generated config must list its subnet_ids |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa0841a7b7dac5db` | `aws_default_route_table.legacy_main_rtb_0fa0841a7b7dac5db` | the VPC's main route table (no subnets associated) |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-05a2722a050c1109b` | `aws_default_security_group.legacy_default` | default SG with LIVE rules (attached to migration-prod + EC2): kept as-is, manage_default_security_group = false |
+| IMPORT | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:agxdb` | `aws_dms_endpoint.legacy_agxdb2instance` | password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn) |
+| IMPORT | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:WFZ6YQ2JCJBLLBLRDLCH7XNRWY` | `aws_dms_endpoint.legacy_agxdb_snapshot_restore` | password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn) |
+| IMPORT | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM` | `aws_dms_endpoint.legacy_nomaosdbinstance` | password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn) |
+| IMPORT | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos` | `aws_dms_endpoint.legacy_nomaosinstance_snapshot_restore` | password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn) |
 | IMPORT | prod | `arn:aws:dms:eu-west-1:221434544570:subgrp:default-vpc-0016f521bae08f4ff` | `aws_dms_replication_subnet_group.legacy_default_vpc_0016f521bae08f4ff` |  |
-| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:volume/vol-019ff51ce045e3490` | `aws_ebs_volume.legacy_vol_019ff51ce045e3490` | root volumes stay with their aws_instance - drop this block if discover.sh marks it ROOT |
 | IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:elastic-ip/eipalloc-0a48ffb921e22bb39` | `aws_eip.legacy_eipalloc_0a48ffb921e22bb39` |  |
 | IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:instance/i-027ff32f2a26fa600` | `aws_instance.legacy_i_027ff32f2a26fa600` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-0b6382b8152c63533` | `aws_key_pair.legacy_deployment_ssh` | public key material only; add lifecycle ignore_changes = [public_key] |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-075e7652029e2c2c5` | `aws_key_pair.legacy_noma_agx` | public key material only; add lifecycle ignore_changes = [public_key] |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-057e0d6c32eb78e4d` | `aws_key_pair.legacy_rdsjumpserverkeypair` | public key material only; add lifecycle ignore_changes = [public_key] |
 | IMPORT | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk` | `aws_lambda_function.legacy_agrovesto_infra_deploymen_customvpcrestrictdefault_igfrsxlzx` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
 | IMPORT | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovestoinfradeploymentagxdbRotationSingleUser096353C8` | `aws_lambda_function.legacy_agrovestoinfradeploymentagxdbrotationsingleuser096353c8` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
 | IMPORT | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovestoinfradeploymentnomaosdbRotationSingleUser77906076` | `aws_lambda_function.legacy_agrovestoinfradeploymentnomaosdbrotationsingleuser77906076` | generated config has no code source: add s3/filename or lifecycle ignore_changes (RUNBOOK 3.3) |
@@ -256,6 +279,7 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:launch-template/lt-08897dce459b4913c` | `aws_launch_template.legacy_lt_08897dce459b4913c` |  |
 | IMPORT | prod | `arn:aws:resource-explorer-2:eu-west-1:221434544570:index/2375ed1a-7adc-44fe-a83f-4f9869bd659a` | `aws_resourceexplorer2_index.legacy_index` |  |
 | IMPORT | prod | `arn:aws:resource-explorer-2:eu-west-1:221434544570:view/eu-west-1/1184df2b-d64b-48e3-85d6-4a7fe3110f8f` | `aws_resourceexplorer2_view.legacy_view` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0614ed06de1bc1d89` | `aws_route_table.legacy_rtb_0614ed06de1bc1d89` | not used by the new design; review for deletion after cut-over |
 | IMPORT | prod | `arn:aws:s3:::agrovesto-pipeline-artifacts` | `aws_s3_bucket.legacy_agrovesto_pipeline_artifacts` |  |
 | IMPORT | prod | `arn:aws:s3:::agrovesto-storage` | `aws_s3_bucket.legacy_agrovesto_storage` |  |
 | IMPORT | prod | `arn:aws:s3:::cf-templates-lh5u9ipyvd5c-eu-west-1` | `aws_s3_bucket.legacy_cf_templates_lh5u9ipyvd5c_eu_west_1` |  |
@@ -263,48 +287,24 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | IMPORT | prod | `arn:aws:s3:::dms-serverless-premigration-results-dnwcx6llcg` | `aws_s3_bucket.legacy_dms_serverless_premigration_results_dnwcx6llcg` |  |
 | IMPORT | prod | `arn:aws:secretsmanager:eu-west-1:221434544570:secret:agxDBcredentials-C6MuaN` | `aws_secretsmanager_secret.legacy_agxdbcredentials` | secret metadata only - no aws_secretsmanager_secret_version, so no secret value enters state |
 | IMPORT | prod | `arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-GIwHiK` | `aws_secretsmanager_secret.legacy_nomaosdbcredentials` | secret metadata only - no aws_secretsmanager_secret_version, so no secret value enters state |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0121823b5aba80621` | `aws_security_group.legacy_sg_0121823b5aba80621` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-044858bb412fc2aa0` | `aws_security_group.legacy_sg_044858bb412fc2aa0` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-04778d7bdb8e2c026` | `aws_security_group.legacy_sg_04778d7bdb8e2c026` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-06e44543a37f56828` | `aws_security_group.legacy_sg_06e44543a37f56828` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-072ebb62525423c86` | `aws_security_group.legacy_sg_072ebb62525423c86` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-094939b554d597e4a` | `aws_security_group.legacy_sg_094939b554d597e4a` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-09e61cfd83551d0ec` | `aws_security_group.legacy_sg_09e61cfd83551d0ec` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0b555edfc6d445a18` | `aws_security_group.legacy_sg_0b555edfc6d445a18` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0bfbddac52a0a2b89` | `aws_security_group.legacy_sg_0bfbddac52a0a2b89` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0df9c118433af39dd` | `aws_security_group.legacy_sg_0df9c118433af39dd` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0e4ef41f521e66695` | `aws_security_group.legacy_sg_0e4ef41f521e66695` |  |
+| IMPORT | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0f208f7733ec29fbd` | `aws_security_group.legacy_sg_0f208f7733ec29fbd` |  |
 | IMPORT | prod | `arn:aws:ses:eu-west-1:221434544570:configuration-set/my-first-configuration-set` | `aws_sesv2_configuration_set.legacy_my_first_configuration_set` |  |
 | IMPORT | prod | `arn:aws:ses:eu-west-1:221434544570:identity/agrovesto.com` | `aws_sesv2_email_identity.legacy_agrovesto_com` | domain identity |
 | IMPORT | prod | `arn:aws:ses:eu-west-1:221434544570:identity/info@agrovesto.com` | `aws_sesv2_email_identity.legacy_info_agrovesto_com` |  |
 | IMPORT | prod | `arn:aws:ses:eu-west-1:221434544570:identity/tech@agrovesto.com` | `aws_sesv2_email_identity.legacy_tech_agrovesto_com` |  |
 | IMPORT | prod | `arn:aws:sns:eu-west-1:221434544570:agrovesto` | `aws_sns_topic.legacy_agrovesto` |  |
 | IMPORT | prod | `arn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main` | `aws_sns_topic.legacy_amplify_d24hrz6o3pnmne_main` |  |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:network-acl/acl-06b37d7639de1e948` | `aws_default_network_acl.legacy_acl_06b37d7639de1e948` | the VPC's default NACL; generated config must list its subnet_ids |
-| CONFIRM | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:agxdb` | `aws_dms_endpoint.legacy_dms_agxdb` | import id is the endpoint identifier, the ARN only shows resource id agxdb |
-| CONFIRM | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM` | `aws_dms_endpoint.legacy_dms_bsi5nfyjsvelzmyvpfomj56mim` | import id is the endpoint identifier, the ARN only shows resource id BSI5NFYJSVELZMYVPFOMJ56MIM |
-| CONFIRM | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos` | `aws_dms_endpoint.legacy_dms_nomaos` | import id is the endpoint identifier, the ARN only shows resource id nomaos |
-| CONFIRM | prod | `arn:aws:dms:eu-west-1:221434544570:endpoint:WFZ6YQ2JCJBLLBLRDLCH7XNRWY` | `aws_dms_endpoint.legacy_dms_wfz6yq2jcjbllblrdlch7xnrwy` | import id is the endpoint identifier, the ARN only shows resource id WFZ6YQ2JCJBLLBLRDLCH7XNRWY |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-057e0d6c32eb78e4d` | `aws_key_pair.legacy_key_057e0d6c32eb78e4d` | import id is the key NAME, not key-057e0d6c32eb78e4d; discover.sh prints it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-075e7652029e2c2c5` | `aws_key_pair.legacy_key_075e7652029e2c2c5` | import id is the key NAME, not key-075e7652029e2c2c5; discover.sh prints it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:key-pair/key-0b6382b8152c63533` | `aws_key_pair.legacy_key_0b6382b8152c63533` | import id is the key NAME, not key-0b6382b8152c63533; discover.sh prints it |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498` | `aws_kms_key.legacy_key_05d6e0b6` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/6e98aa83-4990-4fbe-938a-284763dad588` | `aws_kms_key.legacy_key_6e98aa83` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35` | `aws_kms_key.legacy_key_89a5cab0` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/af93b781-7db2-418f-ba53-aaf08a0893ba` | `aws_kms_key.legacy_key_af93b781` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/f844da16-3c57-4ba4-9e09-fcd6af19c9f1` | `aws_kms_key.legacy_key_f844da16` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:kms:eu-west-1:221434544570:key/fc06a828-b6a4-412a-b5f1-417e4ab693e4` | `aws_kms_key.legacy_key_fc06a828` | only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0530eb261b38f735b` | `aws_route_table.legacy_rtb_0530eb261b38f735b` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0614ed06de1bc1d89` | `aws_route_table.legacy_rtb_0614ed06de1bc1d89` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-084528a52ec739f38` | `aws_route_table.legacy_rtb_084528a52ec739f38` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa0841a7b7dac5db` | `aws_route_table.legacy_rtb_0fa0841a7b7dac5db` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa42099da11b78e9` | `aws_route_table.legacy_rtb_0fa42099da11b78e9` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0121823b5aba80621` | `aws_security_group.legacy_sg_0121823b5aba80621` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-044858bb412fc2aa0` | `aws_security_group.legacy_sg_044858bb412fc2aa0` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-04778d7bdb8e2c026` | `aws_security_group.legacy_sg_04778d7bdb8e2c026` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-05a2722a050c1109b` | `aws_security_group.legacy_sg_05a2722a050c1109b` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-06e44543a37f56828` | `aws_security_group.legacy_sg_06e44543a37f56828` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-072ebb62525423c86` | `aws_security_group.legacy_sg_072ebb62525423c86` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-094939b554d597e4a` | `aws_security_group.legacy_sg_094939b554d597e4a` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-09e61cfd83551d0ec` | `aws_security_group.legacy_sg_09e61cfd83551d0ec` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0b555edfc6d445a18` | `aws_security_group.legacy_sg_0b555edfc6d445a18` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0bfbddac52a0a2b89` | `aws_security_group.legacy_sg_0bfbddac52a0a2b89` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0df9c118433af39dd` | `aws_security_group.legacy_sg_0df9c118433af39dd` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0e4ef41f521e66695` | `aws_security_group.legacy_sg_0e4ef41f521e66695` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0f208f7733ec29fbd` | `aws_security_group.legacy_sg_0f208f7733ec29fbd` | if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-00ee6901e53783c86` | `aws_subnet.legacy_subnet_00ee6901e53783c86` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-084f21457f316c44c` | `aws_subnet.legacy_subnet_084f21457f316c44c` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0b808deeaf8391867` | `aws_subnet.legacy_subnet_0b808deeaf8391867` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
-| CONFIRM | prod | `arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0e169f40c70cdfe8b` | `aws_subnet.legacy_subnet_0e169f40c70cdfe8b` | child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh |
 | STACK | prod | `arn:aws:codebuild:eu-west-1:221434544570:project/agrovesto-ProdCodeBuildProject` |  | owned by CloudFormation stack agrovesto-infra-pipeline* |
 | STACK | prod | `arn:aws:codepipeline:eu-west-1:221434544570:agrovesto-ProdPipeline` |  | owned by CloudFormation stack agrovesto-infra-pipeline* |
 | STACK | prod | `arn:aws:codepipeline:eu-west-1:221434544570:webhook:agrovesto-ProdWebhook` |  | owned by CloudFormation stack agrovesto-infra-pipeline* |
@@ -366,8 +366,15 @@ Every ARN from the 2026-09-23 inventory with exactly one decision. Legend in `im
 | SKIP | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group-rule/sgr-0d60a343f37842971` |  | inline rule of its security group; captured by the parent aws_security_group import |
 | SKIP | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group-rule/sgr-0f04e32c55cba56bb` |  | inline rule of its security group; captured by the parent aws_security_group import |
 | SKIP | prod | `arn:aws:ec2:eu-west-1:221434544570:security-group-rule/sgr-0f6d74ffe6a709dda` |  | inline rule of its security group; captured by the parent aws_security_group import |
+| SKIP | prod | `arn:aws:ec2:eu-west-1:221434544570:volume/vol-019ff51ce045e3490` |  | root volume: managed through its aws_instance (root_block_device) |
 | SKIP | prod | `arn:aws:elasticache:eu-west-1:221434544570:user:default` |  | AWS default ElastiCache user |
 | SKIP | prod | `arn:aws:events:eu-west-1:221434544570:event-bus/default` |  | AWS default event bus |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/6e98aa83-4990-4fbe-938a-284763dad588` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/af93b781-7db2-418f-ba53-aaf08a0893ba` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/f844da16-3c57-4ba4-9e09-fcd6af19c9f1` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
+| SKIP | prod | `arn:aws:kms:eu-west-1:221434544570:key/fc06a828-b6a4-412a-b5f1-417e4ab693e4` |  | AWS-managed key (aws/*): owned by AWS, cannot be managed |
 | SKIP | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk:$LATEST` |  | $LATEST is part of the function, not a separate resource |
 | SKIP | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovestoinfradeploymentagxdbRotationSingleUser096353C8:$LATEST` |  | $LATEST is part of the function, not a separate resource |
 | SKIP | prod | `arn:aws:lambda:eu-west-1:221434544570:function:agrovestoinfradeploymentnomaosdbRotationSingleUser77906076:$LATEST` |  | $LATEST is part of the function, not a separate resource |

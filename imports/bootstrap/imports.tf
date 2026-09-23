@@ -6,10 +6,13 @@
 #
 #   imports/stage.sh bootstrap && cd bootstrap && terraform init
 #   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate \
-#     -var account_id=221434544570
+#     -var account_id=221434544570            # role agrovesto-prod-github-deploy
 #   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate \
 #     -var account_id=353833416626 -var environment=dev \
-#     -var deploy_role_name=<dev role name from discover.sh>
+#     -var deploy_role_name=<nomaos-dev-github-terraform | nomaos-bootstrap-dev-deploy> \
+#     -var state_bucket_kms_key_arn=arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6
+#   (the dev bucket was created by a "nomaos-bootstrap-dev" setup whose KMS key
+#   exists. Keep the KMS arg only if `aws s3api get-bucket-encryption` shows aws:kms)
 # =============================================================================
 
 variable "account_id" {
@@ -42,16 +45,16 @@ import {
   id = local.import_state_bucket
 }
 
-# Uncomment only if discover.sh prints "STATE lifecycle: yes" / "STATE policy: yes".
-# Otherwise leave commented and the apply creates them.
-# import {
-#   to = aws_s3_bucket_lifecycle_configuration.state
-#   id = local.import_state_bucket
-# }
-# import {
-#   to = aws_s3_bucket_policy.state
-#   id = local.import_state_bucket
-# }
+# discovery-{dev,prod}.txt: "STATE lifecycle: yes", "STATE policy: yes" in both accounts.
+import {
+  to = aws_s3_bucket_lifecycle_configuration.state
+  id = local.import_state_bucket
+}
+
+import {
+  to = aws_s3_bucket_policy.state
+  id = local.import_state_bucket
+}
 
 import {
   to = aws_iam_role.deploy

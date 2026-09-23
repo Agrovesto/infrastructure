@@ -38,10 +38,15 @@ resource "aws_db_instance" "mssql" {
   allocated_storage     = var.mssql_allocated_storage_gb
   max_allocated_storage = var.mssql_max_allocated_storage_gb
   storage_type          = var.mssql_storage_type
-  storage_encrypted     = true
+  # ForceNew. true for every new instance; false ONLY while the adopted,
+  # unencrypted migration-prod is in service (encrypt-by-restore: RUNBOOK §4.2).
+  #trivy:ignore:AVD-AWS-0080
+  storage_encrypted = var.mssql_storage_encrypted
 
   db_subnet_group_name   = aws_db_subnet_group.mssql.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
+  # The design's RDS SG plus any SGs the adopted instance still relies on
+  # (legacy EC2 -> DB paths), so adoption does not cut existing connections.
+  vpc_security_group_ids = concat([aws_security_group.rds.id], var.mssql_additional_security_group_ids)
   publicly_accessible    = false
   port                   = var.mssql_port
 
@@ -65,8 +70,9 @@ resource "aws_db_instance" "mssql" {
   monitoring_interval                   = 60
   monitoring_role_arn                   = aws_iam_role.rds_monitoring.arn
   enabled_cloudwatch_logs_exports       = var.mssql_enabled_cloudwatch_logs_exports
-  performance_insights_enabled          = true
-  performance_insights_retention_period = 7
+  # SQL Server Express does not support Performance Insights.
+  performance_insights_enabled          = var.mssql_performance_insights_enabled
+  performance_insights_retention_period = var.mssql_performance_insights_enabled ? 7 : null
 
   auto_minor_version_upgrade = true
   apply_immediately          = false

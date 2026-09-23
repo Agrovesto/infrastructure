@@ -60,3 +60,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "state_bucket_kms_key_arn" {
+  description = "KMS key for the state bucket's default encryption. Empty = SSE-S3 (AES256). Set when importing a bucket that already uses SSE-KMS."
+  type        = string
+  default     = ""
+}

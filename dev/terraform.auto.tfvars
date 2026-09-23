@@ -19,16 +19,20 @@ manage_dns = false
 instance_type = "t3.large"
 # --- Frontends (Amplify) ---
 amplify_apps = {
-  landing = {
-    repository = "https://github.com/Agrovesto/nomaos-landingpage"
-    branch     = "dev"
-    subdomain  = "dev-agrovesto"
-    framework  = "React"
-  }
+  # Adopted: d3v79u00ot9glq / branch dev
   onboarding = {
+    name       = "onboarding-frontend"
     repository = "https://github.com/Agrovesto/onboarding-frontend"
     branch     = "dev"
     subdomain  = "onboarding-dev"
+    framework  = "React"
+  }
+  # Adopted: dfvk5chhp2iln / branch staging
+  landing = {
+    name       = "nomaos-landingpage"
+    repository = "https://github.com/Agrovesto/nomaos-landingpage"
+    branch     = "staging"
+    subdomain  = "dev-agrovesto"
     framework  = "React"
   }
 }
@@ -103,3 +107,11 @@ logging = {
   # status and message fields then become queryable instead of grep fodder.
   json_log_services = []
 }
+
+# =============================================================================
+# Adoption of existing resources (imports/RUNBOOK.md, discovery 2026-09-23)
+# =============================================================================
+# vpc-0d9b566c353787d53. cidr_block is ForceNew, so it must be the real value.
+vpc_cidr = "172.96.0.0/16"
+# subnet-0739cfd4c412deb3f (eu-west-1a, IGW-routed, hosts new-noma-api)
+public_subnet_cidrs = ["172.96.0.0/24"]

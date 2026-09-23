@@ -18,6 +18,11 @@ resource "aws_vpc" "main" {
 # Deny-all default security group: nothing uses it, so strip its default
 # allow-all-self rules (CKV2_AWS_12).
 resource "aws_default_security_group" "default" {
+  # Declaring this resource takes over the VPC's default SG and REMOVES all
+  # of its rules. Turn it off when adopting a VPC whose default SG is in use
+  # (it is then imported with its real rules as a legacy resource instead).
+  count = var.manage_default_security_group ? 1 : 0
+
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.tags, { Name = "${local.name}-default-sg" })
