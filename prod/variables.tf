@@ -281,6 +281,24 @@ variable "mssql_subnet_group_name" {
   default     = ""
 }
 
+variable "mssql_storage_encrypted" {
+  description = "Encrypt RDS storage (ForceNew). Keep true; false only to adopt an existing unencrypted instance without replacing it."
+  type        = bool
+  default     = true
+}
+
+variable "mssql_performance_insights_enabled" {
+  description = "Performance Insights (not supported on SQL Server Express)"
+  type        = bool
+  default     = true
+}
+
+variable "mssql_additional_security_group_ids" {
+  description = "Extra security groups kept on the RDS instance (e.g. the adopted instance's existing SGs)"
+  type        = list(string)
+  default     = []
+}
+
 variable "mssql_storage_type" {
   description = "gp3 for new instances; set to the adopted instance's type (gp2/gp3/io1) so the import is not an in-place storage migration"
   type        = string
@@ -471,4 +489,10 @@ variable "db_size_check_image" {
   description = "Image providing sqlcmd. Must be amd64: this task runs on x86_64."
   type        = string
   default     = "mcr.microsoft.com/mssql-tools:latest"
+}
+
+variable "manage_default_security_group" {
+  description = "Strip the VPC default security group to deny-all. false when the adopted VPC's default SG still carries live traffic."
+  type        = bool
+  default     = true
 }

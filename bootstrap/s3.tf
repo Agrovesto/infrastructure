@@ -38,7 +38,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      # AES256 by default; set var.state_bucket_kms_key_arn to keep an existing
+      # bucket's SSE-KMS key when importing it.
+      sse_algorithm     = var.state_bucket_kms_key_arn != "" ? "aws:kms" : "AES256"
+      kms_master_key_id = var.state_bucket_kms_key_arn != "" ? var.state_bucket_kms_key_arn : null
     }
   }
 }

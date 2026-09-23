@@ -19,7 +19,7 @@ if [ "${1:-}" = "--unstage" ]; then
 fi
 S="${1:?usage: stage.sh [--unstage] bootstrap|dev|prod|monitoring}"
 [ -d "$HERE/$S" ] || { echo "no imports/$S" >&2; exit 2; }
-for f in "$HERE/$S"/*.tf; do
+for f in "$HERE/$S"/*.tf; do  # (*.tfvars stay in imports/, passed with -var-file)
   cp -v "$f" "$ROOT/$S/zz_import_$(basename "$f")"
 done
 echo

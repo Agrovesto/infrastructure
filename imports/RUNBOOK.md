@@ -1,5 +1,9 @@
 # Importing existing AWS resources into the new Terraform stacks
 
+> **Status (after discovery, 2026-09-23):** every resource has a concrete decision; no
+> CONFIRM rows remain. Adoption blocks and tfvars now hold the real values from
+> `imports/discovery-{dev,prod}.txt`. See **§7 Findings** before you run anything.
+
 Source of truth: `AGROVESTO-AWS-INVENTORY-20260923` (Resource Explorer, 375 resources,
 dev `353833416626` + prod `221434544570`, eu-west-1). The ARNs are kept in
 `imports/inventory/*.arns`. Each resource's decision is listed in
@@ -95,11 +99,8 @@ commented slot and tfvar in §4. You can also do it yourself by following §4.
 ```bash
 imports/stage.sh bootstrap && cd bootstrap && terraform init
 # prod
-AWS_PROFILE=agrovesto-prod terraform plan  -state=prod.tfstate -var account_id=221434544570
-AWS_PROFILE=agrovesto-prod terraform apply -state=prod.tfstate -var account_id=221434544570
-# dev (bootstrap defaults are prod-flavoured - override)
-AWS_PROFILE=agrovesto-dev terraform plan -state=dev.tfstate -var account_id=353833416626 \
-  -var environment=dev -var deploy_role_name=<dev role from discover.sh>
+AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars
+AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars
 ```
 
 What to expect in the plan:
@@ -211,3 +212,26 @@ will fail with "already exists":
 * `imports/stage.sh --unstage` has been run for every stack (no `zz_import_*.tf` left).
 * `<stack>/legacy.tf` is committed.
 * Every row in `INVENTORY_MAP.md` is ADOPT/IMPORT/BOOTSTRAP/STACK in state, or SKIP with its reason.
+
+---
+
+## 7. Findings from discovery (read first)
+
+| # | Finding | What was done | Your action |
+|---|---|---|---|
+| 1 | **`migration-prod` is NOT encrypted** (`StorageEncrypted=False`) | `mssql_storage_encrypted = false`, so the adoption does not replace the DB. The default stays `true` for new instances. | Plan a window: snapshot → copy with encryption → restore → swap. Then set it to `true` (§4.2). |
+| 2 | **Prod default SG `sg-05a2722a…` has 8 live rules** and is attached to `migration-prod` and the `noma-agx` EC2 host | The design would strip it to deny-all and cut DB access. Now `manage_default_security_group = false`; the SG is imported as-is (`legacy_default`). | Move those rules to named SGs later, then flip the flag. |
+| 3 | **Both VPCs are `172.96.0.0/16`** (not 10.20/10.30) | `vpc_cidr` and subnet CIDRs set to the real values. The dev test updated. | If you ever peer dev↔prod, you'll need to re-IP one of them. |
+| 4 | **Express has no Performance Insights** | New var, set to `false` for prod | – |
+| 5 | **The live dev host `new-noma-api`** is t3.medium, custom AMI, 500 GB gp2, SQL Server inside | Not adopted as `aws_instance.app`: the AMI differs, so adopting would **replace the live server**. It's imported as `legacy_*` and the new host is built next to it. | Migrate data, then move EIP `eipalloc-0b7f04c0906f47a4e` to the new host. |
+| 6 | **Prod has no NAT and no private subnets**; its "private" subnets hold `migration-prod` | Adopted as **database** subnets. The new private subnets `172.96.11/12.0/24` and 1 NAT are created. | ~$35/mo for the NAT. |
+| 7 | **ACM `*.nomaos.com` has no apex SAN** and isn't in use | The design creates a new wildcard+apex cert; the old one is legacy | Delete the old one after cut-over. |
+| 8 | **Route53 `nomaos.com` / `agrovesto.com` exist in prod** | Adopted as `aws_route53_zone.this[0]` / `.agrovesto`, so no duplicate zones get created | The design's records are added; Amplify-managed records are untouched. |
+| 9 | **Dev Amplify:** `onboarding-frontend` (branch `dev`) and `nomaos-landingpage` (branch `staging`) | Adopted into `amplify_apps.onboarding` / `.landing` with their real names. `ignore_changes` on build spec and env, so their builds aren't overwritten. | – |
+| 10 | 5 key pairs, 4 DMS endpoints, 1 customer KMS key | Concrete import ids filled in. The 11 AWS-managed `aws/*` keys and 3 root volumes are SKIP. | – |
+| 11 | Deploy roles: prod `agrovesto-prod-github-deploy`; dev CI uses **`nomaos-dev-github-terraform`** (confirmed). `nomaos-bootstrap-dev-deploy` isn't used by CI. | `imports/bootstrap/{dev,prod}.tfvars`. The dev trust patterns include `refs/heads/dev`. | Before the dev bootstrap plan, run the two `aws iam` checks in `dev.tfvars` (trust policy, attached policies) and set `deploy_admin_access` / `import_deploy_policy` to match. |
+| 12 | Lots of IAM roles that Resource Explorer doesn't index (Amplify/CDK/CodePipeline/DMS service roles…) | Not imported: they're owned by services or by the CDK/CFN stacks. None collide with names the design creates (`agrovesto-prod-*`, `agrovesto-dev-*`). | – |
+
+> ⚠️ `imports/discovery-*.txt` are now **committed** (you un-ignored them). They hold
+> no secrets, but they do list account IDs, IPs and internal names. The repo is
+> public per the dev tfvars comment, so consider removing them after the import.

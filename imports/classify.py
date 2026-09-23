@@ -45,13 +45,46 @@ ADOPT = {
         "internet-gateway/igw-04e4d65d903b2b67d": "aws_internet_gateway.main (imports_adopt.tf)",
         "apps/d3v79u00ot9glq": 'aws_amplify_app.this["onboarding"] (imports_adopt.tf)',
         "apps/d3v79u00ot9glq/branches/dev": 'aws_amplify_branch.this["onboarding"] (imports_adopt.tf)',
+        "apps/dfvk5chhp2iln": 'aws_amplify_app.this["landing"] (imports_adopt.tf)',
+        "apps/dfvk5chhp2iln/branches/staging": 'aws_amplify_branch.this["landing"] (imports_adopt.tf)',
+        "security-group/sg-032197de8d143373f": "aws_default_security_group.default[0] (no rules today - safe to strip)",
+        "subnet/subnet-0739cfd4c412deb3f": "aws_subnet.public[0] (172.96.0.0/24, eu-west-1a - hosts the app EC2)",
+        "route-table/rtb-018e7f1b9df073189": "aws_route_table.public (+ association and 0.0.0.0/0 route)",
     },
     "prod": {
         "vpc/vpc-0016f521bae08f4ff": "aws_vpc.main (imports/<stack>/imports_adopt.tf)",
         "internet-gateway/igw-07275a1a62726a4c8": "aws_internet_gateway.main (imports_adopt.tf)",
         "db:migration-prod": "aws_db_instance.mssql (imports_adopt.tf; var.mssql_identifier = migration-prod)",
+        "subgrp:agxdb2subnetgroup": "aws_db_subnet_group.mssql (migration-prod's group)",
+        "subnet/subnet-0b808deeaf8391867": "aws_subnet.public[0] (172.96.0.0/24, eu-west-1a)",
+        "subnet/subnet-0e169f40c70cdfe8b": "aws_subnet.public[1] (172.96.1.0/24, eu-west-1b)",
+        "subnet/subnet-00ee6901e53783c86": "aws_subnet.database[0] (172.96.2.0/24, eu-west-1a - migration-prod lives here)",
+        "subnet/subnet-084f21457f316c44c": "aws_subnet.database[1] (172.96.3.0/24, eu-west-1b - migration-prod lives here)",
+        "route-table/rtb-0530eb261b38f735b": "aws_route_table.public",
+        "route-table/rtb-0fa42099da11b78e9": "aws_route_table.private[0] (gains the NAT route)",
+        "route-table/rtb-084528a52ec739f38": "aws_route_table.private[1] (gains the NAT route)",
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# FACTS from imports/discovery-{dev,prod}.txt (2026-09-23). They turn CONFIRM
+# rows into concrete ADOPT / IMPORT / SKIP decisions.
+# ---------------------------------------------------------------------------
+KEY_PAIR_NAMES = {
+    "key-0748e9b8e2b76c283": "noma-api", "key-0abcffe745fbd2ac6": "nomas-api",
+    "key-075e7652029e2c2c5": "noma-agx", "key-057e0d6c32eb78e4d": "rdsjumpserverkeypair",
+    "key-0b6382b8152c63533": "deployment-ssh",
+}
+CUSTOMER_KMS_KEYS = {"31f57b1f-cbde-4aa6-8c6e-18e129c80fb6"}  # alias/nomaos-bootstrap-dev; all others are aws/*
+DMS_ENDPOINT_IDS = {
+    "agxdb": "agxdb2instance", "WFZ6YQ2JCJBLLBLRDLCH7XNRWY": "agxdb-snapshot-restore",
+    "BSI5NFYJSVELZMYVPFOMJ56MIM": "nomaosdbinstance", "nomaos": "nomaosinstance-snapshot-restore",
+}
+ROOT_VOLUMES = {"vol-082127f70f11b82b9", "vol-00f63527a001045fa", "vol-019ff51ce045e3490"}
+DEFAULT_SGS = {"dev": "sg-032197de8d143373f", "prod": "sg-05a2722a050c1109b"}
+MAIN_ROUTE_TABLES = {"rtb-0faede26619f355d8": "vpc-0d9b566c353787d53",
+                     "rtb-0fa0841a7b7dac5db": "vpc-0016f521bae08f4ff"}
 
 # Subnets / route tables / default SG / NACL of the adopted VPCs: which one
 # becomes public[0], database[1], ... depends on CIDR + route, so they are
@@ -175,14 +208,25 @@ def classify(env: str, arn: str):
     # ---- importable ------------------------------------------------------
     if service == "ec2":
         rid = tail.split("/", 1)[1]
+        if rtype == "route-table" and rid in MAIN_ROUTE_TABLES:
+            return ("IMPORT", stack, "aws_default_route_table", "legacy_main_" + slug(rid), MAIN_ROUTE_TABLES[rid],
+                    "the VPC's main route table (no subnets associated)")
         if rtype in VPC_CHILD_TYPES:
+            return ("IMPORT", stack, {"subnet": "aws_subnet", "route-table": "aws_route_table"}[rtype],
+                    "legacy_" + slug(rid), rid, "not used by the new design; review for deletion after cut-over")
+        if False:
             t = {"subnet": "aws_subnet", "route-table": "aws_route_table"}[rtype]
             return ("CONFIRM", stack, t, "legacy_" + slug(rid), rid,
                     "child of the adopted VPC: uncomment EITHER here (legacy) OR the matching slot in imports_adopt.tf, per discover.sh")
         if rtype == "network-acl":
-            return ("CONFIRM", stack, "aws_default_network_acl", "legacy_" + slug(rid), rid,
+            return ("IMPORT", stack, "aws_default_network_acl", "legacy_" + slug(rid), rid,
                     "the VPC's default NACL; generated config must list its subnet_ids")
+        if rtype == "security-group" and rid == DEFAULT_SGS[env]:
+            return ("IMPORT", stack, "aws_default_security_group", "legacy_default", rid,
+                    "default SG with LIVE rules (attached to migration-prod + EC2): kept as-is, manage_default_security_group = false")
         if rtype == "security-group":
+            return ("IMPORT", stack, "aws_security_group", "legacy_" + slug(rid), rid, "")
+        if False:
             return ("CONFIRM", stack, "aws_security_group", "legacy_" + slug(rid), rid,
                     "if discover.sh marks it DEFAULT, leave commented: aws_default_security_group.default adopts it")
         m = {
@@ -192,12 +236,15 @@ def classify(env: str, arn: str):
             "launch-template": ("aws_launch_template", None),
             "image": ("aws_ami", "custom AMI; generated config pins its snapshots"),
         }
+        if rtype == "volume" and rid in ROOT_VOLUMES:
+            return ("SKIP", stack, None, None, None, "root volume: managed through its aws_instance (root_block_device)")
         if rtype in m:
             t, note = m[rtype]
+            note = "" if rtype == "volume" else note
             return ("IMPORT", stack, t, "legacy_" + slug(rid), rid, note or "")
         if rtype == "key-pair":
-            return ("CONFIRM", stack, "aws_key_pair", "legacy_" + slug(rid), "<KEY_NAME>",
-                    f"import id is the key NAME, not {rid}; discover.sh prints it")
+            return ("IMPORT", stack, "aws_key_pair", "legacy_" + slug(KEY_PAIR_NAMES[rid]), KEY_PAIR_NAMES[rid],
+                    "public key material only; add lifecycle ignore_changes = [public_key]")
 
     if service == "logs":
         name = tail.split(":", 1)[1]
@@ -210,6 +257,9 @@ def classify(env: str, arn: str):
         return ("IMPORT", stack, "aws_s3_bucket", "legacy_" + slug(tail), tail, "")
     if service == "kms":
         kid = tail.split("/", 1)[1]
+        if kid not in CUSTOMER_KMS_KEYS:
+            return ("SKIP", stack, None, None, None, "AWS-managed key (aws/*): owned by AWS, cannot be managed")
+        return ("IMPORT", stack, "aws_kms_key", "legacy_key_" + kid[:8], kid, "customer key alias/nomaos-bootstrap-dev")
         return ("CONFIRM", stack, "aws_kms_key", "legacy_key_" + kid[:8], kid,
                 "only customer-managed keys can be imported; discover.sh marks AWS-managed (aws/*) keys")
     if service == "secretsmanager":
@@ -269,8 +319,9 @@ def classify(env: str, arn: str):
             name = tail.split(":", 1)[1]
             return ("IMPORT", stack, "aws_dms_replication_subnet_group", "legacy_" + slug(name), name, "")
         rid = tail.split(":", 1)[1]
-        return ("CONFIRM", stack, "aws_dms_endpoint", "legacy_dms_" + slug(rid), "<ENDPOINT_IDENTIFIER>",
-                f"import id is the endpoint identifier, the ARN only shows resource id {rid}")
+        eid = DMS_ENDPOINT_IDS[rid]
+        return ("IMPORT", stack, "aws_dms_endpoint", "legacy_" + slug(eid), eid,
+                "password is write-only: never read into state; keep it in Secrets Manager (secrets_manager_arn)")
     if service == "ses":
         name = tail.split("/", 1)[1]
         if rtype == "configuration-set":
@@ -305,6 +356,28 @@ HEADER = """# ==================================================================
 """
 
 
+# Found by discover.sh, not indexed by Resource Explorer.
+EXTRA = {
+    "dev": [
+        (f"ec2:association {sn}/{rt} (discover.sh)", "IMPORT", "dev", "aws_route_table_association",
+         "legacy_" + slug(sn), f"{sn}/{rt}", "keeps the legacy subnet on its legacy route table")
+        for sn, rt in [("subnet-0309fc43ea380ad6b", "rtb-05817e82c2f16f0a4"),
+                       ("subnet-0304d72cd90dd43d9", "rtb-04a4e32b4443f50d5"),
+                       ("subnet-004a7f9d9cbd53ea4", "rtb-0fea2a4ff5a3adf0f")]
+    ] + [("route53:hostedzone/Z04841994LNF5EA00ZEG (dev.nomaos.com)", "IMPORT", "dev",
+             "aws_route53_zone", "legacy_dev_nomaos_com", "Z04841994LNF5EA00ZEG",
+             "delegated sub-zone; dev manages no DNS (manage_dns = false), so kept as legacy")],
+    "prod": [
+        ("ec2:association subnet-0e169f40c70cdfe8b/rtb-0614ed06de1bc1d89", "ADOPT", "prod", None, None, None,
+         "aws_route_table_association.public[1] (in-place move to the shared public route table)"),
+        ("route53:hostedzone/Z0208643NZ0W8WF5RQ9F (nomaos.com)", "ADOPT", "prod", None, None, None,
+         "aws_route53_zone.this[0] (imports_adopt.tf)"),
+        ("route53:hostedzone/Z00055662LTUSSMS5ZA84 (agrovesto.com)", "ADOPT", "prod", None, None, None,
+         "aws_route53_zone.agrovesto (imports_adopt.tf)"),
+    ],
+}
+
+
 def main():
     rows = []
     blocks = {"dev": [], "prod": [], "monitoring": []}
@@ -327,6 +400,10 @@ def main():
             if d == "CONFIRM":
                 body = "\n".join("# " + l for l in body.splitlines())
             blocks[stack].append((t, comment + "\n" + body))
+        for src, d, stack, t, name, iid, note in EXTRA.get(env, []):
+            rows.append((env, d, stack, src, f"{t}.{name}" if t else "", note))
+            if t:
+                blocks[stack].append((t, f"# {src} (discover.sh)\n# NOTE: {note}\nimport {{\n  to = {t}.{name}\n  id = \"{iid}\"\n}}"))
 
     for stack, items in blocks.items():
         env = "prod" if stack == "monitoring" else stack

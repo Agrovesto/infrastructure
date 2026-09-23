@@ -5,11 +5,8 @@
 # Run it once per account, each with its own local state file (RUNBOOK §2):
 #
 #   imports/stage.sh bootstrap && cd bootstrap && terraform init
-#   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate \
-#     -var account_id=221434544570
-#   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate \
-#     -var account_id=353833416626 -var environment=dev \
-#     -var deploy_role_name=<dev role name from discover.sh>
+#   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars
+#   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars
 # =============================================================================
 
 variable "account_id" {
@@ -42,35 +39,45 @@ import {
   id = local.import_state_bucket
 }
 
-# Uncomment only if discover.sh prints "STATE lifecycle: yes" / "STATE policy: yes".
-# Otherwise leave commented and the apply creates them.
-# import {
-#   to = aws_s3_bucket_lifecycle_configuration.state
-#   id = local.import_state_bucket
-# }
-# import {
-#   to = aws_s3_bucket_policy.state
-#   id = local.import_state_bucket
-# }
+# discovery-{dev,prod}.txt: "STATE lifecycle: yes", "STATE policy: yes" in both accounts.
+import {
+  to = aws_s3_bucket_lifecycle_configuration.state
+  id = local.import_state_bucket
+}
+
+import {
+  to = aws_s3_bucket_policy.state
+  id = local.import_state_bucket
+}
 
 import {
   to = aws_iam_role.deploy
   id = var.deploy_role_name
 }
 
-# Scoped policy (deploy_admin_access = false, the default). If the role has
-# AdministratorAccess instead, pass -var deploy_admin_access=true and replace
-# these two blocks with:
-#   to = aws_iam_role_policy_attachment.deploy_admin[0]
-#   id = "<role>/arn:aws:iam::aws:policy/AdministratorAccess"
+variable "import_deploy_policy" {
+  description = "Import the existing <role>-policy + its attachment (true when this module created the role, false when the policy doesn't exist yet: apply creates it)"
+  type        = bool
+  default     = true
+}
+
+# Scoped policy (deploy_admin_access = false). for_each on import needs Terraform >= 1.7.
 import {
-  to = aws_iam_policy.deploy_scoped[0]
-  id = local.import_policy_arn
+  for_each = var.import_deploy_policy && !var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_policy.deploy_scoped[0]
+  id       = local.import_policy_arn
 }
 
 import {
-  to = aws_iam_role_policy_attachment.deploy_scoped[0]
-  id = "${var.deploy_role_name}/${local.import_policy_arn}"
+  for_each = var.import_deploy_policy && !var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_role_policy_attachment.deploy_scoped[0]
+  id       = "${var.deploy_role_name}/${local.import_policy_arn}"
+}
+
+import {
+  for_each = var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_role_policy_attachment.deploy_admin[0]
+  id       = "${var.deploy_role_name}/arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
 import {
