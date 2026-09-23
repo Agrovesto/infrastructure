@@ -1,0 +1,4439 @@
+# monitoring  2026-09-23T21:40:23Z  terraform Terraform v1.8.5
+
+Initializing the backend...
+
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+
+Initializing provider plugins...
+- Reusing previous version of hashicorp/random from the dependency lock file
+- Reusing previous version of hashicorp/aws from the dependency lock file
+- Reusing previous version of hashicorp/null from the dependency lock file
+- Using previously-installed hashicorp/random v3.9.1
+- Using previously-installed hashicorp/aws v5.100.0
+- Using previously-installed hashicorp/null v3.3.2
+
+Terraform has been successfully initialized!
+aws_cloudwatch_log_group.legacy_ec2_syslog: Preparing import... [id=ec2-syslog]
+aws_cloudwatch_log_group.legacy_ec2_kernel: Preparing import... [id=ec2-kernel]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init: Preparing import... [id=ec2-cloud-init]
+aws_route53_zone.agrovesto: Refreshing state... [id=Z00055662LTUSSMS5ZA84]
+data.aws_vpc.prod: Reading...
+data.aws_route53_zone.main: Reading...
+aws_cloudwatch_log_group.legacy_ec2_kernel: Refreshing state... [id=ec2-kernel]
+aws_cloudwatch_log_group.legacy_ec2_syslog: Refreshing state... [id=ec2-syslog]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init: Refreshing state... [id=ec2-cloud-init]
+aws_route53_zone.this[0]: Refreshing state... [id=Z0208643NZ0W8WF5RQ9F]
+aws_cloudwatch_log_group.legacy_rdsosmetrics: Preparing import... [id=RDSOSMetrics]
+aws_cloudwatch_log_group.legacy_nginx_error: Preparing import... [id=nginx-error]
+aws_cloudwatch_log_group.legacy_rdsosmetrics: Refreshing state... [id=RDSOSMetrics]
+aws_cloudwatch_log_group.legacy_nginx_error: Refreshing state... [id=nginx-error]
+data.aws_db_instance.mssql[0]: Reading...
+data.aws_region.current: Reading...
+data.aws_region.current: Read complete after 0s [id=eu-west-1]
+aws_cloudwatch_log_group.legacy_nginx_access: Preparing import... [id=nginx-access]
+aws_cloudwatch_log_group.legacy_nginx_access: Refreshing state... [id=nginx-access]
+data.aws_db_instance.mssql[0]: Read complete after 1s [id=migration-prod]
+aws_ssm_parameter.legacy_amazoncloudwatch_linux: Preparing import... [id=AmazonCloudWatch-linux]
+aws_ssm_parameter.legacy_amazoncloudwatch_linux: Refreshing state... [id=AmazonCloudWatch-linux]
+data.aws_caller_identity.current: Reading...
+data.aws_lb.main: Reading...
+aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Preparing import... [id=ec2-cloud-init-output]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Refreshing state... [id=ec2-cloud-init-output]
+data.aws_security_group.alb: Reading...
+aws_cloudwatch_log_group.legacy_ec2_auth: Preparing import... [id=ec2-auth]
+aws_cloudwatch_log_group.legacy_ec2_auth: Refreshing state... [id=ec2-auth]
+data.aws_caller_identity.current: Read complete after 1s [id=221434544570]
+aws_ssm_association.legacy_assoc_ef34e30b: Preparing import... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
+aws_ssm_association.legacy_assoc_ef34e30b: Refreshing state... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
+data.aws_route53_zone.main: Read complete after 3s [id=Z0208643NZ0W8WF5RQ9F]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+  - destroy
+
+Terraform planned the following actions, but then encountered a problem:
+
+  # aws_cloudwatch_event_rule.budget[0] will be created
+  + resource "aws_cloudwatch_event_rule" "budget" {
+      + arn                 = (known after apply)
+      + description         = "Runs the daily cost/budget aggregation task"
+      + event_bus_name      = "default"
+      + force_destroy       = false
+      + id                  = (known after apply)
+      + name                = "agrovesto-monitoring-budget"
+      + name_prefix         = (known after apply)
+      + schedule_expression = "cron(15 6 * * ? *)"
+      + tags                = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all            = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+    }
+
+  # aws_cloudwatch_event_rule.collector[0] will be created
+  + resource "aws_cloudwatch_event_rule" "collector" {
+      + arn                 = (known after apply)
+      + description         = "Runs the ECS metrics and log collector"
+      + event_bus_name      = "default"
+      + force_destroy       = false
+      + id                  = (known after apply)
+      + name                = "agrovesto-monitoring-ecs-collector"
+      + name_prefix         = (known after apply)
+      + schedule_expression = "rate(2 minutes)"
+      + tags                = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all            = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+    }
+
+  # aws_cloudwatch_event_rule.mssql[0] will be created
+  + resource "aws_cloudwatch_event_rule" "mssql" {
+      + arn                 = (known after apply)
+      + description         = "Runs the SQL Server metrics task"
+      + event_bus_name      = "default"
+      + force_destroy       = false
+      + id                  = (known after apply)
+      + name                = "agrovesto-monitoring-mssql-metrics"
+      + name_prefix         = (known after apply)
+      + schedule_expression = "rate(1 hour)"
+      + tags                = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all            = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_ec2_auth will be updated in-place
+  # (imported from "ec2-auth")
+  ~ resource "aws_cloudwatch_log_group" "legacy_ec2_auth" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:ec2-auth"
+        id                = "ec2-auth"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "ec2-auth"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_ec2_cloud_init will be updated in-place
+  # (imported from "ec2-cloud-init")
+  ~ resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:ec2-cloud-init"
+        id                = "ec2-cloud-init"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "ec2-cloud-init"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_ec2_cloud_init_output will be updated in-place
+  # (imported from "ec2-cloud-init-output")
+  ~ resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init_output" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:ec2-cloud-init-output"
+        id                = "ec2-cloud-init-output"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "ec2-cloud-init-output"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_ec2_kernel will be updated in-place
+  # (imported from "ec2-kernel")
+  ~ resource "aws_cloudwatch_log_group" "legacy_ec2_kernel" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:ec2-kernel"
+        id                = "ec2-kernel"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "ec2-kernel"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_ec2_syslog will be updated in-place
+  # (imported from "ec2-syslog")
+  ~ resource "aws_cloudwatch_log_group" "legacy_ec2_syslog" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:ec2-syslog"
+        id                = "ec2-syslog"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "ec2-syslog"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_nginx_access will be updated in-place
+  # (imported from "nginx-access")
+  ~ resource "aws_cloudwatch_log_group" "legacy_nginx_access" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:nginx-access"
+        id                = "nginx-access"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "nginx-access"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_nginx_error will be updated in-place
+  # (imported from "nginx-error")
+  ~ resource "aws_cloudwatch_log_group" "legacy_nginx_error" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:nginx-error"
+        id                = "nginx-error"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "nginx-error"
+        name_prefix       = null
+        retention_in_days = 0
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.legacy_rdsosmetrics will be updated in-place
+  # (imported from "RDSOSMetrics")
+  ~ resource "aws_cloudwatch_log_group" "legacy_rdsosmetrics" {
+        arn               = "arn:aws:logs:eu-west-1:221434544570:log-group:RDSOSMetrics"
+        id                = "RDSOSMetrics"
+        kms_key_id        = null
+        log_group_class   = "STANDARD"
+        name              = "RDSOSMetrics"
+        name_prefix       = null
+        retention_in_days = 30
+        skip_destroy      = false
+        tags              = {}
+      ~ tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+    }
+
+  # aws_cloudwatch_log_group.monitoring will be created
+  + resource "aws_cloudwatch_log_group" "monitoring" {
+      + arn               = (known after apply)
+      + id                = (known after apply)
+      + log_group_class   = (known after apply)
+      + name              = "/ecs/agrovesto-monitoring"
+      + name_prefix       = (known after apply)
+      + retention_in_days = 30
+      + skip_destroy      = false
+      + tags              = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all          = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+    }
+
+  # aws_cur_report_definition.daily[0] will be created
+  + resource "aws_cur_report_definition" "daily" {
+      + additional_schema_elements = [
+          + "RESOURCES",
+        ]
+      + arn                        = (known after apply)
+      + compression                = "Parquet"
+      + format                     = "Parquet"
+      + id                         = (known after apply)
+      + refresh_closed_reports     = true
+      + report_name                = "agrovesto-daily"
+      + report_versioning          = "OVERWRITE_REPORT"
+      + s3_bucket                  = "agrovesto-monitoring-cur-221434544570"
+      + s3_prefix                  = "cur"
+      + s3_region                  = "us-east-1"
+      + tags_all                   = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+      + time_unit                  = "DAILY"
+    }
+
+  # aws_ecs_cluster.monitoring will be created
+  + resource "aws_ecs_cluster" "monitoring" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + name     = "agrovesto-monitoring"
+      + tags     = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+
+      + setting {
+          + name  = "containerInsights"
+          + value = "disabled"
+        }
+    }
+
+  # aws_ecs_task_definition.budget[0] will be created
+  + resource "aws_ecs_task_definition" "budget" {
+      + arn                      = (known after apply)
+      + arn_without_revision     = (known after apply)
+      + container_definitions    = jsonencode(
+            [
+              + {
+                  + command          = [
+                      + "sh",
+                      + "-c",
+                      + "pip install --quiet --no-cache-dir duckdb boto3 && python -c \"import boto3,os;boto3.client('s3', region_name='us-east-1').download_file(os.environ['SCRIPT_BUCKET'], os.environ['SCRIPT_KEY'], '/tmp/budget_report.py')\" && python /tmp/budget_report.py",
+                    ]
+                  + environment      = [
+                      + {
+                          + name  = "BUDGET_USD"
+                          + value = "250"
+                        },
+                      + {
+                          + name  = "CUR_BUCKET"
+                          + value = "agrovesto-monitoring-cur-221434544570"
+                        },
+                      + {
+                          + name  = "CUR_PREFIX"
+                          + value = "cur"
+                        },
+                      + {
+                          + name  = "CUR_REGION"
+                          + value = "us-east-1"
+                        },
+                      + {
+                          + name  = "CUR_REPORT_NAME"
+                          + value = "agrovesto-daily"
+                        },
+                      + {
+                          + name  = "PUSHGATEWAY_URL"
+                          + value = "http://pushgateway.monitoring.internal:9091"
+                        },
+                      + {
+                          + name  = "SCRIPT_BUCKET"
+                          + value = "agrovesto-monitoring-cur-221434544570"
+                        },
+                      + {
+                          + name  = "SCRIPT_KEY"
+                          + value = "scripts/budget_report.py"
+                        },
+                    ]
+                  + essential        = true
+                  + image            = "python:3.12-slim"
+                  + logConfiguration = {
+                      + logDriver = "awslogs"
+                      + options   = {
+                          + awslogs-group         = "/ecs/agrovesto-monitoring"
+                          + awslogs-region        = "eu-west-1"
+                          + awslogs-stream-prefix = "budget"
+                        }
+                    }
+                  + name             = "budget"
+                },
+            ]
+        )
+      + cpu                      = "256"
+      + enable_fault_injection   = (known after apply)
+      + execution_role_arn       = (known after apply)
+      + family                   = "agrovesto-monitoring-budget"
+      + id                       = (known after apply)
+      + memory                   = "512"
+      + network_mode             = "awsvpc"
+      + requires_compatibilities = [
+          + "FARGATE",
+        ]
+      + revision                 = (known after apply)
+      + skip_destroy             = false
+      + tags                     = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all                 = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + task_role_arn            = (known after apply)
+      + track_latest             = false
+
+      + runtime_platform {
+          + cpu_architecture        = "ARM64"
+          + operating_system_family = "LINUX"
+        }
+    }
+
+  # aws_iam_role.events[0] will be created
+  + resource "aws_iam_role" "events" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = [
+                              + "events.amazonaws.com",
+                              + "scheduler.amazonaws.com",
+                            ]
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "agrovesto-monitoring-events-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags                  = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all              = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + unique_id             = (known after apply)
+    }
+
+  # aws_iam_role.execution will be created
+  + resource "aws_iam_role" "execution" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "ecs-tasks.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "agrovesto-monitoring-execution-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags                  = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all              = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + unique_id             = (known after apply)
+    }
+
+  # aws_iam_role.task will be created
+  + resource "aws_iam_role" "task" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "ecs-tasks.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "agrovesto-monitoring-task-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags                  = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all              = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + unique_id             = (known after apply)
+    }
+
+  # aws_iam_role_policy.events[0] will be created
+  + resource "aws_iam_role_policy" "events" {
+      + id          = (known after apply)
+      + name        = "agrovesto-monitoring-events-policy"
+      + name_prefix = (known after apply)
+      + policy      = (known after apply)
+      + role        = (known after apply)
+    }
+
+  # aws_iam_role_policy.execution_ssm will be created
+  + resource "aws_iam_role_policy" "execution_ssm" {
+      + id          = (known after apply)
+      + name        = "agrovesto-monitoring-execution-ssm"
+      + name_prefix = (known after apply)
+      + policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = [
+                          + "arn:aws:ssm:eu-west-1:221434544570:parameter/agrovesto-monitoring",
+                          + "arn:aws:ssm:eu-west-1:221434544570:parameter/agrovesto-monitoring/*",
+                        ]
+                      + Sid      = "ReadConfigParameters"
+                    },
+                  + {
+                      + Action   = [
+                          + "kms:Decrypt",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = [
+                          + "arn:aws:kms:eu-west-1:221434544570:alias/agrovesto-monitoring-efs",
+                        ]
+                      + Sid      = "DecryptConfigParameters"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + role        = (known after apply)
+    }
+
+  # aws_iam_role_policy.task_database_secret[0] will be created
+  + resource "aws_iam_role_policy" "task_database_secret" {
+      + id          = (known after apply)
+      + name        = "agrovesto-monitoring-task-database-secret-policy"
+      + name_prefix = (known after apply)
+      + policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "secretsmanager:GetSecretValue",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = [
+                          + "arn:aws:secretsmanager:eu-west-1:221434544570:secret:rds!db-9bf3a548-e703-4bfe-a868-2a5b81fa436a-U4iZLd",
+                        ]
+                      + Sid      = "ReadDatabaseSecret"
+                    },
+                  + {
+                      + Action    = [
+                          + "kms:Decrypt",
+                        ]
+                      + Condition = {
+                          + StringEquals = {
+                              + "kms:ViaService" = "secretsmanager.eu-west-1.amazonaws.com"
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = [
+                          + "*",
+                        ]
+                      + Sid       = "DecryptDatabaseSecret"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + role        = (known after apply)
+    }
+
+  # aws_iam_role_policy_attachment.execution will be created
+  + resource "aws_iam_role_policy_attachment" "execution" {
+      + id         = (known after apply)
+      + policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+      + role       = "agrovesto-monitoring-execution-role"
+    }
+
+  # aws_kms_alias.monitoring will be created
+  + resource "aws_kms_alias" "monitoring" {
+      + arn            = (known after apply)
+      + id             = (known after apply)
+      + name           = "alias/agrovesto-monitoring-efs"
+      + name_prefix    = (known after apply)
+      + target_key_arn = (known after apply)
+      + target_key_id  = (known after apply)
+    }
+
+  # aws_kms_key.monitoring will be created
+  + resource "aws_kms_key" "monitoring" {
+      + arn                                = (known after apply)
+      + bypass_policy_lockout_safety_check = false
+      + customer_master_key_spec           = "SYMMETRIC_DEFAULT"
+      + description                        = "agrovesto-monitoring EFS"
+      + enable_key_rotation                = true
+      + id                                 = (known after apply)
+      + is_enabled                         = true
+      + key_id                             = (known after apply)
+      + key_usage                          = "ENCRYPT_DECRYPT"
+      + multi_region                       = (known after apply)
+      + policy                             = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "kms:*"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + AWS = "arn:aws:iam::221434544570:root"
+                        }
+                      + Resource  = "*"
+                      + Sid       = "AllowRootAccountFullAccess"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + rotation_period_in_days            = (known after apply)
+      + tags                               = {
+          + "Environment" = "prod"
+          + "Name"        = "agrovesto-monitoring-efs"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all                           = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Name"        = "agrovesto-monitoring-efs"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+    }
+
+  # aws_route53_zone.agrovesto will be destroyed
+  # (because aws_route53_zone.agrovesto is not in configuration)
+  - resource "aws_route53_zone" "agrovesto" {
+      - arn                 = "arn:aws:route53:::hostedzone/Z00055662LTUSSMS5ZA84" -> null
+      - id                  = "Z00055662LTUSSMS5ZA84" -> null
+      - name                = "agrovesto.com" -> null
+      - name_servers        = [
+          - "ns-1516.awsdns-61.org",
+          - "ns-1831.awsdns-36.co.uk",
+          - "ns-783.awsdns-33.net",
+          - "ns-85.awsdns-10.com",
+        ] -> null
+      - primary_name_server = "ns-85.awsdns-10.com" -> null
+      - tags                = {} -> null
+      - tags_all            = {} -> null
+      - zone_id             = "Z00055662LTUSSMS5ZA84" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # aws_route53_zone.this[0] will be destroyed
+  # (because aws_route53_zone.this is not in configuration)
+  - resource "aws_route53_zone" "this" {
+      - arn                 = "arn:aws:route53:::hostedzone/Z0208643NZ0W8WF5RQ9F" -> null
+      - id                  = "Z0208643NZ0W8WF5RQ9F" -> null
+      - name                = "nomaos.com" -> null
+      - name_servers        = [
+          - "ns-1145.awsdns-15.org",
+          - "ns-152.awsdns-19.com",
+          - "ns-1959.awsdns-52.co.uk",
+          - "ns-707.awsdns-24.net",
+        ] -> null
+      - primary_name_server = "ns-707.awsdns-24.net" -> null
+      - tags                = {} -> null
+      - tags_all            = {} -> null
+      - zone_id             = "Z0208643NZ0W8WF5RQ9F" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # aws_s3_bucket.config will be created
+  + resource "aws_s3_bucket" "config" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "agrovesto-monitoring-config-221434544570"
+      + bucket_domain_name          = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = false
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = (known after apply)
+      + request_payer               = (known after apply)
+      + tags                        = {
+          + "Environment" = "prod"
+          + "Name"        = "agrovesto-monitoring-config"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all                    = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Name"        = "agrovesto-monitoring-config"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+    }
+
+  # aws_s3_bucket.cur[0] will be created
+  + resource "aws_s3_bucket" "cur" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "agrovesto-monitoring-cur-221434544570"
+      + bucket_domain_name          = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = false
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = (known after apply)
+      + request_payer               = (known after apply)
+      + tags                        = {
+          + "Environment" = "prod"
+          + "Name"        = "agrovesto-monitoring-cur-221434544570"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all                    = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Name"        = "agrovesto-monitoring-cur-221434544570"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+    }
+
+  # aws_s3_bucket_lifecycle_configuration.config will be created
+  + resource "aws_s3_bucket_lifecycle_configuration" "config" {
+      + bucket                                 = (known after apply)
+      + expected_bucket_owner                  = (known after apply)
+      + id                                     = (known after apply)
+      + transition_default_minimum_object_size = "all_storage_classes_128K"
+
+      + rule {
+          + id     = "expire-superseded-config"
+          + status = "Enabled"
+            # (1 unchanged attribute hidden)
+
+          + abort_incomplete_multipart_upload {
+              + days_after_initiation = 1
+            }
+
+          + filter {
+                # (1 unchanged attribute hidden)
+            }
+
+          + noncurrent_version_expiration {
+              + noncurrent_days = 7
+            }
+        }
+    }
+
+  # aws_s3_bucket_lifecycle_configuration.cur[0] will be created
+  + resource "aws_s3_bucket_lifecycle_configuration" "cur" {
+      + bucket                                 = (known after apply)
+      + expected_bucket_owner                  = (known after apply)
+      + id                                     = (known after apply)
+      + transition_default_minimum_object_size = "all_storage_classes_128K"
+
+      + rule {
+          + id     = "expire-old-reports"
+          + status = "Enabled"
+            # (1 unchanged attribute hidden)
+
+          + abort_incomplete_multipart_upload {
+              + days_after_initiation = 7
+            }
+
+          + expiration {
+              + days                         = 400
+              + expired_object_delete_marker = false
+            }
+
+          + filter {
+                # (1 unchanged attribute hidden)
+            }
+        }
+    }
+
+  # aws_s3_bucket_policy.config will be created
+  + resource "aws_s3_bucket_policy" "config" {
+      + bucket = (known after apply)
+      + id     = (known after apply)
+      + policy = (known after apply)
+    }
+
+  # aws_s3_bucket_policy.cur[0] will be created
+  + resource "aws_s3_bucket_policy" "cur" {
+      + bucket = (known after apply)
+      + id     = (known after apply)
+      + policy = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "s3:*"
+                      + Condition = {
+                          + Bool = {
+                              + "aws:SecureTransport" = "false"
+                            }
+                        }
+                      + Effect    = "Deny"
+                      + Principal = "*"
+                      + Resource  = [
+                          + "arn:aws:s3:::agrovesto-monitoring-cur-221434544570",
+                          + "arn:aws:s3:::agrovesto-monitoring-cur-221434544570/*",
+                        ]
+                      + Sid       = "DenyNonTls"
+                    },
+                  + {
+                      + Action    = [
+                          + "s3:GetBucketAcl",
+                          + "s3:GetBucketPolicy",
+                        ]
+                      + Condition = {
+                          + StringEquals = {
+                              + "aws:SourceAccount" = "221434544570"
+                              + "aws:SourceArn"     = "arn:aws:cur:us-east-1::definition/*"
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "billingreports.amazonaws.com"
+                        }
+                      + Resource  = "arn:aws:s3:::agrovesto-monitoring-cur-221434544570"
+                      + Sid       = "AllowBillingReports"
+                    },
+                  + {
+                      + Action    = "s3:PutObject"
+                      + Condition = {
+                          + StringEquals = {
+                              + "aws:SourceAccount" = "221434544570"
+                              + "aws:SourceArn"     = "arn:aws:cur:us-east-1::definition/*"
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "billingreports.amazonaws.com"
+                        }
+                      + Resource  = "arn:aws:s3:::agrovesto-monitoring-cur-221434544570/*"
+                      + Sid       = "AllowBillingReportsPut"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+    }
+
+  # aws_s3_bucket_public_access_block.config will be created
+  + resource "aws_s3_bucket_public_access_block" "config" {
+      + block_public_acls       = true
+      + block_public_policy     = true
+      + bucket                  = (known after apply)
+      + id                      = (known after apply)
+      + ignore_public_acls      = true
+      + restrict_public_buckets = true
+    }
+
+  # aws_s3_bucket_public_access_block.cur[0] will be created
+  + resource "aws_s3_bucket_public_access_block" "cur" {
+      + block_public_acls       = true
+      + block_public_policy     = true
+      + bucket                  = (known after apply)
+      + id                      = (known after apply)
+      + ignore_public_acls      = true
+      + restrict_public_buckets = true
+    }
+
+  # aws_s3_bucket_server_side_encryption_configuration.config will be created
+  + resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+      + bucket = (known after apply)
+      + id     = (known after apply)
+
+      + rule {
+          + bucket_key_enabled = true
+
+          + apply_server_side_encryption_by_default {
+              + kms_master_key_id = (known after apply)
+              + sse_algorithm     = "aws:kms"
+            }
+        }
+    }
+
+  # aws_s3_bucket_server_side_encryption_configuration.cur[0] will be created
+  + resource "aws_s3_bucket_server_side_encryption_configuration" "cur" {
+      + bucket = (known after apply)
+      + id     = (known after apply)
+
+      + rule {
+          + apply_server_side_encryption_by_default {
+              + sse_algorithm     = "AES256"
+                # (1 unchanged attribute hidden)
+            }
+        }
+    }
+
+  # aws_s3_bucket_versioning.config will be created
+  + resource "aws_s3_bucket_versioning" "config" {
+      + bucket = (known after apply)
+      + id     = (known after apply)
+
+      + versioning_configuration {
+          + mfa_delete = (known after apply)
+          + status     = "Enabled"
+        }
+    }
+
+  # aws_s3_object.budget_script[0] will be created
+  + resource "aws_s3_object" "budget_script" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            #!/usr/bin/env python3
+            """Aggregate the Cost and Usage Report and publish budget metrics to Pushgateway.
+            
+            Runs as a daily Fargate task. Reads the Parquet report straight from S3 with
+            DuckDB, then pushes gauge values that Prometheus scrapes from Pushgateway and
+            the cost alert rules evaluate.
+            """
+            
+            import datetime as dt
+            import json
+            import os
+            import sys
+            import urllib.request
+            
+            import boto3
+            import duckdb
+            
+            REGION = os.environ.get("CUR_REGION", "us-east-1")
+            BUCKET = os.environ["CUR_BUCKET"]
+            PREFIX = os.environ.get("CUR_PREFIX", "cur")
+            REPORT = os.environ["CUR_REPORT_NAME"]
+            BUDGET = float(os.environ.get("BUDGET_USD", "0") or 0)
+            PUSHGATEWAY = os.environ["PUSHGATEWAY_URL"].rstrip("/")
+            
+            TODAY = dt.datetime.now(dt.timezone.utc).date()
+            PERIOD_START = TODAY.replace(day=1)
+            # The delivery folder is named <period-start>-<period-end>.
+            FOLDER = f"{PREFIX}/{REPORT}/{PERIOD_START:%Y%m%d}-"
+            
+            
+            def month_to_date_files(s3):
+                prefix = f"{PREFIX}/{REPORT}/{REPORT}/"
+                paginator = s3.get_paginator("list_objects_v2")
+                keys = []
+                for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix, PaginationConfig={"PageSize": 1000}):
+                    for obj in page.get("Contents", []):
+                        key = obj["Key"]
+                        if not key.endswith(".parquet"):
+                            continue
+                        relative = key[len(prefix):]
+                        if relative.startswith(FOLDER):
+                            keys.append(f"s3://{BUCKET}/{key}")
+                return keys
+            
+            
+            def push(metrics):
+                body = "\n".join(metrics) + "\n"
+                request = urllib.request.Request(
+                    f"{PUSHGATEWAY}/metrics/job/budget",
+                    data=body.encode(),
+                    headers={"Content-Type": "text/plain"},
+                    method="PUT",
+                )
+                urllib.request.urlopen(request, timeout=10).read()
+            
+            
+            def main():
+                s3 = boto3.client("s3", region_name=REGION)
+                files = month_to_date_files(s3)
+                if not files:
+                    print(f"no CUR objects under {FOLDER} yet; nothing to publish")
+                    return 0
+            
+                session = boto3.session.Session()
+                credentials = session.get_credentials().get_frozen_credentials()
+                con = duckdb.connect()
+                con.execute(
+                    f"""
+                    CREATE SECRET cur (TYPE S3,
+                        KEY_ID '{credentials.access_key}',
+                        SECRET '{credentials.secret_key}',
+                        SESSION_TOKEN '{credentials.token}',
+                        REGION '{REGION}')
+                    """
+                )
+            
+                total = con.execute("SELECT coalesce(sum(line_item_unblended_cost), 0) FROM read_parquet($files)", {"files": files}).fetchone()[0]
+                by_service = con.execute(
+                    """
+                    SELECT line_item_product_code, sum(line_item_unblended_cost)
+                    FROM read_parquet($files)
+                    GROUP BY 1
+                    HAVING sum(line_item_unblended_cost) > 0.01
+                    ORDER BY 2 DESC
+                    LIMIT 25
+                    """,
+                    {"files": files},
+                ).fetchall()
+            
+                days_elapsed = (TODAY - PERIOD_START).days + 1
+                days_in_month = (PERIOD_START.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
+                projected = float(total) / days_elapsed * days_in_month.day
+            
+                metrics = [
+                    f'cost_month_to_date_usd {float(total):.4f}',
+                    f'cost_projected_month_usd {projected:.4f}',
+                    f'budget_month_usd {BUDGET:.2f}',
+                    f'budget_utilization_ratio {(projected / BUDGET if BUDGET else 0):.4f}',
+                    f'cost_report_timestamp_seconds {int(dt.datetime.now(dt.timezone.utc).timestamp())}',
+                ]
+                metrics += [
+                    'cost_by_service_month_to_date_usd{service="%s"} %.4f' % (service, float(cost))
+                    for service, cost in by_service
+                ]
+            
+                push(metrics)
+                print(json.dumps({"month_to_date_usd": float(total), "projected_usd": projected, "services": len(by_service)}))
+                return 0
+            
+            
+            if __name__ == "__main__":
+                sys.exit(main())
+        EOT
+      + content_type           = (known after apply)
+      + etag                   = "6407cb3c95077795705569ae5db652c6"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "scripts/budget_report.py"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["alertmanager/alertmanager.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            global:
+              resolve_timeout: 5m
+            
+            route:
+              receiver: default
+              group_by: [alertname, probe]
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 4h
+              routes:
+                - matchers: ['severity="critical"']
+                  receiver: default
+                  repeat_interval: 1h
+            
+            inhibit_rules:
+              - source_matchers: [severity="critical"]
+                target_matchers: [severity="warning"]
+                equal: [alertname, probe]
+            
+            receivers:
+              - name: default
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "8690be21d7f3bfbac0698906b396a947"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/alertmanager/alertmanager.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["alloy/config.alloy"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            logging {
+              level  = "warn"
+              format = "logfmt"
+            }
+            
+            // Logs: Loki push API (Fluent Bit/FireLens, Promtail, or the app itself).
+            loki.source.api "push" {
+              http {
+                listen_address = "0.0.0.0"
+                listen_port    = 3100
+              }
+            
+              labels      = { source = "loki-push" }
+              forward_to  = [loki.write.default.receiver]
+            }
+            
+            loki.write "default" {
+              endpoint {
+                url = "http://loki.monitoring.internal:3100/loki/api/v1/push"
+              }
+            }
+            
+            // Traces + metrics: OTLP from the OpenTelemetry SDK/SDK-side car in each service.
+            otelcol.receiver.otlp "default" {
+              grpc {
+                endpoint = "0.0.0.0:4317"
+              }
+            
+              http {
+                endpoint = "0.0.0.0:4318"
+              }
+            
+              output {
+                metrics = [otelcol.exporter.prometheus.default.input]
+                logs    = [otelcol.exporter.loki.default.receiver]
+                traces  = [otelcol.exporter.otlp.tempo.input]
+              }
+            }
+            
+            otelcol.exporter.otlp "tempo" {
+              client {
+                endpoint = "tempo.monitoring.internal:4317"
+            
+                tls {
+                  insecure = true
+                }
+              }
+            }
+            
+            otelcol.exporter.loki "default" {
+              forward_to = [loki.write.default.receiver]
+            }
+            
+            otelcol.exporter.prometheus "default" {
+              forward_to = [prometheus.remote_write.default.receiver]
+            }
+            
+            prometheus.remote_write "default" {
+              endpoint {
+                url = "http://prometheus.monitoring.internal:9090/api/v1/write"
+              }
+            }
+            
+            // Alloy's own metrics, scraped by Prometheus.
+            prometheus.exporter.self "alloy" {
+            }
+            
+            prometheus.scrape "alloy" {
+              targets         = prometheus.exporter.self.alloy.targets
+              forward_to      = [prometheus.remote_write.default.receiver]
+              scrape_interval = "60s"
+            }
+        EOT
+      + content_type           = "text/plain"
+      + etag                   = "935064b23bfec166a1ef831336ac9dd5"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/alloy/config.alloy"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["blackbox/blackbox.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            modules:
+              http_2xx:
+                prober: http
+                timeout: 10s
+                http:
+                  preferred_ip_protocol: ip4
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                  follow_redirects: true
+                  fail_if_not_ssl: true
+            
+              tcp_connect:
+                prober: tcp
+                timeout: 5s
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "8dc688945ffcea9be47906d7d790c326"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/blackbox/blackbox.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["collector/ecs_logs.py"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            """Ship prod ECS task logs into Loki.
+            
+            The services already write to CloudWatch Logs through the awslogs driver; this
+            reads those groups with FilterLogEvents and pushes the lines to Loki, so nothing
+            is queried through CloudWatch dashboards, alarms, metric filters or Insights.
+            Progress is checkpointed on EFS so each run only ships new lines.
+            
+            Writes: Loki POST /loki/api/v1/push and Pushgateway job="ecs-logs".
+            """
+            
+            import json
+            import os
+            import sys
+            import time
+            import urllib.request
+            
+            import boto3
+            
+            REGION = os.environ.get("AWS_REGION", "eu-west-1")
+            PREFIX = os.environ["LOG_GROUP_PREFIX"]
+            LOKI = os.environ["LOKI_URL"].rstrip("/")
+            PUSH = os.environ["PUSHGATEWAY_URL"].rstrip("/")
+            STATE = os.environ.get("STATE_FILE", "/collector/state/ecs_logs.json")
+            LOOKBACK_MS = int(os.environ.get("LOOKBACK_MINUTES", "15")) * 60_000
+            LIMIT = int(os.environ.get("MAX_EVENTS_PER_GROUP", "2000"))
+            BATCH = int(os.environ.get("LOKI_BATCH_SIZE", "500"))
+            SEEN_IDS = 200
+            
+            
+            def gauge(name, value, **labels):
+                label = ",".join(f'{key}="{val}"' for key, val in labels.items())
+                return f"{name}{{{label}}} {value}" if label else f"{name} {value}"
+            
+            
+            def load_state():
+                try:
+                    with open(STATE) as handle:
+                        return json.load(handle)
+                except (OSError, ValueError):
+                    return {}
+            
+            
+            def save_state(state):
+                os.makedirs(os.path.dirname(STATE), exist_ok=True)
+                tmp = f"{STATE}.tmp"
+                with open(tmp, "w") as handle:
+                    json.dump(state, handle)
+                os.replace(tmp, STATE)
+            
+            
+            def service_of(group):
+                tail = group[len(PREFIX):].strip("/-")
+                return tail or group.rsplit("/", 1)[-1]
+            
+            
+            def push_loki(entries):
+                body = json.dumps({"streams": entries}).encode()
+                request = urllib.request.Request(f"{LOKI}/loki/api/v1/push", data=body, method="POST")
+                request.add_header("Content-Type", "application/json")
+                urllib.request.urlopen(request, timeout=30).read()
+            
+            
+            def push_metrics(lines):
+                body = ("\n".join(lines) + "\n").encode()
+                request = urllib.request.Request(f"{PUSH}/metrics/job/ecs-logs", data=body, method="PUT")
+                request.add_header("Content-Type", "text/plain")
+                urllib.request.urlopen(request, timeout=15).read()
+            
+            
+            def start_time(state, group):
+                now = int(time.time() * 1000)
+                previous = state.get(group, {}).get("ts", now - LOOKBACK_MS)
+                return max(previous, now - LOOKBACK_MS)
+            
+            
+            def ship(logs, group, state):
+                cursor = state.get(group, {})
+                last_ts = cursor.get("ts")
+                seen = set(cursor.get("ids", []))
+                response = logs.filter_log_events(
+                    logGroupName=group, startTime=start_time(state, group), limit=LIMIT, interleaved=True
+                )
+                events = sorted(response.get("events", []), key=lambda event: event["timestamp"])
+            
+                values, newest, ids = [], last_ts, list(seen)
+                for event in events:
+                    timestamp, event_id = event["timestamp"], event["eventId"]
+                    if last_ts is not None and (
+                        timestamp < last_ts or (timestamp == last_ts and event_id in seen)
+                    ):
+                        continue
+                    values.append([str(timestamp * 1_000_000), event["message"].rstrip("\n")])
+                    if newest is None or timestamp > newest:
+                        newest, ids = timestamp, []
+                    if timestamp == newest:
+                        ids.append(event_id)
+            
+                if values:
+                    for start in range(0, len(values), BATCH):
+                        push_loki([{
+                            "stream": {"source": "app", "service": service_of(group), "log_group": group},
+                            "values": values[start:start + BATCH],
+                        }])
+            
+                previous_total = cursor.get("total", 0)
+                if newest is None and last_ts is None:
+                    newest = int(time.time() * 1000)
+                state[group] = {
+                    "ts": newest if newest is not None else last_ts,
+                    "ids": ids[-SEEN_IDS:],
+                    "total": previous_total + len(values),
+                    "last_event": values[-1][0] if values else cursor.get("last_event"),
+                }
+                return len(values), newest if newest is not None else cursor.get("last_event")
+            
+            
+            def main():
+                state = load_state()
+                lines = []
+                try:
+                    logs = boto3.client("logs", region_name=REGION)
+                    groups = []
+                    for page in logs.get_paginator("describe_log_groups").paginate(logGroupNamePrefix=PREFIX):
+                        groups.extend(page["logGroups"])
+                    shipped = 0
+                    for group in groups:
+                        name = group["logGroupName"]
+                        count, last_event = ship(logs, name, state)
+                        shipped += count
+                        labels = {"log_group": name, "service": service_of(name)}
+                        lines.append(gauge("ecs_logs_shipped_total", state[name]["total"], **labels))
+                        if last_event:
+                            lines.append(gauge("ecs_logs_last_event_timestamp_seconds", int(last_event / 1000), **labels))
+                    save_state(state)
+                    lines += [gauge("ecs_logs_shipper_up", 1), gauge("ecs_logs_scrape_timestamp_seconds", int(time.time())), gauge("ecs_logs_shipped_run_total", shipped)]
+                except Exception as exc:  # noqa: BLE001 - reported through the metric
+                    print(json.dumps({"error": str(exc)}), file=sys.stderr)
+                    lines = [gauge("ecs_logs_shipper_up", 0), gauge("ecs_logs_scrape_timestamp_seconds", int(time.time()))]
+                push_metrics(lines)
+            
+            
+            main()
+        EOT
+      + content_type           = "text/plain"
+      + etag                   = "4c15d7d6b95ad6a8b9296c179b9b82b1"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/collector/ecs_logs.py"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["collector/ecs_metrics.py"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            """ECS cluster and service state for Pushgateway.
+            
+            Reads the ECS API (DescribeServices / ListTasks) instead of Container Insights or
+            CloudWatch metrics, and is pushed under job="ecs" where Prometheus scrapes it.
+            A failure only reports ecs_up 0; the task itself exits 0.
+            """
+            
+            import json
+            import os
+            import sys
+            import time
+            import urllib.request
+            
+            import boto3
+            
+            REGION = os.environ.get("AWS_REGION", "eu-west-1")
+            CLUSTER = os.environ["ECS_CLUSTER"]
+            PUSH = os.environ["PUSHGATEWAY_URL"].rstrip("/")
+            STOPPED_LIMIT = int(os.environ.get("STOPPED_TASK_LIMIT", "50"))
+            
+            
+            def gauge(name, value, **labels):
+                label = ",".join(f'{key}="{val}"' for key, val in labels.items())
+                return f"{name}{{{label}}} {value}" if label else f"{name} {value}"
+            
+            
+            def push(lines):
+                body = ("\n".join(lines) + "\n").encode()
+                request = urllib.request.Request(f"{PUSH}/metrics/job/ecs", data=body, method="PUT")
+                request.add_header("Content-Type", "text/plain")
+                urllib.request.urlopen(request, timeout=15).read()
+            
+            
+            def services(ecs):
+                arns = []
+                for page in ecs.get_paginator("list_services").paginate(cluster=CLUSTER):
+                    arns.extend(page["serviceArns"])
+                described = []
+                for start in range(0, len(arns), 10):
+                    described.extend(
+                        ecs.describe_services(cluster=CLUSTER, services=arns[start:start + 10])["services"]
+                    )
+                return described
+            
+            
+            def tasks(ecs, status):
+                count = 0
+                for page in ecs.get_paginator("list_tasks").paginate(cluster=CLUSTER, desiredStatus=status):
+                    count += len(page["taskArns"])
+                return count
+            
+            
+            def stopped_reasons(ecs):
+                arns = ecs.list_tasks(cluster=CLUSTER, desiredStatus="STOPPED")["taskArns"][:STOPPED_LIMIT]
+                reasons = {}
+                if arns:
+                    for task in ecs.describe_tasks(cluster=CLUSTER, tasks=arns)["tasks"]:
+                        code = task.get("stopCode", "Unknown")
+                        for container in task.get("containers", []):
+                            if container.get("exitCode"):
+                                code = f"{code}_{container['exitCode']}"
+                        reasons[code] = reasons.get(code, 0) + 1
+                return reasons
+            
+            
+            def collect(ecs):
+                lines = [gauge("ecs_up", 1)]
+                described = services(ecs)
+            
+                lines.append(gauge("ecs_cluster_services", len(described), cluster=CLUSTER))
+                lines.append(gauge("ecs_cluster_running_tasks", tasks(ecs, "RUNNING"), cluster=CLUSTER))
+                lines.append(gauge("ecs_cluster_pending_tasks", tasks(ecs, "PENDING"), cluster=CLUSTER))
+            
+                for service in described:
+                    name = service["serviceName"]
+                    lines.append(gauge("ecs_service_desired_count", service["desiredCount"], cluster=CLUSTER, service=name))
+                    lines.append(gauge("ecs_service_running_count", service["runningCount"], cluster=CLUSTER, service=name))
+                    lines.append(gauge("ecs_service_pending_count", service["pendingCount"], cluster=CLUSTER, service=name))
+            
+                    failed = 0
+                    for deployment in service.get("deployments", []):
+                        state = deployment.get("rolloutState", "UNKNOWN")
+                        lines.append(gauge("ecs_service_rollout_state", 1, cluster=CLUSTER, service=name, state=state))
+                        if state == "FAILED":
+                            failed = 1
+                    lines.append(gauge("ecs_service_deployment_failed", failed, cluster=CLUSTER, service=name))
+                    lines.append(gauge("ecs_service_desired_status", 1 if service["status"] == "ACTIVE" else 0, cluster=CLUSTER, service=name))
+            
+                for code, count in stopped_reasons(ecs).items():
+                    lines.append(gauge("ecs_stopped_tasks", count, cluster=CLUSTER, stop_code=code))
+            
+                lines.append(gauge("ecs_scrape_timestamp_seconds", int(time.time())))
+                return lines
+            
+            
+            def main():
+                try:
+                    push(collect(boto3.client("ecs", region_name=REGION)))
+                except Exception as exc:  # noqa: BLE001 - any failure is reported through the metric
+                    print(json.dumps({"error": str(exc)}), file=sys.stderr)
+                    push([gauge("ecs_up", 0), gauge("ecs_scrape_timestamp_seconds", int(time.time()))])
+            
+            
+            main()
+        EOT
+      + content_type           = "text/plain"
+      + etag                   = "ff9eb28454869bf8c61454c3e87bc6b6"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/collector/ecs_metrics.py"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/dashboards/cost.json"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = jsonencode(
+            {
+              + panels        = [
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals   = 2
+                              + max        = 1.5
+                              + min        = 0
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "green"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "orange"
+                                          + value = 0.8
+                                        },
+                                      + {
+                                          + color = "red"
+                                          + value = 1.0
+                                        },
+                                    ]
+                                }
+                              + unit       = "percentunit"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 8
+                          + x = 0
+                          + y = 0
+                        }
+                      + id          = 1
+                      + options     = {
+                          + showThresholdLabels  = true
+                          + showThresholdMarkers = true
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "budget_utilization_ratio"
+                              + legendFormat = "utilisation"
+                            },
+                        ]
+                      + title       = "Budget utilisation (projected month-end)"
+                      + type        = "gauge"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 5
+                          + x = 8
+                          + y = 0
+                        }
+                      + id          = 2
+                      + targets     = [
+                          + {
+                              + expr         = "cost_month_to_date_usd"
+                              + legendFormat = "USD"
+                            },
+                        ]
+                      + title       = "Month-to-date"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 5
+                          + x = 13
+                          + y = 0
+                        }
+                      + id          = 3
+                      + targets     = [
+                          + {
+                              + expr         = "cost_projected_month_usd"
+                              + legendFormat = "USD"
+                            },
+                        ]
+                      + title       = "Projected month-end"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 6
+                          + x = 18
+                          + y = 0
+                        }
+                      + id          = 4
+                      + targets     = [
+                          + {
+                              + expr         = "budget_month_usd"
+                              + legendFormat = "USD"
+                            },
+                        ]
+                      + title       = "Monthly budget"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 10
+                          + w = 12
+                          + x = 0
+                          + y = 7
+                        }
+                      + id          = 5
+                      + options     = {
+                          + displayMode = "gradient"
+                          + orientation = "horizontal"
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "topk(15, cost_by_service_month_to_date_usd)"
+                              + format       = "table"
+                              + instant      = true
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Top services this month"
+                      + type        = "bargauge"
+                    },
+                  + {
+                      + datasource      = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig     = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos         = {
+                          + h = 10
+                          + w = 12
+                          + x = 12
+                          + y = 7
+                        }
+                      + id              = 6
+                      + targets         = [
+                          + {
+                              + expr    = "sort_desc(cost_by_service_month_to_date_usd)"
+                              + format  = "table"
+                              + instant = true
+                            },
+                        ]
+                      + title           = "Service breakdown"
+                      + transformations = [
+                          + {
+                              + id      = "organize"
+                              + options = {
+                                  + excludeByName = {
+                                      + Time     = true
+                                      + __name__ = true
+                                    }
+                                  + renameByName  = {
+                                      + Value   = "USD"
+                                      + service = "Service"
+                                    }
+                                }
+                            },
+                        ]
+                      + type            = "table"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 20
+                                  + lineWidth   = 2
+                                }
+                              + max    = 1
+                              + min    = 0
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 24
+                          + x = 0
+                          + y = 17
+                        }
+                      + id          = 7
+                      + targets     = [
+                          + {
+                              + expr         = "ALERTS{alertname=~\"Budget.*|Cost.*\"}"
+                              + legendFormat = "{{alertname}} ({{alertstate}})"
+                            },
+                        ]
+                      + title       = "Budget alerts"
+                      + type        = "timeseries"
+                    },
+                ]
+              + refresh       = "15m"
+              + schemaVersion = 39
+              + tags          = [
+                  + "agrovesto",
+                  + "cost",
+                ]
+              + time          = {
+                  + from = "now-30d"
+                  + to   = "now"
+                }
+              + timezone      = "browser"
+              + title         = "Cost and budget"
+              + uid           = "agrovesto-cost"
+            }
+        )
+      + content_type           = "application/json"
+      + etag                   = "3589289bcfed95383a2a0104ac7f8071"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/dashboards/cost.json"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/dashboards/ecs.json"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = jsonencode(
+            {
+              + panels        = [
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 0
+                          + y = 0
+                        }
+                      + id          = 1
+                      + targets     = [
+                          + {
+                              + expr         = "sum(ecs_cluster_running_tasks)"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Running tasks"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 4
+                          + y = 0
+                        }
+                      + id          = 2
+                      + targets     = [
+                          + {
+                              + expr         = "sum(ecs_cluster_pending_tasks)"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Pending tasks"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 8
+                          + y = 0
+                        }
+                      + id          = 3
+                      + targets     = [
+                          + {
+                              + expr         = "sum(ecs_cluster_services)"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Services"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + mappings = [
+                                  + {
+                                      + options = {
+                                          + "0" = {
+                                              + color = "red"
+                                              + text  = "Down"
+                                            }
+                                          + "1" = {
+                                              + color = "green"
+                                              + text  = "Up"
+                                            }
+                                        }
+                                      + type    = "value"
+                                    },
+                                ]
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 12
+                          + y = 0
+                        }
+                      + id          = 4
+                      + targets     = [
+                          + {
+                              + expr         = "ecs_up"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Collector reachable"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 0
+                              + unit     = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 16
+                          + y = 0
+                        }
+                      + id          = 5
+                      + targets     = [
+                          + {
+                              + expr         = "time() - ecs_scrape_timestamp_seconds"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Collector age"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 0
+                              + unit     = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 4
+                          + x = 20
+                          + y = 0
+                        }
+                      + id          = 6
+                      + targets     = [
+                          + {
+                              + expr         = "time() - ecs_logs_scrape_timestamp_seconds"
+                              + legendFormat = ""
+                            },
+                        ]
+                      + title       = "Log shipper age"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 9
+                          + w = 12
+                          + x = 0
+                          + y = 5
+                        }
+                      + id          = 7
+                      + targets     = [
+                          + {
+                              + expr         = "ecs_service_running_count"
+                              + legendFormat = "{{service}}"
+                            },
+                          + {
+                              + expr         = "ecs_service_desired_count"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Tasks running vs desired"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 9
+                          + w = 12
+                          + x = 12
+                          + y = 5
+                        }
+                      + id          = 8
+                      + targets     = [
+                          + {
+                              + expr         = "ecs_service_pending_count"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Tasks stuck pending"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 14
+                        }
+                      + id          = 9
+                      + targets     = [
+                          + {
+                              + expr         = "ecs_stopped_tasks"
+                              + legendFormat = "{{stop_code}}"
+                            },
+                        ]
+                      + title       = "Tasks stopping by stop code"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 14
+                        }
+                      + id          = 10
+                      + targets     = [
+                          + {
+                              + expr    = "ecs_service_desired_count"
+                              + format  = "table"
+                              + instant = true
+                            },
+                          + {
+                              + expr    = "ecs_service_running_count"
+                              + format  = "table"
+                              + instant = true
+                            },
+                          + {
+                              + expr    = "ecs_service_pending_count"
+                              + format  = "table"
+                              + instant = true
+                            },
+                          + {
+                              + expr    = "ecs_service_deployment_failed"
+                              + format  = "table"
+                              + instant = true
+                            },
+                        ]
+                      + title       = "Service state"
+                      + type        = "table"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "loki"
+                          + uid  = "loki"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 22
+                        }
+                      + id          = 11
+                      + targets     = [
+                          + {
+                              + expr         = "sum by (service) (rate({source=\"app\"} |= \"\" [5m]))"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Log lines per service (Loki)"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource = {
+                          + type = "loki"
+                          + uid  = "loki"
+                        }
+                      + gridPos    = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 22
+                        }
+                      + id         = 12
+                      + options    = {
+                          + showTime       = true
+                          + sortOrder      = "Descending"
+                          + wrapLogMessage = true
+                        }
+                      + targets    = [
+                          + {
+                              + expr = "{source=\"app\"} |~ \"(?i)error|exception|fail\""
+                            },
+                        ]
+                      + title      = "Recent service logs"
+                      + type       = "logs"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {}
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 12
+                          + x = 0
+                          + y = 30
+                        }
+                      + id          = 13
+                      + targets     = [
+                          + {
+                              + expr         = "ecs_logs_shipped_total"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Log lines shipped per group"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + unit = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 7
+                          + w = 12
+                          + x = 12
+                          + y = 30
+                        }
+                      + id          = 14
+                      + targets     = [
+                          + {
+                              + expr         = "time() - ecs_logs_last_event_timestamp_seconds"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Newest shipped log event age"
+                      + type        = "timeseries"
+                    },
+                ]
+              + refresh       = "1m"
+              + schemaVersion = 39
+              + tags          = [
+                  + "agrovesto",
+                  + "ecs",
+                ]
+              + templating    = {
+                  + list = [
+                      + {
+                          + datasource = {
+                              + type = "prometheus"
+                              + uid  = "prometheus"
+                            }
+                          + includeAll = true
+                          + label      = "Service"
+                          + multi      = true
+                          + name       = "service"
+                          + query      = "label_values(ecs_service_desired_count, service)"
+                          + refresh    = 2
+                          + type       = "query"
+                        },
+                    ]
+                }
+              + time          = {
+                  + from = "now-12h"
+                  + to   = "now"
+                }
+              + timezone      = "browser"
+              + title         = "ECS platform"
+              + uid           = "agrovesto-ecs"
+              + version       = 1
+            }
+        )
+      + content_type           = "application/json"
+      + etag                   = "d554ba16033d037d84bc3aa405fcf7df"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/dashboards/ecs.json"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/dashboards/platform.json"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = jsonencode(
+            {
+              + panels        = [
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "red"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "green"
+                                          + value = 7
+                                        },
+                                    ]
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 0
+                          + y = 0
+                        }
+                      + id          = 1
+                      + options     = {
+                          + colorMode = "background"
+                          + graphMode = "none"
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "sum(probe_success{probe=~\"$probe\"})"
+                              + legendFormat = "up"
+                            },
+                        ]
+                      + title       = "Endpoints up"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "green"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "red"
+                                          + value = 1
+                                        },
+                                    ]
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 6
+                          + y = 0
+                        }
+                      + id          = 2
+                      + options     = {
+                          + colorMode = "background"
+                          + graphMode = "none"
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "count(up == 0)"
+                              + legendFormat = "down"
+                            },
+                        ]
+                      + title       = "Monitoring targets down"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals   = 1
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "red"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "orange"
+                                          + value = 21
+                                        },
+                                      + {
+                                          + color = "green"
+                                          + value = 45
+                                        },
+                                    ]
+                                }
+                              + unit       = "none"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 12
+                          + y = 0
+                        }
+                      + id          = 3
+                      + targets     = [
+                          + {
+                              + expr         = "(min(probe_ssl_earliest_cert_expiry) - time()) / 86400"
+                              + legendFormat = "days"
+                            },
+                        ]
+                      + title       = "Earliest certificate expiry"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals = 2
+                              + unit     = "currencyUSD"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 18
+                          + y = 0
+                        }
+                      + id          = 4
+                      + targets     = [
+                          + {
+                              + expr         = "cost_month_to_date_usd"
+                              + legendFormat = "USD"
+                            },
+                        ]
+                      + title       = "Month-to-date spend"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 10
+                                  + lineWidth   = 2
+                                }
+                              + max    = 1
+                              + min    = 0
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 5
+                        }
+                      + id          = 5
+                      + targets     = [
+                          + {
+                              + expr         = "probe_success{probe=~\"$probe\"}"
+                              + legendFormat = "{{probe}}"
+                            },
+                        ]
+                      + title       = "Probe success"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 0
+                                  + lineWidth   = 2
+                                }
+                              + unit   = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 5
+                        }
+                      + id          = 6
+                      + targets     = [
+                          + {
+                              + expr         = "probe_duration_seconds{probe=~\"$probe\"}"
+                              + legendFormat = "{{probe}}"
+                            },
+                        ]
+                      + title       = "Probe duration"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 0
+                                  + lineWidth   = 2
+                                }
+                              + max    = 1
+                              + min    = 0
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 13
+                        }
+                      + id          = 7
+                      + targets     = [
+                          + {
+                              + expr         = "up"
+                              + legendFormat = "{{job}} ({{instance}})"
+                            },
+                        ]
+                      + title       = "Monitoring component health"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource      = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + gridPos         = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 13
+                        }
+                      + id              = 8
+                      + targets         = [
+                          + {
+                              + expr    = "ALERTS{alertstate=\"firing\"}"
+                              + format  = "table"
+                              + instant = true
+                            },
+                        ]
+                      + title           = "Active alerts"
+                      + transformations = [
+                          + {
+                              + id      = "organize"
+                              + options = {
+                                  + excludeByName = {
+                                      + Time     = true
+                                      + __name__ = true
+                                    }
+                                  + renameByName  = {
+                                      + alertname = "Alert"
+                                      + probe     = "Probe"
+                                      + severity  = "Severity"
+                                    }
+                                }
+                            },
+                        ]
+                      + type            = "table"
+                    },
+                ]
+              + refresh       = "1m"
+              + schemaVersion = 39
+              + tags          = [
+                  + "agrovesto",
+                  + "platform",
+                ]
+              + templating    = {
+                  + list = [
+                      + {
+                          + datasource = {
+                              + type = "prometheus"
+                              + uid  = "prometheus"
+                            }
+                          + includeAll = true
+                          + label      = "Probe"
+                          + multi      = true
+                          + name       = "probe"
+                          + query      = "label_values(probe_success, probe)"
+                          + refresh    = 2
+                          + type       = "query"
+                        },
+                    ]
+                }
+              + time          = {
+                  + from = "now-6h"
+                  + to   = "now"
+                }
+              + timezone      = "browser"
+              + title         = "Platform overview"
+              + uid           = "agrovesto-platform"
+            }
+        )
+      + content_type           = "application/json"
+      + etag                   = "e2d4c601a6b88fa1de3877852e44d4a4"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/dashboards/platform.json"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/dashboards/services.json"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = jsonencode(
+            {
+              + panels        = [
+                  + {
+                      + gridPos = {
+                          + h = 1
+                          + w = 24
+                          + x = 0
+                          + y = 0
+                        }
+                      + id      = 1
+                      + title   = "Uptime and latency (blackbox probes)"
+                      + type    = "row"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 0
+                                  + lineWidth   = 2
+                                }
+                              + unit   = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 1
+                        }
+                      + id          = 2
+                      + targets     = [
+                          + {
+                              + expr         = "probe_duration_seconds{probe=~\"$service\"}"
+                              + legendFormat = "{{probe}}"
+                            },
+                        ]
+                      + title       = "Probe duration by service"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom   = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 0
+                                  + lineWidth   = 2
+                                }
+                              + decimals = 1
+                              + unit     = "short"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 1
+                        }
+                      + id          = 3
+                      + targets     = [
+                          + {
+                              + expr         = "(probe_ssl_earliest_cert_expiry{probe=~\"$service\"} - time()) / 86400"
+                              + legendFormat = "{{probe}}"
+                            },
+                        ]
+                      + title       = "TLS certificate expiry"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + gridPos = {
+                          + h = 1
+                          + w = 24
+                          + x = 0
+                          + y = 9
+                        }
+                      + id      = 4
+                      + title   = "Logs (Loki)"
+                      + type    = "row"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "loki"
+                          + uid  = "loki"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 10
+                                  + lineWidth   = 2
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 10
+                        }
+                      + id          = 5
+                      + targets     = [
+                          + {
+                              + expr         = "sum by (service) (rate({source=\"app\"} |= \"level=error\" [5m]))"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Error lines per service"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource = {
+                          + type = "loki"
+                          + uid  = "loki"
+                        }
+                      + gridPos    = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 10
+                        }
+                      + id         = 6
+                      + options    = {
+                          + showTime       = true
+                          + sortOrder      = "Descending"
+                          + wrapLogMessage = true
+                        }
+                      + targets    = [
+                          + {
+                              + expr = "{source=\"app\"} |= \"error\" | line_format \"{{.service}} {{.message}}\""
+                            },
+                        ]
+                      + title      = "Recent error logs"
+                      + type       = "logs"
+                    },
+                  + {
+                      + gridPos = {
+                          + h = 1
+                          + w = 24
+                          + x = 0
+                          + y = 18
+                        }
+                      + id      = 7
+                      + title   = "Traces (Tempo)"
+                      + type    = "row"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 10
+                                  + lineWidth   = 2
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 19
+                        }
+                      + id          = 8
+                      + targets     = [
+                          + {
+                              + expr         = "sum by (service) (rate(traces_spanmetrics_calls_total[5m]))"
+                              + legendFormat = "{{service}}"
+                            },
+                        ]
+                      + title       = "Spans by service"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource = {
+                          + type = "tempo"
+                          + uid  = "tempo"
+                        }
+                      + gridPos    = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 19
+                        }
+                      + id         = 9
+                      + options    = {
+                          + showTime = true
+                        }
+                      + targets    = [
+                          + {
+                              + query     = "{ .service.name =~ \".+\" }"
+                              + queryType = "traceql"
+                            },
+                        ]
+                      + title      = "Recent traces"
+                      + type       = "table"
+                    },
+                  + {
+                      + gridPos = {
+                          + h = 1
+                          + w = 24
+                          + x = 0
+                          + y = 27
+                        }
+                      + id      = 10
+                      + title   = "Database (prod SQL Server, queried from SQL Server DMVs)"
+                      + type    = "row"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + max        = 1
+                              + min        = 0
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "red"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "green"
+                                          + value = 1
+                                        },
+                                    ]
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 0
+                          + y = 28
+                        }
+                      + id          = 11
+                      + options     = {
+                          + colorMode = "background"
+                          + graphMode = "none"
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "mssql_up"
+                              + legendFormat = "up"
+                            },
+                        ]
+                      + title       = "Metrics task reachable"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "green"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "orange"
+                                          + value = 5
+                                        },
+                                      + {
+                                          + color = "red"
+                                          + value = 20
+                                        },
+                                    ]
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 6
+                          + y = 28
+                        }
+                      + id          = 12
+                      + options     = {
+                          + colorMode = "value"
+                          + graphMode = "area"
+                        }
+                      + targets     = [
+                          + {
+                              + expr         = "mssql_blocked_sessions"
+                              + legendFormat = "blocked"
+                            },
+                        ]
+                      + title       = "Blocked sessions"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "red"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "orange"
+                                          + value = 300
+                                        },
+                                      + {
+                                          + color = "green"
+                                          + value = 900
+                                        },
+                                    ]
+                                }
+                              + unit       = "s"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 12
+                          + y = 28
+                        }
+                      + id          = 13
+                      + targets     = [
+                          + {
+                              + expr         = "mssql_page_life_expectancy_seconds"
+                              + legendFormat = "seconds"
+                            },
+                        ]
+                      + title       = "Page life expectancy"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + decimals   = 2
+                              + thresholds = {
+                                  + mode  = "absolute"
+                                  + steps = [
+                                      + {
+                                          + color = "red"
+                                          + value = null
+                                        },
+                                      + {
+                                          + color = "orange"
+                                          + value = 0.15
+                                        },
+                                      + {
+                                          + color = "green"
+                                          + value = 0.3
+                                        },
+                                    ]
+                                }
+                              + unit       = "percentunit"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 5
+                          + w = 6
+                          + x = 18
+                          + y = 28
+                        }
+                      + id          = 14
+                      + targets     = [
+                          + {
+                              + expr         = "min(mssql_volume_available_bytes / mssql_volume_total_bytes)"
+                              + legendFormat = "free"
+                            },
+                        ]
+                      + title       = "Free disk on the RDS volume"
+                      + type        = "stat"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 10
+                                  + lineWidth   = 2
+                                }
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 0
+                          + y = 33
+                        }
+                      + id          = 15
+                      + targets     = [
+                          + {
+                              + expr         = "rate(mssql_deadlocks_total[15m])"
+                              + legendFormat = "deadlocks/s"
+                            },
+                          + {
+                              + expr         = "rate(mssql_logins_total[15m])"
+                              + legendFormat = "logins/s"
+                            },
+                        ]
+                      + title       = "Deadlocks and logins"
+                      + type        = "timeseries"
+                    },
+                  + {
+                      + datasource  = {
+                          + type = "prometheus"
+                          + uid  = "prometheus"
+                        }
+                      + fieldConfig = {
+                          + defaults  = {
+                              + custom = {
+                                  + drawStyle   = "line"
+                                  + fillOpacity = 10
+                                  + lineWidth   = 2
+                                }
+                              + unit   = "bytes"
+                            }
+                          + overrides = []
+                        }
+                      + gridPos     = {
+                          + h = 8
+                          + w = 12
+                          + x = 12
+                          + y = 33
+                        }
+                      + id          = 16
+                      + targets     = [
+                          + {
+                              + expr         = "mssql_database_size_bytes"
+                              + legendFormat = "{{db}}"
+                            },
+                        ]
+                      + title       = "Database size"
+                      + type        = "timeseries"
+                    },
+                ]
+              + refresh       = "1m"
+              + schemaVersion = 39
+              + tags          = [
+                  + "agrovesto",
+                  + "services",
+                ]
+              + templating    = {
+                  + list = [
+                      + {
+                          + datasource = {
+                              + type = "prometheus"
+                              + uid  = "prometheus"
+                            }
+                          + includeAll = true
+                          + label      = "Service"
+                          + multi      = true
+                          + name       = "service"
+                          + query      = "label_values(probe_success, probe)"
+                          + refresh    = 2
+                          + type       = "query"
+                        },
+                    ]
+                }
+              + time          = {
+                  + from = "now-3h"
+                  + to   = "now"
+                }
+              + timezone      = "browser"
+              + title         = "Services: logs, traces, metrics"
+              + uid           = "agrovesto-services"
+            }
+        )
+      + content_type           = "application/json"
+      + etag                   = "240db5c56df6474c776fbc3b7ad62fbf"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/dashboards/services.json"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/provisioning/dashboards/dashboards.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            apiVersion: 1
+            
+            providers:
+              - name: agrovesto
+                orgId: 1
+                folder: Agrovesto
+                type: file
+                disableDeletion: false
+                updateIntervalSeconds: 30
+                allowUiUpdates: true
+                options:
+                  path: /var/lib/grafana/config/dashboards
+                  foldersFromFilesStructure: false
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "c1ab3e58eff4bb92066c41ee230075cd"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/provisioning/dashboards/dashboards.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["grafana/provisioning/datasources/datasources.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            apiVersion: 1
+            
+            datasources:
+              - name: Prometheus
+                uid: prometheus
+                type: prometheus
+                access: proxy
+                url: http://prometheus.monitoring.internal:9090
+                isDefault: true
+                jsonData:
+                  timeInterval: 60s
+            
+              - name: Loki
+                uid: loki
+                type: loki
+                access: proxy
+                url: http://loki.monitoring.internal:3100
+                jsonData:
+                  maxLines: 1000
+                  derivedFields:
+                    - name: TraceID
+                      matcherRegex: "trace_id=(\\w+)"
+                      datasourceUid: tempo
+                      url: "${__value.raw}"
+            
+              - name: Tempo
+                uid: tempo
+                type: tempo
+                access: proxy
+                url: http://tempo.monitoring.internal:3200
+                jsonData:
+                  tracesToLogsV2:
+                    datasourceUid: loki
+                    filterByTraceID: true
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "5f1e429bf69189c092bf5db54b43a9bc"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/grafana/provisioning/datasources/datasources.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["loki/config.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            auth_enabled: false
+            
+            server:
+              http_listen_port: 3100
+              log_level: warn
+            
+            common:
+              instance_addr: 127.0.0.1
+              path_prefix: /loki
+              storage:
+                filesystem:
+                  chunks_directory: /loki/chunks
+                  rules_directory: /loki/config/rules
+              replication_factor: 1
+              ring:
+                kvstore:
+                  store: inmemory
+            
+            schema_config:
+              configs:
+                - from: 2024-01-01
+                  store: tsdb
+                  object_store: filesystem
+                  schema: v13
+                  index:
+                    prefix: index_
+                    period: 24h
+            
+            limits_config:
+              retention_period: 720h
+              allow_structured_metadata: true
+              max_query_series: 5000
+            
+            compactor:
+              working_directory: /loki/compactor
+              retention_enabled: true
+              delete_request_store: filesystem
+            
+            ruler:
+              storage:
+                type: local
+                local:
+                  directory: /loki/config/rules
+              rule_path: /loki/rules-temp
+              alertmanager_url: http://alertmanager.monitoring.internal:9093
+              enable_api: true
+              ring:
+                kvstore:
+                  store: inmemory
+            
+            analytics:
+              reporting_enabled: false
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "3956a47cdbb85d263c5185093967a6c7"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/loki/config.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["loki/rules/application.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            groups:
+              - name: application-logs
+                rules:
+                  - alert: ApplicationErrorSpike
+                    expr: sum(rate({source="app"} |= "level=error" [10m])) > 1
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Error-rate spike in application logs"
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "151305e601b4c34de312dae6b0be7707"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/loki/rules/application.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["prometheus/prometheus.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            global:
+              scrape_interval: 60s
+              scrape_timeout: 10s
+              evaluation_interval: 60s
+              external_labels:
+                stack: monitoring
+                env: prod
+            
+            rule_files:
+              - /prometheus/config/rules/*.yml
+            
+            alerting:
+              alertmanagers:
+                - static_configs:
+                    - targets: ["alertmanager.monitoring.internal:9093"]
+            
+            scrape_configs:
+              - job_name: prometheus
+                static_configs:
+                  - targets: ["localhost:9090"]
+            
+              - job_name: pushgateway
+                honor_labels: true
+                static_configs:
+                  - targets: ["pushgateway.monitoring.internal:9091"]
+            
+              - job_name: alloy
+                static_configs:
+                  - targets: ["alloy.monitoring.internal:12345"]
+            
+              - job_name: loki
+                static_configs:
+                  - targets: ["loki.monitoring.internal:3100"]
+            
+              - job_name: tempo
+                static_configs:
+                  - targets: ["tempo.monitoring.internal:3200"]
+            
+              - job_name: grafana
+                static_configs:
+                  - targets: ["grafana.monitoring.internal:3000"]
+            
+              - job_name: alertmanager
+                static_configs:
+                  - targets: ["alertmanager.monitoring.internal:9093"]
+            
+              - job_name: blackbox
+                static_configs:
+                  - targets: ["blackbox.monitoring.internal:9115"]
+            
+              - job_name: uptime
+                metrics_path: /probe
+                params:
+                  module: [http_2xx]
+                static_configs:
+                      - targets: ["https://grafana.nomaos.com/api/health"]
+                        labels:
+                          probe: grafana
+                      - targets: ["https://input-api.nomaos.com/"]
+                        labels:
+                          probe: input
+                      - targets: ["https://moneval-api.nomaos.com/"]
+                        labels:
+                          probe: moneval
+                      - targets: ["https://onboarding-api.nomaos.com/"]
+                        labels:
+                          probe: onboarding
+                      - targets: ["https://serviceprovider-api.nomaos.com/"]
+                        labels:
+                          probe: serviceprovider
+                      - targets: ["https://vault.nomaos.com/v1/sys/health"]
+                        labels:
+                          probe: vault
+                      - targets: ["https://wallet-api.nomaos.com/"]
+                        labels:
+                          probe: wallet
+                relabel_configs:
+                  - source_labels: [__address__]
+                    target_label: __param_target
+                  - source_labels: [__param_target]
+                    target_label: instance
+                  - target_label: __address__
+                    replacement: blackbox.monitoring.internal:9115
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "5b8ba4b4a12a0f19cccdade7b36c41b8"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/prometheus/prometheus.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["prometheus/rules/cost.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            groups:
+              - name: cost
+                rules:
+                  - alert: BudgetThresholdExceeded
+                    expr: budget_utilization_ratio > 0.8
+                    for: 15m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Projected month-end spend passed 80% of the monthly budget"
+                      description: "budget_utilization_ratio = {{ $value }}"
+            
+                  - alert: CostReportStale
+                    expr: time() - cost_report_timestamp_seconds > 129600
+                    for: 30m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "The daily cost report has not run for over 36h"
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "6f8f1c2efc9a7031448b5f4fcb92d690"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/prometheus/rules/cost.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["prometheus/rules/database.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            groups:
+              - name: database
+                rules:
+                  - alert: MssqlUnreachable
+                    expr: mssql_up == 0
+                    for: 15m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "The prod SQL Server could not be reached by the metrics task"
+                      description: "job=mssql target {{ $labels.instance }}"
+            
+                  - alert: MssqlMetricsStale
+                    expr: time() - mssql_scrape_timestamp_seconds > 10800
+                    for: 30m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "No SQL Server metrics for over 3h"
+            
+                  - alert: MssqlLowDiskSpace
+                    expr: mssql_volume_available_bytes / mssql_volume_total_bytes < 0.15
+                    for: 30m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "RDS volume {{ $labels.mount }} is more than 85% full"
+                      description: "{{ $value | humanizePercentage }} of the volume is free"
+            
+                  - alert: MssqlBlockedSessions
+                    expr: mssql_blocked_sessions > 5
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "{{ $value }} sessions are blocked on the prod SQL Server"
+            
+                  - alert: MssqlDeadlockSpike
+                    expr: increase(mssql_deadlocks_total[15m]) > 5
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Deadlocks on the prod SQL Server"
+                      description: "{{ $value }} deadlocks in the last 15m"
+            
+                  - alert: MssqlDatabaseNearSizeLimit
+                    expr: mssql_database_size_bytes > 8589934592
+                    for: 15m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "Database {{ $labels.db }} is nearing the SQL Server Express 10 GB cap"
+                      description: "{{ $value | humanize1024 }}B in use; writes fail at 10 GB. Snapshot, restore to sqlserver-web/standard-se and rename to keep the endpoint."
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "54508b1cbb368f46d3d74ff3b966df4f"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/prometheus/rules/database.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["prometheus/rules/ecs.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            groups:
+              - name: ecs
+                rules:
+                  - alert: EcsMetricsMissing
+                    expr: absent(ecs_up)
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "The ECS collector has not reported for 10m"
+            
+                  - alert: EcsCollectorFailing
+                    expr: ecs_up == 0
+                    for: 10m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "The ECS collector cannot read the cluster state"
+            
+                  - alert: EcsServiceShortOfTasks
+                    expr: ecs_service_running_count < ecs_service_desired_count
+                    for: 10m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "{{ $labels.service }} is running fewer tasks than it wants"
+                      description: "{{ $value }} task(s) missing on {{ $labels.cluster }}"
+            
+                  - alert: EcsServiceTasksPending
+                    expr: ecs_service_pending_count > 0
+                    for: 15m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "{{ $labels.service }} has tasks stuck in PENDING for 15m"
+            
+                  - alert: EcsDeploymentFailed
+                    expr: ecs_service_deployment_failed == 1
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "{{ $labels.service }} deployment failed or rolled back"
+            
+                  - alert: EcsTasksStopping
+                    expr: ecs_stopped_tasks{stop_code=~"TaskFailed.*|CannotPullContainer.*|OutOfMemoryError.*"} > 0
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "{{ $labels.service }} tasks are stopping with {{ $labels.stop_code }}"
+            
+                  - alert: EcsLogShipperStalled
+                    expr: time() - ecs_logs_scrape_timestamp_seconds > 900
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "ECS log shipping into Loki has stalled"
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "c872e3c6633ece12f872438bb5513d03"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/prometheus/rules/ecs.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["prometheus/rules/platform.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            groups:
+              - name: uptime
+                rules:
+                  - alert: ProbeFailing
+                    expr: probe_success == 0
+                    for: 2m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "{{ $labels.probe }} is not responding"
+                      description: "{{ $labels.instance }} has failed for {{ $value }} minutes"
+            
+                  - alert: ProbeSlow
+                    expr: probe_duration_seconds > 3
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "{{ $labels.probe }} is slow"
+                      description: "{{ $labels.instance }} responds in {{ $value }}s"
+            
+                  - alert: TlsCertificateExpiring
+                    expr: probe_ssl_earliest_cert_expiry - time() < 1814400
+                    for: 1h
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "TLS certificate for {{ $labels.probe }} expires soon"
+            
+              - name: platform
+                rules:
+                  - alert: MonitoringTargetDown
+                    expr: up == 0
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "{{ $labels.job }} target is down"
+                      description: "{{ $labels.instance }} has been unreachable for 5m"
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "69642d6ed82d42bbca5fc7248b672f19"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/prometheus/rules/platform.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["rds/mssql_metrics.py"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            #!/usr/bin/env python3
+            """Publish prod SQL Server (RDS) metrics to Pushgateway.
+            
+            Runs as a scheduled Fargate task. Connection details come from the prod
+            Secrets Manager secret; the queries are SQL Server DMVs, read over TDS with the
+            pure-Python `pytds` client (no ODBC driver, no CloudWatch, no Performance
+            Insights). Prometheus scrapes the values from Pushgateway and the database
+            alert rules evaluate them.
+            
+            A failed connection is reported as mssql_up 0 rather than a task failure, so
+            the alert fires from Prometheus and the task stops cleanly.
+            """
+            
+            import datetime as dt
+            import json
+            import os
+            import sys
+            import urllib.request
+            
+            import boto3
+            import pytds
+            
+            SECRET_NAME = os.environ["DB_SECRET_NAME"]
+            PUSHGATEWAY = os.environ["PUSHGATEWAY_URL"].rstrip("/")
+            DATABASE = os.environ.get("DB_NAME", "master")
+            REGION = os.environ.get("AWS_REGION", "eu-west-1")
+            TIMEOUT = int(os.environ.get("DB_TIMEOUT_SECONDS", "15"))
+            
+            SIZE_BY_DATABASE = """
+            SELECT DB_NAME(database_id) AS db, SUM(size) * 8 * 1024 AS bytes
+            FROM sys.master_files
+            GROUP BY database_id
+            """
+            
+            USER_CONNECTIONS = "SELECT COUNT(*) AS value FROM sys.dm_exec_sessions WHERE is_user_process = 1"
+            
+            BLOCKED_SESSIONS = "SELECT COUNT(*) AS value FROM sys.dm_exec_requests WHERE blocking_session_id <> 0"
+            
+            PERFORMANCE_COUNTERS = """
+            SELECT RTRIM(counter_name) AS counter_name, cntr_value AS value
+            FROM sys.dm_os_performance_counters
+            WHERE counter_name IN ('Deadlocks/sec', 'Batch Requests/sec', 'Page life expectancy', 'Logins/sec')
+            """
+            
+            # The database name is read from the server itself and quoted inline: pytds
+            # paramstyles differ between builds, and there is nothing user-supplied here.
+            VOLUME_STATS = """
+            SELECT volume_mount_point AS mount, total_bytes, available_bytes
+            FROM sys.dm_os_volume_stats(DB_ID(N'%s'), NULL)
+            """
+            
+            COUNTER_METRICS = {
+                "Deadlocks/sec": "mssql_deadlocks_total",
+                "Batch Requests/sec": "mssql_batch_requests_total",
+                "Logins/sec": "mssql_logins_total",
+                "Page life expectancy": "mssql_page_life_expectancy_seconds",
+            }
+            
+            
+            def read_secret():
+                client = boto3.client("secretsmanager", region_name=REGION)
+                payload = json.loads(client.get_secret_value(SecretId=SECRET_NAME)["SecretString"])
+                # RDS-managed secrets hold only username/password; host/port then come
+                # from the task environment (set from the aws_db_instance data source).
+                host = os.environ.get("DB_HOST") or payload["host"]
+                port = int(os.environ.get("DB_PORT") or payload.get("port", 1433))
+                return payload["username"], payload["password"], host, port
+            
+            
+            def push(metrics, instance):
+                body = "\n".join(metrics) + "\n"
+                request = urllib.request.Request(
+                    f"{PUSHGATEWAY}/metrics/job/mssql/instance/{instance}",
+                    data=body.encode(),
+                    headers={"Content-Type": "text/plain"},
+                    method="PUT",
+                )
+                urllib.request.urlopen(request, timeout=10).read()
+            
+            
+            def query(cursor, sql):
+                cursor.execute(sql)
+                columns = [column[0] for column in cursor.description]
+                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            
+            def collect():
+                metrics = []
+                user, password, host, port = read_secret()
+                with pytds.connect(host, user, password, database=DATABASE, port=port, timeout=TIMEOUT, as_dict=True) as conn:
+                    with conn.cursor() as cursor:
+                        databases = query(cursor, SIZE_BY_DATABASE)
+                        for row in databases:
+                            if row["db"]:
+                                metrics.append('mssql_database_size_bytes{db="%s"} %d' % (row["db"], int(row["bytes"])))
+            
+                        metrics.append("mssql_user_connections %d" % int(query(cursor, USER_CONNECTIONS)[0]["value"]))
+                        metrics.append("mssql_blocked_sessions %d" % int(query(cursor, BLOCKED_SESSIONS)[0]["value"]))
+            
+                        for row in query(cursor, PERFORMANCE_COUNTERS):
+                            name = COUNTER_METRICS.get(row["counter_name"].strip())
+                            if name:
+                                metrics.append("%s %d" % (name, int(row["value"])))
+            
+                        for row in databases:
+                            if not row["db"]:
+                                continue
+                            volumes = query(cursor, VOLUME_STATS % row["db"].replace("'", "''"))
+                            for volume in volumes:
+                                mount = str(volume["mount"]).replace("\\", "\\\\")
+                                metrics.append('mssql_volume_total_bytes{mount="%s"} %d' % (mount, int(volume["total_bytes"])))
+                                metrics.append('mssql_volume_available_bytes{mount="%s"} %d' % (mount, int(volume["available_bytes"])))
+            
+                return metrics
+            
+            
+            def main():
+                stamp = int(dt.datetime.now(dt.timezone.utc).timestamp())
+                host = "unknown"
+            
+                try:
+                    _, _, host, _ = read_secret()
+                    metrics = collect()
+                    up = 1
+                except Exception as exc:  # any failure means "not reachable"
+                    print(json.dumps({"error": str(exc), "secret": SECRET_NAME}), file=sys.stderr)
+                    metrics = []
+                    up = 0
+            
+                metrics.append("mssql_up %d" % up)
+                metrics.append("mssql_scrape_timestamp_seconds %d" % stamp)
+                push(metrics, host)
+                print(json.dumps({"host": host, "up": up, "metrics": len(metrics)}))
+                return 0
+            
+            
+            if __name__ == "__main__":
+                sys.exit(main())
+        EOT
+      + content_type           = "text/plain"
+      + etag                   = "a78d880aca0db03ec9708dffe248be21"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/rds/mssql_metrics.py"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_s3_object.config["tempo/config.yml"] will be created
+  + resource "aws_s3_object" "config" {
+      + acl                    = (known after apply)
+      + arn                    = (known after apply)
+      + bucket                 = (known after apply)
+      + bucket_key_enabled     = (known after apply)
+      + checksum_crc32         = (known after apply)
+      + checksum_crc32c        = (known after apply)
+      + checksum_crc64nvme     = (known after apply)
+      + checksum_sha1          = (known after apply)
+      + checksum_sha256        = (known after apply)
+      + content                = <<-EOT
+            stream_over_http_enabled: true
+            
+            server:
+              http_listen_port: 3200
+              log_level: warn
+            
+            distributor:
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                      endpoint: 0.0.0.0:4317
+                    http:
+                      endpoint: 0.0.0.0:4318
+            
+            ingester:
+              max_block_duration: 5m
+            
+            compactor:
+              compaction:
+                block_retention: 336h
+            
+            storage:
+              trace:
+                backend: local
+                local:
+                  path: /tempo/blocks
+                wal:
+                  path: /tempo/wal
+            
+            metrics_generator:
+              registry:
+                external_labels:
+                  source: tempo
+              storage:
+                path: /tempo/generator/wal
+                remote_write:
+                  - url: http://prometheus.monitoring.internal:9090/api/v1/write
+              processor:
+                span_metrics: {}
+            
+            overrides:
+              defaults:
+                metrics_generator:
+                  processors:
+                    - span-metrics
+        EOT
+      + content_type           = "text/yaml"
+      + etag                   = "e225ffcd27514daa33453bb98825de34"
+      + force_destroy          = false
+      + id                     = (known after apply)
+      + key                    = "config/tempo/config.yml"
+      + kms_key_id             = (known after apply)
+      + server_side_encryption = (known after apply)
+      + storage_class          = (known after apply)
+      + tags                   = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all               = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + version_id             = (known after apply)
+    }
+
+  # aws_ssm_association.legacy_assoc_ef34e30b will be updated in-place
+  # (imported from "ef34e30b-8367-4e4e-96d6-573010af70ef")
+  ~ resource "aws_ssm_association" "legacy_assoc_ef34e30b" {
+        apply_only_at_cron_interval      = false
+        arn                              = "arn:aws:ssm:eu-west-1:221434544570:association/ef34e30b-8367-4e4e-96d6-573010af70ef"
+        association_id                   = "ef34e30b-8367-4e4e-96d6-573010af70ef"
+        association_name                 = "SystemAssociationForSsmAgentUpdate"
+        automation_target_parameter_name = null
+        compliance_severity              = "UNSPECIFIED"
+        document_version                 = "$DEFAULT"
+        id                               = "ef34e30b-8367-4e4e-96d6-573010af70ef"
+        instance_id                      = null
+        max_concurrency                  = "50"
+        max_errors                       = "10%"
+        name                             = "AWS-UpdateSSMAgent"
+        parameters                       = {}
+        schedule_expression              = "rate(14 days)"
+        sync_compliance                  = null
+        tags                             = {}
+      ~ tags_all                         = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+        }
+
+        targets {
+            key    = "InstanceIds"
+            values = [
+                "*",
+            ]
+        }
+    }
+
+  # aws_ssm_parameter.grafana_admin_password will be created
+  + resource "aws_ssm_parameter" "grafana_admin_password" {
+      + arn            = (known after apply)
+      + data_type      = (known after apply)
+      + has_value_wo   = (known after apply)
+      + id             = (known after apply)
+      + insecure_value = (known after apply)
+      + key_id         = "alias/agrovesto-monitoring-efs"
+      + name           = "/agrovesto-monitoring/grafana/admin-password"
+      + tags           = {
+          + "Environment" = "prod"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tags_all       = {
+          + "Environment" = "prod"
+          + "ManagedBy"   = "terraform"
+          + "Project"     = "agrovesto"
+          + "Stack"       = "monitoring"
+        }
+      + tier           = (known after apply)
+      + type           = "SecureString"
+      + value          = (sensitive value)
+      + version        = (known after apply)
+    }
+
+  # random_password.grafana_admin will be created
+  + resource "random_password" "grafana_admin" {
+      + bcrypt_hash = (sensitive value)
+      + id          = (known after apply)
+      + length      = 32
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (sensitive value)
+      + special     = false
+      + upper       = true
+    }
+
+Plan: 9 to import, 50 to add, 9 to change, 2 to destroy.
+
+Changes to Outputs:
+  - agrovesto_zone_id                = "Z00055662LTUSSMS5ZA84" -> null
+  - agrovesto_zone_name_servers      = [
+      - "ns-1516.awsdns-61.org",
+      - "ns-1831.awsdns-36.co.uk",
+      - "ns-783.awsdns-33.net",
+      - "ns-85.awsdns-10.com",
+    ] -> null
+  + budget_task_name                 = "agrovesto-monitoring-budget"
+  + config_parameter_prefix          = "/agrovesto-monitoring"
+  + cur_bucket                       = "agrovesto-monitoring-cur-221434544570"
+  + dashboard_uids                   = {
+      + cost     = "agrovesto-cost"
+      + platform = "agrovesto-platform"
+      + services = "agrovesto-services"
+    }
+  + ecs_cluster_name                 = "agrovesto-monitoring"
+  + grafana_admin_password_parameter = "/agrovesto-monitoring/grafana/admin-password"
+  + grafana_admin_user               = "admin"
+  + grafana_url                      = "https://grafana.nomaos.com"
+  + internal_endpoints               = {
+      + alertmanager     = "http://alertmanager.monitoring.internal:9093"
+      + loki_push        = "http://alloy.monitoring.internal:3100"
+      + loki_query       = "http://loki.monitoring.internal:3100"
+      + otlp_grpc        = "alloy.monitoring.internal:4317"
+      + otlp_http        = "http://alloy.monitoring.internal:4318"
+      + prometheus_query = "http://prometheus.monitoring.internal:9090"
+      + pushgateway      = "http://pushgateway.monitoring.internal:9091"
+      + tempo_query      = "http://tempo.monitoring.internal:3200"
+    }
+  - mssql_databases                  = [
+      - "wallet",
+      - "onboarding",
+      - "input",
+      - "moneval",
+      - "serviceprovider",
+    ] -> null
+  - mssql_db_init_sql                = "IF DB_ID(N'wallet') IS NULL CREATE DATABASE [wallet]; IF DB_ID(N'onboarding') IS NULL CREATE DATABASE [onboarding]; IF DB_ID(N'input') IS NULL CREATE DATABASE [input]; IF DB_ID(N'moneval') IS NULL CREATE DATABASE [moneval]; IF DB_ID(N'serviceprovider') IS NULL CREATE DATABASE [serviceprovider];" -> null
+  - route53_name_servers             = [
+      - "ns-1145.awsdns-15.org",
+      - "ns-152.awsdns-19.com",
+      - "ns-1959.awsdns-52.co.uk",
+      - "ns-707.awsdns-24.net",
+    ] -> null
+  - route53_zone_id                  = "Z0208643NZ0W8WF5RQ9F" -> null
+  - service_fqdns                    = {
+      - input           = "https://input-api.nomaos.com"
+      - moneval         = "https://moneval-api.nomaos.com"
+      - onboarding      = "https://onboarding-api.nomaos.com"
+      - serviceprovider = "https://serviceprovider-api.nomaos.com"
+      - vault           = "https://vault.nomaos.com"
+      - wallet          = "https://wallet-api.nomaos.com"
+    } -> null
+  - vault_url                        = "https://vault.nomaos.com" -> null
+
+Warning: Config generation is experimental
+
+Generating configuration during import is currently experimental, and the
+generated configuration format may change in future versions.
+
+Error: no matching EC2 VPC found
+
+  with data.aws_vpc.prod,
+  on data.tf line 7, in data "aws_vpc" "prod":
+   7: data "aws_vpc" "prod" {
+
+
+Error: reading ELBv2 Load Balancers: couldn't find resource
+
+  with data.aws_lb.main,
+  on data.tf line 32, in data "aws_lb" "main":
+  32: data "aws_lb" "main" {
+
+
+Error: no matching EC2 Security Group found
+
+  with data.aws_security_group.alb,
+  on data.tf line 41, in data "aws_security_group" "alb":
+  41: data "aws_security_group" "alb" {
+
+
+Error: Invalid combination of arguments
+
+  with aws_ssm_parameter.legacy_amazoncloudwatch_linux,
+  on generated_legacy.tf line 5:
+  (source code not available)
+
+"insecure_value": one of `insecure_value,value,value_wo` must be specified
+
+Error: Invalid combination of arguments
+
+  with aws_ssm_parameter.legacy_amazoncloudwatch_linux,
+  on generated_legacy.tf line 13:
+  (source code not available)
+
+"value": one of `insecure_value,value,value_wo` must be specified
+
+Error: Invalid combination of arguments
+
+  with aws_ssm_parameter.legacy_amazoncloudwatch_linux,
+  on generated_legacy.tf line 14:
+  (source code not available)
+
+"value_wo": one of `insecure_value,value,value_wo` must be specified
+
+# plan exit code: 1
+# generated config copied to imports/plans/monitoring.generated_legacy.tf

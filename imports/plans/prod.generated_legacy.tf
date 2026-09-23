@@ -1,0 +1,2584 @@
+# __generated__ by Terraform
+# Please review these resources and move them into your main configuration files.
+
+# __generated__ by Terraform from "dm0gdjrq9j06v/onboarding.nomaos.com"
+resource "aws_amplify_domain_association" "legacy_dm0gdjrq9j06v_onboarding_nomaos_com" {
+  app_id                 = "dm0gdjrq9j06v"
+  domain_name            = "onboarding.nomaos.com"
+  enable_auto_sub_domain = false
+  wait_for_verification  = null
+  certificate_settings {
+    custom_certificate_arn = null
+    type                   = "AMPLIFY_MANAGED"
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = ""
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = "www"
+  }
+}
+
+# __generated__ by Terraform from "sg-06e44543a37f56828"
+resource "aws_security_group" "legacy_sg_06e44543a37f56828" {
+  description = "Security group attached to agxdbinstance to allow EC2 instances with specific security groups attached to connect to the database. Modification could lead to connection loss."
+  egress      = []
+  ingress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections from EC2 instances with sg-0df9c118433af39dd attached"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-0df9c118433af39dd"]
+    self             = false
+    to_port          = 1433
+  }]
+  name                   = "rds-ec2-2"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "d24hrz6o3pnmne/master"
+resource "aws_amplify_branch" "legacy_d24hrz6o3pnmne_master" {
+  app_id                        = "d24hrz6o3pnmne"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = null
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform
+resource "aws_codepipeline" "legacy_agx_trade" {
+  execution_mode = "QUEUED"
+  name           = "Agx_Trade"
+  pipeline_type  = "V2"
+  role_arn       = "arn:aws:iam::221434544570:role/service-role/AWSCodePipelineServiceRole-eu-west-1-argovesto-api-v8"
+  tags           = {}
+  tags_all       = {}
+  artifact_store {
+    location = "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+    region   = null
+    type     = "S3"
+  }
+  stage {
+    name = "Source"
+    action {
+      category = "Source"
+      configuration = {
+        BranchName           = "master"
+        ConnectionArn        = "arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681"
+        DetectChanges        = "true"
+        FullRepositoryId     = "Agrovesto/AgxTrade"
+        OutputArtifactFormat = "CODE_ZIP"
+      }
+      input_artifacts    = []
+      name               = "Source"
+      namespace          = "SourceVariables"
+      output_artifacts   = ["SourceArtifact"]
+      owner              = "AWS"
+      provider           = "CodeStarSourceConnection"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "RETRY"
+      retry_configuration {
+        retry_mode = "ALL_ACTIONS"
+      }
+    }
+  }
+  stage {
+    name = "Deploy"
+    action {
+      category = "Deploy"
+      configuration = {
+        InstanceTagKey   = "aws:autoscaling:groupName"
+        InstanceTagValue = "agx-api"
+        InstanceType     = "EC2"
+        PostScript       = "deploy.sh"
+        TargetDirectory  = "/home/ubuntu/agx"
+      }
+      input_artifacts    = ["SourceArtifact"]
+      name               = "Deploy"
+      namespace          = "DeployVariables"
+      output_artifacts   = []
+      owner              = "AWS"
+      provider           = "EC2"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "ROLLBACK"
+    }
+  }
+}
+
+# __generated__ by Terraform from "/aws/lambda/agrovestoinfradeploymentagxdbRotationSingleUser096353C8"
+resource "aws_cloudwatch_log_group" "legacy_aws_lambda_agrovestoinfradeploymentagxdbrotationsingleuser09" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/lambda/agrovestoinfradeploymentagxdbRotationSingleUser096353C8"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "default-vpc-0016f521bae08f4ff"
+resource "aws_dms_replication_subnet_group" "legacy_default_vpc_0016f521bae08f4ff" {
+  replication_subnet_group_description = "default group created by console for vpc id vpc-0016f521bae08f4ff"
+  replication_subnet_group_id          = "default-vpc-0016f521bae08f4ff"
+  subnet_ids                           = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c", "subnet-0b808deeaf8391867", "subnet-0e169f40c70cdfe8b"]
+  tags                                 = {}
+  tags_all                             = {}
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/agxtrade"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_agxtrade" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/agxtrade"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "arn:aws:resource-explorer-2:eu-west-1:221434544570:index/2375ed1a-7adc-44fe-a83f-4f9869bd659a"
+resource "aws_resourceexplorer2_index" "legacy_index" {
+  tags = null
+  type = "LOCAL"
+}
+
+# __generated__ by Terraform
+resource "aws_codepipeline" "legacy_noma_api_pipeline" {
+  execution_mode = "QUEUED"
+  name           = "noma-api-pipeline"
+  pipeline_type  = "V2"
+  role_arn       = "arn:aws:iam::221434544570:role/service-role/AWSCodePipelineServiceRole-eu-west-1-argovesto-api-v8"
+  tags           = {}
+  tags_all       = {}
+  artifact_store {
+    location = "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+    region   = null
+    type     = "S3"
+  }
+  stage {
+    name = "Source"
+    action {
+      category = "Source"
+      configuration = {
+        BranchName           = "master"
+        ConnectionArn        = "arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681"
+        DetectChanges        = "true"
+        FullRepositoryId     = "Agrovesto/Agrovesto"
+        OutputArtifactFormat = "CODE_ZIP"
+      }
+      input_artifacts    = []
+      name               = "Source"
+      namespace          = "SourceVariables"
+      output_artifacts   = ["SourceArtifact"]
+      owner              = "AWS"
+      provider           = "CodeStarSourceConnection"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "RETRY"
+      retry_configuration {
+        retry_mode = "ALL_ACTIONS"
+      }
+    }
+  }
+  stage {
+    name = "Deploy"
+    action {
+      category = "Deploy"
+      configuration = {
+        InstanceTagKey   = "aws:autoscaling:groupName"
+        InstanceTagValue = "noma-api"
+        InstanceType     = "EC2"
+        PostScript       = "deploy.sh"
+        TargetDirectory  = "/home/ubuntu/nomaos"
+      }
+      input_artifacts    = ["SourceArtifact"]
+      name               = "Deploy"
+      namespace          = "DeployVariables"
+      output_artifacts   = []
+      owner              = "AWS"
+      provider           = "EC2"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "RETRY"
+      retry_configuration {
+        retry_mode = "ALL_ACTIONS"
+      }
+    }
+  }
+}
+
+# __generated__ by Terraform from "/aws/lambda/agrovestoinfradeploymentnomaosdbRotationSingleUser77906076"
+resource "aws_cloudwatch_log_group" "legacy_aws_lambda_agrovestoinfradeploymentnomaosdbrotationsingleuse" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/lambda/agrovestoinfradeploymentnomaosdbRotationSingleUser77906076"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "dm0gdjrq9j06v/master"
+resource "aws_amplify_branch" "legacy_dm0gdjrq9j06v_master" {
+  app_id                        = "dm0gdjrq9j06v"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Expo-Web"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform from "acl-06b37d7639de1e948"
+resource "aws_default_network_acl" "legacy_acl_06b37d7639de1e948" {
+  default_network_acl_id = "acl-06b37d7639de1e948"
+  subnet_ids             = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c", "subnet-0b808deeaf8391867", "subnet-0e169f40c70cdfe8b"]
+  tags                   = {}
+  tags_all               = {}
+  egress {
+    action          = "allow"
+    cidr_block      = "0.0.0.0/0"
+    from_port       = 0
+    icmp_code       = 0
+    icmp_type       = 0
+    ipv6_cidr_block = null
+    protocol        = jsonencode(-1)
+    rule_no         = 100
+    to_port         = 0
+  }
+  ingress {
+    action          = "allow"
+    cidr_block      = "0.0.0.0/0"
+    from_port       = 0
+    icmp_code       = 0
+    icmp_type       = 0
+    ipv6_cidr_block = null
+    protocol        = jsonencode(-1)
+    rule_no         = 100
+    to_port         = 0
+  }
+}
+
+# __generated__ by Terraform from "sg-072ebb62525423c86"
+resource "aws_security_group" "legacy_sg_072ebb62525423c86" {
+  description = "MSsql security group"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Allow all outbound traffic by default"
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress = [{
+    cidr_blocks      = []
+    description      = ""
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-0bfbddac52a0a2b89"]
+    self             = false
+    to_port          = 1433
+    }, {
+    cidr_blocks      = []
+    description      = "from agrovestoinfradeploymentagxdbRotationSingleUserSecurityGroup9D54F98A:{IndirectPort}"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-0f208f7733ec29fbd"]
+    self             = false
+    to_port          = 1433
+    }, {
+    cidr_blocks      = []
+    description      = "from agrovestoinfradeploymentnomaosdbRotationSingleUserSecurityGroupE5889A34:{IndirectPort}"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-094939b554d597e4a"]
+    self             = false
+    to_port          = 1433
+  }]
+  name                   = "agrovesto-db-sg"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags = {
+    Name = "agrovesto-db-sg"
+  }
+  tags_all = {
+    Name = "agrovesto-db-sg"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "noma-api"
+resource "aws_cloudwatch_log_group" "legacy_noma_api" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "noma-api"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "d2qsjz4yzplkjb/nomaos.com"
+resource "aws_amplify_domain_association" "legacy_d2qsjz4yzplkjb_nomaos_com" {
+  app_id                 = "d2qsjz4yzplkjb"
+  domain_name            = "nomaos.com"
+  enable_auto_sub_domain = false
+  wait_for_verification  = null
+  certificate_settings {
+    custom_certificate_arn = null
+    type                   = "AMPLIFY_MANAGED"
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = ""
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = "www"
+  }
+}
+
+# __generated__ by Terraform from "d2tux0dpg27k42"
+resource "aws_amplify_app" "legacy_d2tux0dpg27k42" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    # IMPORTANT - Please verify your build commands\n    build:\n      commands: []\n  artifacts:\n    # IMPORTANT - Please verify your build output directory\n    baseDirectory: /\n    files:\n      - '**/*'\n  cache:\n    paths: []\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables = {
+    VITE_BASE_URL            = "https://release-noma-api.nomaos.com"
+    VITE_BUSINESS_CODE       = "AGROVESTO2025L"
+    VITE_ENV                 = "Live"
+    VITE_GOOGLE_MAPS_API_KEY = "AIzaSyCNI264P2MdIXNAUP06GUULi_We1MUtaFo"
+    VITE_SIGNAGE             = "HMSg4VAbP2XdWhV9Z7DaAqxvZqcME+hG/65nR0O9FeheCPGZtiU4zYw2BEG3pjCax9AdWtiK+lLf13pvv2B4nUg9dlSd+/AqAcVTAtZBIxHUBUxIadUEfy6uN4bjFEVd4+PoQp8DcZsm8wVGzIe/abNjlXWgPBiMefuzSyeNXktH876j2gNkIb58A+C4H9crEIV4HKWxl0msq3xpQDinkcFErgHBzubAHDqAXgMob5U+RR6t0+LPzwrhJGAhleDPCxQ0wK5b2rbkjGCPSkiNreNBMrZCZztqdu8OiDxX+Wvk4ldKrOZd/uObkAx6+CQ6XWZEJVZMMREvO7HqU0VnhQ=="
+  }
+  iam_service_role_arn = null
+  name                 = "nomaos-centralcontrol"
+  oauth_token          = null # sensitive
+  platform             = "WEB"
+  repository           = "https://github.com/Agrovesto/nomaos-centralcontrol"
+  tags                 = {}
+  tags_all             = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/noma-new"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_noma_new" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/noma-new"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/agreovesto-api"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_agreovesto_api" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/agreovesto-api"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform
+resource "aws_launch_template" "legacy_lt_017de20e61da8fe44" {
+  default_version                      = 1
+  description                          = null
+  disable_api_stop                     = false
+  disable_api_termination              = false
+  ebs_optimized                        = null
+  image_id                             = "ami-0651fd5b99debb0f4"
+  instance_initiated_shutdown_behavior = null
+  instance_type                        = "t3.small"
+  kernel_id                            = null
+  key_name                             = null
+  name                                 = "noma-apiLaunchTemplate"
+  name_prefix                          = null
+  ram_disk_id                          = null
+  security_group_names                 = []
+  tags = {
+    Name = "agrovesto-infra-deployment/noma-apiLaunchTemplate"
+  }
+  tags_all = {
+    Name = "agrovesto-infra-deployment/noma-apiLaunchTemplate"
+  }
+  update_default_version = null
+  user_data              = "IyEvYmluL2Jhc2gKc3VkbyBhcHQtZ2V0IHVwZGF0ZQpzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSBuZ2lueCBweXRob24zLXBpcApwaXAzIGluc3RhbGwgLS11cGdyYWRlIHBpcApzdWRvIHN5c3RlbWN0bCBlbmFibGUgbmdpbngKc3VkbyBzeXN0ZW1jdGwgc3RhcnQgbmdpbngKZWNobyAiQVNHIDEiIHwgc3VkbyB0ZWUgL3Zhci93d3cvaHRtbC9pbmRleC5uZ2lueC1kZWJpYW4uaHRtbA=="
+  vpc_security_group_ids = []
+  block_device_mappings {
+    device_name  = "/dev/xvda"
+    no_device    = null
+    virtual_name = null
+    ebs {
+      delete_on_termination      = null
+      encrypted                  = null
+      iops                       = 0
+      kms_key_id                 = null
+      snapshot_id                = null
+      throughput                 = 0
+      volume_initialization_rate = 0
+      volume_size                = 200
+      volume_type                = null
+    }
+  }
+  iam_instance_profile {
+    arn  = "arn:aws:iam::221434544570:instance-profile/noma-apiInstanceProfile"
+    name = null
+  }
+  network_interfaces {
+    associate_carrier_ip_address = null
+    associate_public_ip_address  = jsonencode(true)
+    delete_on_termination        = null
+    description                  = null
+    device_index                 = 0
+    interface_type               = null
+    ipv4_address_count           = 0
+    ipv4_addresses               = []
+    ipv4_prefix_count            = 0
+    ipv4_prefixes                = []
+    ipv6_address_count           = 0
+    ipv6_addresses               = []
+    ipv6_prefix_count            = 0
+    ipv6_prefixes                = []
+    network_card_index           = 0
+    network_interface_id         = null
+    primary_ipv6                 = null
+    private_ip_address           = null
+    security_groups              = ["sg-0bfbddac52a0a2b89"]
+    subnet_id                    = null
+  }
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "agrovesto-infra-deployment/noma-apiLaunchTemplate"
+    }
+  }
+  tag_specifications {
+    resource_type = "volume"
+    tags = {
+      Name = "agrovesto-infra-deployment/noma-apiLaunchTemplate"
+    }
+  }
+}
+
+# __generated__ by Terraform from "agrovesto.com"
+resource "aws_sesv2_email_identity" "legacy_agrovesto_com" {
+  configuration_set_name = "my-first-configuration-set"
+  email_identity         = "agrovesto.com"
+  tags                   = {}
+  tags_all               = {}
+  dkim_signing_attributes {
+    domain_signing_private_key = null # sensitive
+    domain_signing_selector    = null
+    next_signing_key_length    = "RSA_2048_BIT"
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_codepipeline" "legacy_noma_new" {
+  execution_mode = "QUEUED"
+  name           = "noma-new"
+  pipeline_type  = "V2"
+  role_arn       = "arn:aws:iam::221434544570:role/service-role/AWSCodePipelineServiceRole-eu-west-1-argovesto-api-v8"
+  tags           = {}
+  tags_all       = {}
+  artifact_store {
+    location = "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+    region   = null
+    type     = "S3"
+  }
+  stage {
+    name = "Source"
+    action {
+      category = "Source"
+      configuration = {
+        BranchName           = "master"
+        ConnectionArn        = "arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681"
+        DetectChanges        = "false"
+        FullRepositoryId     = "Agrovesto/Nomaos"
+        OutputArtifactFormat = "CODE_ZIP"
+      }
+      input_artifacts    = []
+      name               = "Source"
+      namespace          = "SourceVariables"
+      output_artifacts   = ["SourceArtifact"]
+      owner              = "AWS"
+      provider           = "CodeStarSourceConnection"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "RETRY"
+      retry_configuration {
+        retry_mode = "ALL_ACTIONS"
+      }
+    }
+  }
+  stage {
+    name = "Deploy"
+    action {
+      category = "Deploy"
+      configuration = {
+        InstanceTagKey   = "Deploy"
+        InstanceTagValue = "noma-api-new"
+        InstanceType     = "EC2"
+        PostScript       = "deploy.sh"
+        TargetDirectory  = "/home/ubuntu/Nomaos"
+      }
+      input_artifacts    = ["SourceArtifact"]
+      name               = "Deploy"
+      namespace          = "DeployVariables"
+      output_artifacts   = []
+      owner              = "AWS"
+      provider           = "EC2"
+      region             = "eu-west-1"
+      role_arn           = null
+      run_order          = 1
+      timeout_in_minutes = 0
+      version            = jsonencode(1)
+    }
+    on_failure {
+      result = "ROLLBACK"
+    }
+  }
+}
+
+# __generated__ by Terraform from "sg-09e61cfd83551d0ec"
+resource "aws_security_group" "legacy_sg_09e61cfd83551d0ec" {
+  description = "ALB security group"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Allow all outbound traffic by default"
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 443
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 443
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 81
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 81
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 82
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 82
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 83
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 83
+  }]
+  name                   = "agrovesto-alb-sg"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags = {
+    Name = "agrovesto-alb-sg"
+  }
+  tags_all = {
+    Name = "agrovesto-alb-sg"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "eipalloc-0a48ffb921e22bb39"
+resource "aws_eip" "legacy_eipalloc_0a48ffb921e22bb39" {
+  address                   = null
+  associate_with_private_ip = null
+  customer_owned_ipv4_pool  = null
+  domain                    = "vpc"
+  instance                  = "i-027ff32f2a26fa600"
+  ipam_pool_id              = null
+  network_border_group      = "eu-west-1"
+  network_interface         = "eni-026166645623c9b77"
+  public_ipv4_pool          = "amazon"
+  tags                      = {}
+  tags_all                  = {}
+}
+
+# __generated__ by Terraform from "d2qsjz4yzplkjb"
+resource "aws_amplify_app" "legacy_d2qsjz4yzplkjb" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm ci --cache .npm --prefer-offline --legacy-peer-deps\n    build:\n      commands:\n        - npm run build\n  artifacts:\n    baseDirectory: dist\n    files:\n      - \"**/*\"\n  cache:\n    paths:\n      - .npm/**/*\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables         = {}
+  iam_service_role_arn          = null
+  name                          = "nomaos-landingpage"
+  oauth_token                   = null # sensitive
+  platform                      = "WEB"
+  repository                    = "https://github.com/Agrovesto/nomaos-landingpage"
+  tags                          = {}
+  tags_all                      = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "https://nomaos.com"
+    status    = jsonencode(302)
+    target    = "https://www.nomaos.com"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "sg-0121823b5aba80621"
+resource "aws_security_group" "legacy_sg_0121823b5aba80621" {
+  description = "Security group attached to nomaosdbinstance to allow EC2 instances with specific security groups attached to connect to the database. Modification could lead to connection loss."
+  egress      = []
+  ingress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections from EC2 instances with sg-044858bb412fc2aa0 attached"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-044858bb412fc2aa0"]
+    self             = false
+    to_port          = 1433
+  }]
+  name                   = "rds-ec2-1"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "agxdb-snapshot-restore"
+resource "aws_dms_endpoint" "legacy_agxdb_snapshot_restore" {
+  certificate_arn                 = null
+  database_name                   = "AgroVesto"
+  endpoint_id                     = "agxdb-snapshot-restore"
+  endpoint_type                   = "source"
+  engine_name                     = "sqlserver"
+  extra_connection_attributes     = null
+  kms_key_arn                     = "arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498"
+  password                        = null # sensitive
+  pause_replication_tasks         = null
+  port                            = 1433
+  secrets_manager_access_role_arn = null
+  secrets_manager_arn             = null
+  server_name                     = "agxdb-snapshot-restore.cxgc0aq4mmfo.eu-west-1.rds.amazonaws.com"
+  service_access_role             = null
+  ssl_mode                        = "none"
+  tags                            = {}
+  tags_all                        = {}
+  username                        = "agrovesto"
+}
+
+# __generated__ by Terraform from "dms-serverless-replication-agx"
+resource "aws_cloudwatch_log_group" "legacy_dms_serverless_replication_agx" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "dms-serverless-replication-agx"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "d3po2sm2zq4p71/trade.agrovesto.com"
+resource "aws_amplify_domain_association" "legacy_d3po2sm2zq4p71_trade_agrovesto_com" {
+  app_id                 = "d3po2sm2zq4p71"
+  domain_name            = "trade.agrovesto.com"
+  enable_auto_sub_domain = false
+  wait_for_verification  = null
+  certificate_settings {
+    custom_certificate_arn = null
+    type                   = "AMPLIFY_MANAGED"
+  }
+  sub_domain {
+    branch_name = "main"
+    prefix      = ""
+  }
+  sub_domain {
+    branch_name = "main"
+    prefix      = "www"
+  }
+}
+
+# __generated__ by Terraform from "d24hrz6o3pnmne"
+resource "aws_amplify_app" "legacy_d24hrz6o3pnmne" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = ["*", "*/**"]
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm install --legacy-peer-deps\n    build:\n      commands:\n        - npm run build \n  artifacts:\n    baseDirectory: dist\n    files:\n      - '**/*'\n  cache:\n    paths:\n      - node_modules/**/*\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = true
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = true
+  environment_variables         = {}
+  iam_service_role_arn          = null
+  name                          = "E-Trade-Web"
+  oauth_token                   = null # sensitive
+  platform                      = "WEB"
+  repository                    = "https://github.com/Agrovesto/E-Trade-Web"
+  tags                          = {}
+  tags_all                      = {}
+  auto_branch_creation_config {
+    basic_auth_credentials        = null # sensitive
+    build_spec                    = null
+    enable_auto_build             = true
+    enable_basic_auth             = false
+    enable_performance_mode       = false
+    enable_pull_request_preview   = false
+    environment_variables         = {}
+    framework                     = null
+    pull_request_environment_name = null
+    stage                         = "DEVELOPMENT"
+  }
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "https://agrovesto.com"
+    status    = jsonencode(302)
+    target    = "https://www.agrovesto.com"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "/aws/lambda/agrovesto-infra-deploymen-CustomVpcRestrictDefault-HM2z7LXp0eJr"
+resource "aws_cloudwatch_log_group" "legacy_aws_lambda_agrovesto_infra_deploymen_customvpcrestrictdefaul" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/lambda/agrovesto-infra-deploymen-CustomVpcRestrictDefault-HM2z7LXp0eJr"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/argovesto-api-v8"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_argovesto_api_v8" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/argovesto-api-v8"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform
+resource "aws_dms_endpoint" "legacy_nomaosdbinstance" {
+  certificate_arn                 = null
+  database_name                   = "nomaosdb"
+  endpoint_id                     = "nomaosdbinstance"
+  endpoint_type                   = "target"
+  engine_name                     = "sqlserver"
+  extra_connection_attributes     = null
+  kms_key_arn                     = "arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498"
+  password                        = null # sensitive
+  pause_replication_tasks         = null
+  port                            = 0
+  secrets_manager_access_role_arn = "arn:aws:iam::221434544570:role/service-role/DMSSecretManagerAccessRole-nomaosDBcredentials"
+  secrets_manager_arn             = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-GIwHiK"
+  server_name                     = null
+  service_access_role             = null
+  ssl_mode                        = "none"
+  tags                            = {}
+  tags_all                        = {}
+  username                        = null
+}
+
+# __generated__ by Terraform from "d2uzc83ix5qdfu"
+resource "aws_amplify_app" "legacy_d2uzc83ix5qdfu" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    # IMPORTANT - Please verify your build commands\n    build:\n      commands: []\n  artifacts:\n    # IMPORTANT - Please verify your build output directory\n    baseDirectory: /\n    files:\n      - '**/*'\n  cache:\n    paths: []\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables         = {}
+  iam_service_role_arn          = null
+  name                          = "nomaos-landingpage"
+  oauth_token                   = null # sensitive
+  platform                      = "WEB"
+  repository                    = "https://github.com/Agrovesto/nomaos-landingpage"
+  tags                          = {}
+  tags_all                      = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_lambda_function" "legacy_agrovestoinfradeploymentnomaosdbrotationsingleuser77906076" {
+  architectures                      = ["x86_64"]
+  code_signing_config_arn            = null
+  description                        = "Rotates a Secrets Manager secret for Amazon RDS SQL Server credentials using the single user rotation strategy."
+  filename                           = null
+  function_name                      = "agrovestoinfradeploymentnomaosdbRotationSingleUser77906076"
+  handler                            = "lambda_function.lambda_handler"
+  image_uri                          = null
+  kms_key_arn                        = null
+  layers                             = []
+  memory_size                        = 128
+  package_type                       = "Zip"
+  publish                            = null
+  replace_security_groups_on_destroy = null
+  replacement_security_group_ids     = null
+  reserved_concurrent_executions     = -1
+  role                               = "arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-UepjS11Nv8aU"
+  runtime                            = "python3.10"
+  s3_bucket                          = null
+  s3_key                             = null
+  s3_object_version                  = null
+  skip_destroy                       = false
+  source_code_hash                   = null
+  tags = {
+    Name                             = "nomaosdb"
+    SecretsManagerLambda             = "Rotation"
+    "lambda:createdBy"               = "SAM"
+    "serverlessrepo:applicationId"   = "arn:aws:serverlessrepo:us-east-1:297356227824:applications/SecretsManagerRDSSQLServerRotationSingleUser"
+    "serverlessrepo:semanticVersion" = "1.1.618"
+  }
+  tags_all = {
+    Name                             = "nomaosdb"
+    SecretsManagerLambda             = "Rotation"
+    "lambda:createdBy"               = "SAM"
+    "serverlessrepo:applicationId"   = "arn:aws:serverlessrepo:us-east-1:297356227824:applications/SecretsManagerRDSSQLServerRotationSingleUser"
+    "serverlessrepo:semanticVersion" = "1.1.618"
+  }
+  timeout = 30
+  environment {
+    variables = {
+      EXCLUDE_CHARACTERS         = "%+~`#$&*()|[]{}:;<>?!'/@\"\\"
+      EXCLUDE_LOWERCASE          = "false"
+      EXCLUDE_NUMBERS            = "false"
+      EXCLUDE_PUNCTUATION        = "false"
+      EXCLUDE_UPPERCASE          = "false"
+      PASSWORD_LENGTH            = "32"
+      REQUIRE_EACH_INCLUDED_TYPE = "true"
+      SECRETS_MANAGER_ENDPOINT   = "https://secretsmanager.eu-west-1.amazonaws.com"
+    }
+  }
+  ephemeral_storage {
+    size = 512
+  }
+  logging_config {
+    application_log_level = null
+    log_format            = "Text"
+    log_group             = "/aws/lambda/agrovestoinfradeploymentnomaosdbRotationSingleUser77906076"
+    system_log_level      = null
+  }
+  tracing_config {
+    mode = "PassThrough"
+  }
+  vpc_config {
+    ipv6_allowed_for_dual_stack = false
+    security_group_ids          = ["sg-094939b554d597e4a"]
+    subnet_ids                  = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c"]
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_key_pair" "legacy_deployment_ssh" {
+  key_name        = "deployment-ssh"
+  key_name_prefix = null
+  public_key      = null
+  tags            = {}
+  tags_all        = {}
+}
+
+# __generated__ by Terraform from "agrovesto-infra-pipeline"
+resource "aws_cloudformation_stack" "legacy_agrovesto_infra_pipeline" {
+  capabilities       = ["CAPABILITY_NAMED_IAM"]
+  disable_rollback   = false
+  iam_role_arn       = null
+  name               = "agrovesto-infra-pipeline"
+  notification_arns  = null
+  on_failure         = null
+  parameters         = {}
+  policy_body        = null
+  policy_url         = null
+  tags               = {}
+  tags_all           = {}
+  template_body      = "AWSTemplateFormatVersion: \"2010-09-09\"\nParameters:\n  CustomerName:\n    Type: String\n    Description: The name of the customer to prefix AWS resources\n\n  CreateDev:\n    Type: String\n    AllowedValues:\n      - true\n      - false\n    Default: false\n    Description: Set to true if you want to create a pipeline for the dev branch\n\n  CreateDr:\n    Type: String\n    AllowedValues:\n      - true\n      - false\n    Default: false\n    Description: Set to true if you want to create a pipeline for the dr branch\n\n  GitHubRepoOwner:\n    Type: String\n    Description: The GitHub account owner of the repository\n\n  GitHubRepoName:\n    Type: String\n    Description: The name of the GitHub repository\n\n  ProdAccountID:\n    Type: String\n    Description: Account ID for the production environment.\n\n  DevAccountID:\n    Type: String\n    Description: Account ID for the development environment.\n\n  DRAccountID:\n    Type: String\n    Description: Account ID for the disaster recovery environment.\n\nResources:\n  GithubConnection:\n    Type: AWS::CodeStarConnections::Connection\n    Properties:\n      ConnectionName: !Sub $${CustomerName}-GithubConnection\n      ProviderType: GitHub\n\n  # S3 Bucket for Pipeline Artifacts\n  PipelineBucket:\n    Type: AWS::S3::Bucket\n    Properties:\n      BucketName: !Sub $${CustomerName}-pipeline-artifacts\n\n  # IAM Role for CodePipeline\n  CodePipelineRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Version: \"2012-10-17\"\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: codepipeline.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/PowerUserAccess # Grants PowerUser access to the pipeline\n\n  CodeBuildServiceRole:\n    Type: AWS::IAM::Role\n    Properties:\n      RoleName: CodeBuildServiceRole\n      AssumeRolePolicyDocument:\n        Version: \"2012-10-17\"\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: codebuild.amazonaws.com\n            Action: sts:AssumeRole\n      Policies:\n        - PolicyName: DevAssumeCodeBuildDeploymentRole\n          PolicyDocument:\n            Version: \"2012-10-17\"\n            Statement:\n              - Effect: Allow\n                Action: sts:AssumeRole\n                Resource: !Sub arn:aws:iam::*:role/CodeBuildDeploymentRole\n        - PolicyName: DevCodeBuildLogsPolicy\n          PolicyDocument:\n            Version: \"2012-10-17\"\n            Statement:\n              - Effect: Allow\n                Action:\n                  - logs:DescribeLogGroups\n                  - logs:GetLogEvents\n                  - logs:DeleteLogGroup\n                  - logs:CreateLogGroup\n                  - logs:CreateLogStream\n                  - logs:DeleteLogStream\n                  - logs:PutLogEvents\n                  - logs:DescribeLogStreams\n                  - s3:GetObject\n                Resource:\n                  - \"arn:aws:logs:*:*:log-group:/aws/codebuild/*\"\n                  - \"arn:aws:logs:*:*:log-group:/aws/codebuild/*:log-stream:*\"\n                  - \"arn:aws:s3:::*\"\n\n  ProdCodeBuildRole:\n    Type: \"AWS::IAM::Role\"\n    Properties:\n      RoleName: \"CodeBuildDeploymentRole\" # Name of the role is important, EKS utilizes and potentially other services, do not change without testing and reviewing\n      AssumeRolePolicyDocument:\n        Version: \"2012-10-17\"\n        Statement:\n          - Effect: \"Allow\"\n            Principal:\n              Service:\n                - \"codebuild.amazonaws.com\"\n            Action:\n              - \"sts:AssumeRole\"\n      ManagedPolicyArns:\n        - \"arn:aws:iam::aws:policy/AdministratorAccess\"\n\n  # Codebuild Project for Production\n  ProdCodeBuildProject:\n    Type: AWS::CodeBuild::Project\n    Properties:\n      Name: !Sub $${CustomerName}-ProdCodeBuildProject\n      Source:\n        Type: CODEPIPELINE\n        BuildSpec: !Sub |\n          version: 0.2\n          phases:\n            install:\n              runtime-versions:\n                nodejs: 20\n              commands:\n                - echo Installing dependencies...\n                - npm install -g aws-cdk\n                - pip3 install -r requirements.txt\n                - echo Dependencies installed.\n            pre_build:\n              commands:\n                - echo Bootstrapping the environment...\n                - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION\n                - echo Bootstrapping complete.\n            build:\n              commands:\n                - echo Synthesizing the CloudFormation template...\n                - cdk synth\n                - echo Synthesis complete.\n                - echo Deploying the CDK stack...\n                - cdk deploy --require-approval never\n          artifacts:\n            files:\n              - \"**/*\"\n          cache:\n            paths:\n              - node_modules/**/*\n          env:\n            variables:\n              AWS_ACCOUNT_ID: $${ProdAccountID}\n              AWS_REGION: $${AWS::Region}\n      Artifacts:\n        Type: CODEPIPELINE\n      Environment:\n        ComputeType: BUILD_GENERAL1_SMALL\n        Image: aws/codebuild/standard:5.0\n        Type: LINUX_CONTAINER\n      ServiceRole: !GetAtt ProdCodeBuildRole.Arn\n\n  # Prod Pipeline\n  ProdPipeline:\n    Type: AWS::CodePipeline::Pipeline\n    Properties:\n      Name: !Sub $${CustomerName}-ProdPipeline # Prefix customer name\n      RoleArn: !GetAtt CodePipelineRole.Arn\n      PipelineType: V2\n      ArtifactStore:\n        Type: S3\n        Location: !Ref PipelineBucket\n      Stages:\n        - Name: Source\n          Actions:\n            - Name: SourceAction\n              ActionTypeId:\n                Category: Source\n                Owner: AWS\n                Provider: CodeStarSourceConnection\n                Version: \"1\"\n              OutputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ConnectionArn: !Ref GithubConnection\n                FullRepositoryId: !Sub $${GitHubRepoOwner}/$${GitHubRepoName}\n                BranchName: prod\n              RunOrder: 1\n        - Name: Build\n          Actions:\n            - Name: BuildAction\n              ActionTypeId:\n                Category: Build\n                Owner: AWS\n                Provider: CodeBuild\n                Version: \"1\"\n              InputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ProjectName: !Ref ProdCodeBuildProject\n              RunOrder: 1\n\n  # Webhook for Prod Pipeline (triggered on push to prod)\n  ProdPipelineWebhook:\n    Type: AWS::CodePipeline::Webhook\n    Properties:\n      Authentication: GITHUB_HMAC\n      AuthenticationConfiguration:\n        SecretToken: !Ref GithubConnection\n      Filters:\n        - JsonPath: $.ref\n          MatchEquals: refs/heads/prod # Trigger when pushing to prod\n      TargetPipeline: !Ref ProdPipeline\n      TargetAction: Source\n      Name: !Sub $${CustomerName}-ProdWebhook\n      TargetPipelineVersion: 1\n\n    # CodeBuild Project for Development\n  DevCodeBuildProject:\n    Condition: CreateDevPipeline\n    Type: AWS::CodeBuild::Project\n    Properties:\n      Name: !Sub $${CustomerName}-DevCodeBuildProject\n      Source:\n        Type: CODEPIPELINE\n        BuildSpec: !Sub |\n          version: 0.2\n          phases:\n            install:\n              runtime-versions:\n                nodejs: 20\n              commands:\n                - echo Installing dependencies...\n                - npm install -g aws-cdk\n                - pip3 install -r requirements.txt\n                - echo Dependencies installed.Region\n            pre_build:\n              commands:\n                - echo Assuming the CodeBuildDeploymentRole...\n                - >\n                  ROLE_SESSION_NAME=codebuild-$(date +%s)\n                - >\n                  CREDS=$(aws sts assume-role --role-arn arn:aws:iam::$${DevAccountID}:role/CodeBuildDeploymentRole --role-session-name $ROLE_SESSION_NAME)\n                - >\n                  export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r .Credentials.AccessKeyId)\n                - >\n                  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r .Credentials.SecretAccessKey)\n                - >\n                  export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r .Credentials.SessionToken)\n                - echo Role assumed successfully\n                - echo Bootstrapping the environment...\n                - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION\n                - echo Bootstrapping complete.\n            build:\n              commands:\n                - echo Synthesizing the CloudFormation template...\n                - cdk synth\n                - echo Synthesis complete.\n                - echo Deploying the CDK stack...\n                - cdk deploy --require-approval never\n          artifacts:\n            files:\n              - \"**/*\"\n          cache:\n            paths:\n              - node_modules/**/*\n          env:\n            variables:\n              AWS_ACCOUNT_ID: $${DevAccountID}\n              AWS_REGION: $${AWS::Region}\n      Artifacts:\n        Type: CODEPIPELINE\n      Environment:\n        ComputeType: BUILD_GENERAL1_SMALL\n        Image: aws/codebuild/standard:5.0\n        Type: LINUX_CONTAINER\n      ServiceRole: !GetAtt CodeBuildServiceRole.Arn\n\n  # Dev Pipeline\n  DevPipeline:\n    Condition: CreateDevPipeline\n    Type: AWS::CodePipeline::Pipeline\n    Properties:\n      Name: !Sub $${CustomerName}-DevPipeline # Prefix customer name\n      RoleArn: !GetAtt CodePipelineRole.Arn\n      PipelineType: V2\n      ArtifactStore:\n        Type: S3\n        Location: !Ref PipelineBucket\n      Stages:\n        - Name: Source\n          Actions:\n            - Name: SourceAction\n              ActionTypeId:\n                Category: Source\n                Owner: AWS\n                Provider: CodeStarSourceConnection\n                Version: \"1\"\n              OutputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ConnectionArn: !Ref GithubConnection\n                FullRepositoryId: !Sub $${GitHubRepoOwner}/$${GitHubRepoName}\n                BranchName: dev\n              RunOrder: 1\n        - Name: Build\n          Actions:\n            - Name: BuildAction\n              ActionTypeId:\n                Category: Build\n                Owner: AWS\n                Provider: CodeBuild\n                Version: \"1\"\n              InputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ProjectName: !Ref DevCodeBuildProject\n              RunOrder: 1\n\n  # Webhook for Dev Pipeline (triggered on push to dev)\n  DevPipelineWebhook:\n    Condition: CreateDevPipeline\n    Type: AWS::CodePipeline::Webhook\n    Properties:\n      Authentication: GITHUB_HMAC\n      AuthenticationConfiguration:\n        SecretToken: !Ref GithubConnection\n      Filters:\n        - JsonPath: $.ref\n          MatchEquals: refs/heads/dev # Trigger when pushing to dev\n      TargetPipeline: !Ref DevPipeline\n      TargetAction: Source\n      Name: !Sub $${CustomerName}-DevWebhook\n      TargetPipelineVersion: 1\n\n  # CodeBuild Project for Disaster Recovery (DR)\n  DRCodeBuildProject:\n    Condition: CreateDrPipeline\n    Type: AWS::CodeBuild::Project\n    Properties:\n      Name: !Sub $${CustomerName}-DRCodeBuildProject\n      Source:\n        Type: CODEPIPELINE\n        BuildSpec: !Sub |\n          version: 0.2\n          phases:\n            install:\n              runtime-versions:\n                nodejs: 20\n              commands:\n                - echo Installing dependencies...\n                - npm install -g aws-cdk\n                - pip3 install -r requirements.txt\n                - echo Dependencies installed.\n            pre_build:\n              commands:\n                - echo Assuming the CodeBuildDeploymentRole...\n                - >\n                  ROLE_SESSION_NAME=codebuild-$(date +%s)\n                - >\n                  CREDS=$(aws sts assume-role --role-arn arn:aws:iam::$${DevAccountID}:role/CodeBuildDeploymentRole --role-session-name $ROLE_SESSION_NAME)\n                - >\n                  export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r .Credentials.AccessKeyId)\n                - >\n                  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r .Credentials.SecretAccessKey)\n                - >\n                  export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r .Credentials.SessionToken)\n                - echo Role assumed successfully\n                - echo Bootstrapping the environment...\n                - cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION\n                - echo Bootstrapping complete.\n            build:\n              commands:\n                - echo Synthesizing the CloudFormation template...\n                - cdk synth\n                - echo Synthesis complete.\n                - echo Deploying the CDK stack...\n                - cdk deploy --require-approval never\n          artifacts:\n            files:\n              - \"**/*\"\n          cache:\n            paths:\n              - node_modules/**/*\n          env:\n            variables:\n              AWS_ACCOUNT_ID: $${DRAccountID}\n              AWS_REGION: $${AWS::Region}\n      Artifacts:\n        Type: CODEPIPELINE\n      Environment:\n        ComputeType: BUILD_GENERAL1_SMALL\n        Image: aws/codebuild/standard:5.0\n        Type: LINUX_CONTAINER\n      ServiceRole: !GetAtt CodeBuildServiceRole.Arn\n\n  # DR Pipeline\n  DrPipeline:\n    Condition: CreateDrPipeline\n    Type: AWS::CodePipeline::Pipeline\n    Properties:\n      Name: !Sub $${CustomerName}-DrPipeline # Prefix customer name\n      RoleArn: !GetAtt CodePipelineRole.Arn\n      PipelineType: V2\n      ArtifactStore:\n        Type: S3\n        Location: !Ref PipelineBucket\n      Stages:\n        - Name: Source\n          Actions:\n            - Name: SourceAction\n              ActionTypeId:\n                Category: Source\n                Owner: AWS\n                Provider: CodeStarSourceConnection\n                Version: \"1\"\n              OutputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ConnectionArn: !Ref GithubConnection\n                FullRepositoryId: !Sub $${GitHubRepoOwner}/$${GitHubRepoName}\n                BranchName: dr\n              RunOrder: 1\n        - Name: Build\n          Actions:\n            - Name: BuildAction\n              ActionTypeId:\n                Category: Build\n                Owner: AWS\n                Provider: CodeBuild\n                Version: \"1\"\n              InputArtifacts:\n                - Name: SourceOutput\n              Configuration:\n                ProjectName: !Ref DRCodeBuildProject\n              RunOrder: 1\n\n  # Webhook for DR Pipeline (triggered on push to dr)\n  DrPipelineWebhook:\n    Condition: CreateDrPipeline\n    Type: AWS::CodePipeline::Webhook\n    Properties:\n      Authentication: GITHUB_HMAC\n      AuthenticationConfiguration:\n        SecretToken: !Ref GithubConnection\n      Filters:\n        - JsonPath: $.ref\n          MatchEquals: refs/heads/dr # Trigger when pushing to dr\n      TargetPipeline: !Ref DrPipeline\n      TargetAction: Source\n      Name: !Sub $${CustomerName}-DrWebhook\n      TargetPipelineVersion: 1\n\nConditions:\n  CreateDevPipeline: !Equals\n    - !Ref CreateDev\n    - true\n  CreateDrPipeline: !Equals\n    - !Ref CreateDr\n    - true\n"
+  template_url       = null
+  timeout_in_minutes = 0
+}
+
+# __generated__ by Terraform from "nomaosdbsubnetgroup"
+resource "aws_db_subnet_group" "legacy_nomaosdbsubnetgroup" {
+  description = "Subnet group for nomaosdb RDS instance"
+  name        = "nomaosdbsubnetgroup"
+  name_prefix = null
+  subnet_ids  = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c"]
+  tags        = {}
+  tags_all    = {}
+}
+
+# __generated__ by Terraform
+resource "aws_key_pair" "legacy_rdsjumpserverkeypair" {
+  key_name        = "rdsjumpserverkeypair"
+  key_name_prefix = null
+  public_key      = null
+  tags            = {}
+  tags_all        = {}
+}
+
+# __generated__ by Terraform from "/aws/amplify/d3po2sm2zq4p71"
+resource "aws_cloudwatch_log_group" "legacy_aws_amplify_d3po2sm2zq4p71" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/amplify/d3po2sm2zq4p71"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform
+resource "aws_key_pair" "legacy_noma_agx" {
+  key_name        = "noma-agx"
+  key_name_prefix = null
+  public_key      = null
+  tags            = {}
+  tags_all        = {}
+}
+
+# __generated__ by Terraform
+resource "aws_sns_topic" "legacy_agrovesto" {
+  application_failure_feedback_role_arn    = null
+  application_success_feedback_role_arn    = null
+  application_success_feedback_sample_rate = 0
+  archive_policy                           = null
+  content_based_deduplication              = false
+  delivery_policy                          = null
+  display_name                             = "agrovesto"
+  fifo_throughput_scope                    = null
+  fifo_topic                               = false
+  firehose_failure_feedback_role_arn       = null
+  firehose_success_feedback_role_arn       = null
+  firehose_success_feedback_sample_rate    = 0
+  http_failure_feedback_role_arn           = null
+  http_success_feedback_role_arn           = null
+  http_success_feedback_sample_rate        = 0
+  kms_master_key_id                        = null
+  lambda_failure_feedback_role_arn         = null
+  lambda_success_feedback_role_arn         = null
+  lambda_success_feedback_sample_rate      = 0
+  name                                     = "agrovesto"
+  name_prefix                              = null
+  policy = jsonencode({
+    Statement = [{
+      Action = "SNS:Publish"
+      Condition = {
+        StringEquals = {
+          "AWS:SourceAccount" = "221434544570"
+        }
+        StringLike = {
+          "AWS:SourceArn" = "arn:aws:ses:*"
+        }
+      }
+      Effect = "Allow"
+      Principal = {
+        Service = "ses.amazonaws.com"
+      }
+      Resource = "arn:aws:sns:eu-west-1:221434544570:agrovesto"
+      Sid      = "stmt1773836287303"
+    }]
+    Version = "2008-10-17"
+  })
+  signature_version                = 0
+  sqs_failure_feedback_role_arn    = null
+  sqs_success_feedback_role_arn    = null
+  sqs_success_feedback_sample_rate = 0
+  tags                             = {}
+  tags_all                         = {}
+  tracing_config                   = null
+}
+
+# __generated__ by Terraform from "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-GIwHiK"
+resource "aws_secretsmanager_secret" "legacy_nomaosdbcredentials" {
+  description                    = "Generated by the CDK for stack: agrovesto-infra-deployment"
+  force_overwrite_replica_secret = null
+  kms_key_id                     = null
+  name                           = "nomaosDBcredentials"
+  name_prefix                    = null
+  policy = jsonencode({
+    Statement = [{
+      Action = "secretsmanager:DeleteSecret"
+      Effect = "Deny"
+      Principal = {
+        AWS = "arn:aws:iam::221434544570:root"
+      }
+      Resource = "*"
+    }]
+    Version = "2012-10-17"
+  })
+  recovery_window_in_days = null
+  tags = {
+    Name = "nomaosdb"
+  }
+  tags_all = {
+    Name = "nomaosdb"
+  }
+}
+
+# __generated__ by Terraform from "sg-0f208f7733ec29fbd"
+resource "aws_security_group" "legacy_sg_0f208f7733ec29fbd" {
+  description = "agrovesto-infra-deployment/agxdb/RotationSingleUser/SecurityGroup"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Allow all outbound traffic by default"
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress                = []
+  name                   = "agrovesto-infra-deployment-agxdbRotationSingleUserSecurityGroup123C71F0-PJlfciPOXQY9"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags = {
+    Name = "agxdb"
+  }
+  tags_all = {
+    Name = "agxdb"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "agxdbsubnetgroup"
+resource "aws_db_subnet_group" "legacy_agxdbsubnetgroup" {
+  description = "Subnet group for agxdb RDS instance"
+  name        = "agxdbsubnetgroup"
+  name_prefix = null
+  subnet_ids  = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c"]
+  tags        = {}
+  tags_all    = {}
+}
+
+# __generated__ by Terraform from "info@agrovesto.com"
+resource "aws_sesv2_email_identity" "legacy_info_agrovesto_com" {
+  configuration_set_name = "my-first-configuration-set"
+  email_identity         = "info@agrovesto.com"
+  tags                   = {}
+  tags_all               = {}
+  dkim_signing_attributes {
+    domain_signing_private_key = null # sensitive
+    domain_signing_selector    = null
+    next_signing_key_length    = "RSA_2048_BIT"
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_route_table" "legacy_rtb_0614ed06de1bc1d89" {
+  propagating_vgws = []
+  route = [{
+    carrier_gateway_id         = ""
+    cidr_block                 = "0.0.0.0/0"
+    core_network_arn           = ""
+    destination_prefix_list_id = ""
+    egress_only_gateway_id     = ""
+    gateway_id                 = "igw-07275a1a62726a4c8"
+    ipv6_cidr_block            = ""
+    local_gateway_id           = ""
+    nat_gateway_id             = ""
+    network_interface_id       = ""
+    transit_gateway_id         = ""
+    vpc_endpoint_id            = ""
+    vpc_peering_connection_id  = ""
+  }]
+  tags = {
+    Name = "agrovesto-infra-deployment/agrovesto-vpc/publicSubnet2"
+  }
+  tags_all = {
+    Name = "agrovesto-infra-deployment/agrovesto-vpc/publicSubnet2"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "sg-04778d7bdb8e2c026"
+resource "aws_security_group" "legacy_sg_04778d7bdb8e2c026" {
+  description = "Security group attached to instances to securely connect to migration-prod. Modification could lead to connection loss."
+  egress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections to migration-prod from any instances this security group is attached to"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-0b555edfc6d445a18"]
+    self             = false
+    to_port          = 1433
+  }]
+  ingress                = []
+  name                   = "ec2-rds-3"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "sg-094939b554d597e4a"
+resource "aws_security_group" "legacy_sg_094939b554d597e4a" {
+  description = "agrovesto-infra-deployment/nomaosdb/RotationSingleUser/SecurityGroup"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Allow all outbound traffic by default"
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress                = []
+  name                   = "agrovesto-infra-deployment-nomaosdbRotationSingleUserSecurityGroup1AEE7A58-WzSrmmV4Q1zV"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags = {
+    Name = "nomaosdb"
+  }
+  tags_all = {
+    Name = "nomaosdb"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/noma-api-new"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_noma_api_new" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/noma-api-new"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/Agx_Trade"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_agx_trade" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/Agx_Trade"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+resource "aws_s3_bucket" "legacy_codepipeline_eu_west_1_388c27815165_4d9c_97e5_35f4ec8ad1d6" {
+  bucket              = "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+  bucket_prefix       = null
+  force_destroy       = null
+  object_lock_enabled = false
+  tags                = {}
+  tags_all            = {}
+}
+
+# __generated__ by Terraform
+resource "aws_lambda_function" "legacy_agrovestoinfradeploymentagxdbrotationsingleuser096353c8" {
+  architectures                      = ["x86_64"]
+  code_signing_config_arn            = null
+  description                        = "Rotates a Secrets Manager secret for Amazon RDS SQL Server credentials using the single user rotation strategy."
+  filename                           = null
+  function_name                      = "agrovestoinfradeploymentagxdbRotationSingleUser096353C8"
+  handler                            = "lambda_function.lambda_handler"
+  image_uri                          = null
+  kms_key_arn                        = null
+  layers                             = []
+  memory_size                        = 128
+  package_type                       = "Zip"
+  publish                            = null
+  replace_security_groups_on_destroy = null
+  replacement_security_group_ids     = null
+  reserved_concurrent_executions     = -1
+  role                               = "arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-yDIdim0P5oKG"
+  runtime                            = "python3.10"
+  s3_bucket                          = null
+  s3_key                             = null
+  s3_object_version                  = null
+  skip_destroy                       = false
+  source_code_hash                   = null
+  tags = {
+    Name                             = "agxdb"
+    SecretsManagerLambda             = "Rotation"
+    "lambda:createdBy"               = "SAM"
+    "serverlessrepo:applicationId"   = "arn:aws:serverlessrepo:us-east-1:297356227824:applications/SecretsManagerRDSSQLServerRotationSingleUser"
+    "serverlessrepo:semanticVersion" = "1.1.618"
+  }
+  tags_all = {
+    Name                             = "agxdb"
+    SecretsManagerLambda             = "Rotation"
+    "lambda:createdBy"               = "SAM"
+    "serverlessrepo:applicationId"   = "arn:aws:serverlessrepo:us-east-1:297356227824:applications/SecretsManagerRDSSQLServerRotationSingleUser"
+    "serverlessrepo:semanticVersion" = "1.1.618"
+  }
+  timeout = 30
+  environment {
+    variables = {
+      EXCLUDE_CHARACTERS         = "%+~`#$&*()|[]{}:;<>?!'/@\"\\"
+      EXCLUDE_LOWERCASE          = "false"
+      EXCLUDE_NUMBERS            = "false"
+      EXCLUDE_PUNCTUATION        = "false"
+      EXCLUDE_UPPERCASE          = "false"
+      PASSWORD_LENGTH            = "32"
+      REQUIRE_EACH_INCLUDED_TYPE = "true"
+      SECRETS_MANAGER_ENDPOINT   = "https://secretsmanager.eu-west-1.amazonaws.com"
+    }
+  }
+  ephemeral_storage {
+    size = 512
+  }
+  logging_config {
+    application_log_level = null
+    log_format            = "Text"
+    log_group             = "/aws/lambda/agrovestoinfradeploymentagxdbRotationSingleUser096353C8"
+    system_log_level      = null
+  }
+  tracing_config {
+    mode = "PassThrough"
+  }
+  vpc_config {
+    ipv6_allowed_for_dual_stack = false
+    security_group_ids          = ["sg-0f208f7733ec29fbd"]
+    subnet_ids                  = ["subnet-00ee6901e53783c86", "subnet-084f21457f316c44c"]
+  }
+}
+
+# __generated__ by Terraform from "d2tux0dpg27k42/master"
+resource "aws_amplify_branch" "legacy_d2tux0dpg27k42_master" {
+  app_id                        = "d2tux0dpg27k42"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Web"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform
+resource "aws_dms_endpoint" "legacy_agxdb2instance" {
+  certificate_arn                 = null
+  database_name                   = "agxdb"
+  endpoint_id                     = "agxdb2instance"
+  endpoint_type                   = "target"
+  engine_name                     = "sqlserver"
+  extra_connection_attributes     = null
+  kms_key_arn                     = "arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498"
+  password                        = null # sensitive
+  pause_replication_tasks         = null
+  port                            = 0
+  secrets_manager_access_role_arn = "arn:aws:iam::221434544570:role/service-role/DMSSecretManagerAccessRole-agxdb2DBcredentials"
+  secrets_manager_arn             = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:agxdb2DBcredentials-26LKpW"
+  server_name                     = null
+  service_access_role             = null
+  ssl_mode                        = "none"
+  tags                            = {}
+  tags_all                        = {}
+  username                        = null
+}
+
+# __generated__ by Terraform from "/aws/lambda/agrovestoinfradeploymentagxdb2RotationSingleUserAF8581BB"
+resource "aws_cloudwatch_log_group" "legacy_aws_lambda_agrovestoinfradeploymentagxdb2rotationsingleusera" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/lambda/agrovestoinfradeploymentagxdb2RotationSingleUserAF8581BB"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "arn:aws:resource-explorer-2:eu-west-1:221434544570:view/eu-west-1/1184df2b-d64b-48e3-85d6-4a7fe3110f8f"
+resource "aws_resourceexplorer2_view" "legacy_view" {
+  default_view = true
+  name         = "eu-west-1"
+  scope        = "arn:aws:iam::221434544570:root"
+  tags         = null
+  included_property {
+    name = "tags"
+  }
+}
+
+# __generated__ by Terraform from "tech@agrovesto.com"
+resource "aws_sesv2_email_identity" "legacy_tech_agrovesto_com" {
+  configuration_set_name = null
+  email_identity         = "tech@agrovesto.com"
+  tags                   = {}
+  tags_all               = {}
+  dkim_signing_attributes {
+    domain_signing_private_key = null # sensitive
+    domain_signing_selector    = null
+    next_signing_key_length    = "RSA_2048_BIT"
+  }
+}
+
+# __generated__ by Terraform from "arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681"
+resource "aws_codeconnections_connection" "legacy_conn_da07fb91" {
+  host_arn      = null
+  name          = "Agrovesto"
+  provider_type = "GitHub"
+  tags          = null
+}
+
+# __generated__ by Terraform from "d2qsjz4yzplkjb/master"
+resource "aws_amplify_branch" "legacy_d2qsjz4yzplkjb_master" {
+  app_id                        = "d2qsjz4yzplkjb"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Web"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform from "d4d246twq5d12"
+resource "aws_amplify_app" "legacy_d4d246twq5d12" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm ci --cache .npm --prefer-offline --legacy-peer-deps\n    build:\n      commands:\n        - npm run build\n  artifacts:\n    baseDirectory: dist\n    files:\n      - \"**/*\"\n  cache:\n    paths:\n      - .npm/**/*\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables         = {}
+  iam_service_role_arn          = null
+  name                          = "Monitoring-and-Evaluation-as-service"
+  oauth_token                   = null # sensitive
+  platform                      = "WEB"
+  repository                    = "https://github.com/Agrovesto/Monitoring-and-Evaluation-as-service"
+  tags                          = {}
+  tags_all                      = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "https://insight.nomaos.com"
+    status    = jsonencode(302)
+    target    = "https://www.insight.nomaos.com"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "sg-05a2722a050c1109b"
+resource "aws_default_security_group" "legacy_default" {
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 1433
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 22
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 22
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 443
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 443
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 5000
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 5000
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 5001
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 5001
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 5002
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 5002
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 80
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 80
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "vault port"
+    from_port        = 8200
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 8200
+  }]
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "/aws/lambda/agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk"
+resource "aws_cloudwatch_log_group" "legacy_aws_lambda_agrovesto_infra_deploymen_customvpcrestrictdefaul_2" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/lambda/agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "/nomaos/prod/api"
+resource "aws_cloudwatch_log_group" "legacy_nomaos_prod_api" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/nomaos/prod/api"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "sg-0df9c118433af39dd"
+resource "aws_security_group" "legacy_sg_0df9c118433af39dd" {
+  description = "Security group attached to instances to securely connect to agxdbinstance. Modification could lead to connection loss."
+  egress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections to agxdbinstance from any instances this security group is attached to"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-06e44543a37f56828"]
+    self             = false
+    to_port          = 1433
+  }]
+  ingress                = []
+  name                   = "ec2-rds-2"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "/aws/codepipeline/noma-api-pipeline"
+resource "aws_cloudwatch_log_group" "legacy_aws_codepipeline_noma_api_pipeline" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codepipeline/noma-api-pipeline"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "d3po2sm2zq4p71/main"
+resource "aws_amplify_branch" "legacy_d3po2sm2zq4p71_main" {
+  app_id                        = "d3po2sm2zq4p71"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "main"
+  description                   = null
+  display_name                  = "main"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Next.js - SSR"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform from "dm0gdjrq9j06v"
+resource "aws_amplify_app" "legacy_dm0gdjrq9j06v" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm install --legacy-peer-deps\n    build:\n      commands:\n        - npm run build \n  artifacts:\n    baseDirectory: dist\n    files:\n      - '**/*'\n  cache:\n    paths:\n      - node_modules/**/*"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables = {
+    VITE_BASE_URL            = "https://noma-api.nomaos.com"
+    VITE_BUSINESS_CODE       = "AGROVESTO2025L"
+    VITE_DEMO                = "Live"
+    VITE_GOOGLE_MAPS_API_KEY = "AIzaSyCNI264P2MdIXNAUP06GUULi_We1MUtaFo"
+  }
+  iam_service_role_arn = null
+  name                 = "onboarding-as-a-service"
+  oauth_token          = null # sensitive
+  platform             = "WEB"
+  repository           = "https://github.com/Agrovesto/onboarding-as-a-service"
+  tags                 = {}
+  tags_all             = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "https://onboarding.nomaos.com"
+    status    = jsonencode(302)
+    target    = "https://www.onboarding.nomaos.com"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "/aws/rds/instance/migration-prod/error"
+resource "aws_cloudwatch_log_group" "legacy_aws_rds_instance_migration_prod_error" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/rds/instance/migration-prod/error"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "nomaosinstance-snapshot-restore"
+resource "aws_dms_endpoint" "legacy_nomaosinstance_snapshot_restore" {
+  certificate_arn                 = null
+  database_name                   = "agrovestodbinstance"
+  endpoint_id                     = "nomaosinstance-snapshot-restore"
+  endpoint_type                   = "source"
+  engine_name                     = "sqlserver"
+  extra_connection_attributes     = null
+  kms_key_arn                     = "arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498"
+  password                        = null # sensitive
+  pause_replication_tasks         = null
+  port                            = 1433
+  secrets_manager_access_role_arn = null
+  secrets_manager_arn             = null
+  server_name                     = "nomaosinstance-snapshot-restore.cxgc0aq4mmfo.eu-west-1.rds.amazonaws.com"
+  service_access_role             = null
+  ssl_mode                        = "none"
+  tags                            = {}
+  tags_all                        = {}
+  username                        = "agrovesto"
+}
+
+# __generated__ by Terraform from "sg-044858bb412fc2aa0"
+resource "aws_security_group" "legacy_sg_044858bb412fc2aa0" {
+  description = "Security group attached to instances to securely connect to nomaosdbinstance. Modification could lead to connection loss."
+  egress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections to nomaosdbinstance from any instances this security group is attached to"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-0121823b5aba80621"]
+    self             = false
+    to_port          = 1433
+  }]
+  ingress                = []
+  name                   = "ec2-rds-1"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "d2uzc83ix5qdfu/master"
+resource "aws_amplify_branch" "legacy_d2uzc83ix5qdfu_master" {
+  app_id                        = "d2uzc83ix5qdfu"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Web"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform
+resource "aws_sns_topic" "legacy_amplify_d24hrz6o3pnmne_main" {
+  application_failure_feedback_role_arn    = null
+  application_success_feedback_role_arn    = null
+  application_success_feedback_sample_rate = 0
+  archive_policy                           = null
+  content_based_deduplication              = false
+  delivery_policy                          = null
+  display_name                             = null
+  fifo_throughput_scope                    = null
+  fifo_topic                               = false
+  firehose_failure_feedback_role_arn       = null
+  firehose_success_feedback_role_arn       = null
+  firehose_success_feedback_sample_rate    = 0
+  http_failure_feedback_role_arn           = null
+  http_success_feedback_role_arn           = null
+  http_success_feedback_sample_rate        = 0
+  kms_master_key_id                        = null
+  lambda_failure_feedback_role_arn         = null
+  lambda_success_feedback_role_arn         = null
+  lambda_success_feedback_sample_rate      = 0
+  name                                     = "amplify-d24hrz6o3pnmne_main"
+  name_prefix                              = null
+  policy = jsonencode({
+    Id = "__default_policy_ID"
+    Statement = [{
+      Action = ["SNS:GetTopicAttributes", "SNS:SetTopicAttributes", "SNS:AddPermission", "SNS:RemovePermission", "SNS:DeleteTopic", "SNS:Subscribe", "SNS:ListSubscriptionsByTopic", "SNS:Publish"]
+      Condition = {
+        StringEquals = {
+          "AWS:SourceOwner" = "221434544570"
+        }
+      }
+      Effect = "Allow"
+      Principal = {
+        AWS = "*"
+      }
+      Resource = "arn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main"
+      Sid      = "__default_statement_ID"
+      }, {
+      Action = "sns:Publish"
+      Effect = "Allow"
+      Principal = {
+        Service = "events.amazonaws.com"
+      }
+      Resource = "arn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main"
+      Sid      = "Allow_Publish_Eventsarn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main"
+    }]
+    Version = "2008-10-17"
+  })
+  signature_version                = 0
+  sqs_failure_feedback_role_arn    = null
+  sqs_success_feedback_role_arn    = null
+  sqs_success_feedback_sample_rate = 0
+  tags                             = {}
+  tags_all                         = {}
+  tracing_config                   = null
+}
+
+# __generated__ by Terraform from "default/amplify-d24hrz6o3pnmne-main-branch-notification"
+resource "aws_cloudwatch_event_rule" "legacy_amplify_d24hrz6o3pnmne_main_branch_notification" {
+  description    = "AWS Amplify build notifications for : App: d24hrz6o3pnmne Branch: main"
+  event_bus_name = "default"
+  event_pattern = jsonencode({
+    detail = {
+      appId      = ["d24hrz6o3pnmne"]
+      branchName = ["main"]
+      jobStatus  = ["SUCCEED", "FAILED", "STARTED"]
+    }
+    detail-type = ["Amplify Deployment Status Change"]
+    source      = ["aws.amplify"]
+  })
+  force_destroy       = false
+  name                = "amplify-d24hrz6o3pnmne-main-branch-notification"
+  name_prefix         = null
+  role_arn            = null
+  schedule_expression = null
+  state               = "ENABLED"
+  tags                = {}
+  tags_all            = {}
+}
+
+# __generated__ by Terraform from "agrovesto-storage"
+resource "aws_s3_bucket" "legacy_agrovesto_storage" {
+  bucket              = "agrovesto-storage"
+  bucket_prefix       = null
+  force_destroy       = null
+  object_lock_enabled = false
+  tags                = {}
+  tags_all            = {}
+}
+
+# __generated__ by Terraform from "sg-0b555edfc6d445a18"
+resource "aws_security_group" "legacy_sg_0b555edfc6d445a18" {
+  description = "Security group attached to migration-prod to allow EC2 instances with specific security groups attached to connect to the database. Modification could lead to connection loss."
+  egress      = []
+  ingress = [{
+    cidr_blocks      = []
+    description      = "Rule to allow connections from EC2 instances with sg-04778d7bdb8e2c026 attached"
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-04778d7bdb8e2c026"]
+    self             = false
+    to_port          = 1433
+  }]
+  name                   = "rds-ec2-3"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "sg-0bfbddac52a0a2b89"
+resource "aws_security_group" "legacy_sg_0bfbddac52a0a2b89" {
+  description = "EC2 security group"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = "Allow all outbound traffic by default"
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 22
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 22
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 443
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 443
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 80
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 80
+    }, {
+    cidr_blocks      = []
+    description      = "Load balancer to target"
+    from_port        = 80
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = ["sg-09e61cfd83551d0ec"]
+    self             = false
+    to_port          = 80
+  }]
+  name                   = "agrovesto-ec2-sg"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags = {
+    Name = "agrovesto-ec2-sg"
+  }
+  tags_all = {
+    Name = "agrovesto-ec2-sg"
+  }
+  vpc_id = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "arn:aws:secretsmanager:eu-west-1:221434544570:secret:agxDBcredentials-C6MuaN"
+resource "aws_secretsmanager_secret" "legacy_agxdbcredentials" {
+  description                    = "Generated by the CDK for stack: agrovesto-infra-deployment"
+  force_overwrite_replica_secret = null
+  kms_key_id                     = null
+  name                           = "agxDBcredentials"
+  name_prefix                    = null
+  policy = jsonencode({
+    Statement = [{
+      Action = "secretsmanager:DeleteSecret"
+      Effect = "Deny"
+      Principal = {
+        AWS = "arn:aws:iam::221434544570:root"
+      }
+      Resource = "*"
+    }]
+    Version = "2012-10-17"
+  })
+  recovery_window_in_days = null
+  tags = {
+    Name = "agxdb"
+  }
+  tags_all = {
+    Name = "agxdb"
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_launch_template" "legacy_lt_08897dce459b4913c" {
+  default_version                      = 1
+  description                          = null
+  disable_api_stop                     = false
+  disable_api_termination              = false
+  ebs_optimized                        = null
+  image_id                             = "ami-0651fd5b99debb0f4"
+  instance_initiated_shutdown_behavior = null
+  instance_type                        = "t3.small"
+  kernel_id                            = null
+  key_name                             = null
+  name                                 = "agx-apiLaunchTemplate"
+  name_prefix                          = null
+  ram_disk_id                          = null
+  security_group_names                 = []
+  tags = {
+    Name = "agrovesto-infra-deployment/agx-apiLaunchTemplate"
+  }
+  tags_all = {
+    Name = "agrovesto-infra-deployment/agx-apiLaunchTemplate"
+  }
+  update_default_version = null
+  user_data              = "IyEvYmluL2Jhc2gKc3VkbyBhcHQtZ2V0IHVwZGF0ZQpzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSBuZ2lueCBweXRob24zLXBpcApwaXAzIGluc3RhbGwgLS11cGdyYWRlIHBpcApzdWRvIHN5c3RlbWN0bCBlbmFibGUgbmdpbngKc3VkbyBzeXN0ZW1jdGwgc3RhcnQgbmdpbngKZWNobyAiQVNHIDIiIHwgc3VkbyB0ZWUgL3Zhci93d3cvaHRtbC9pbmRleC5uZ2lueC1kZWJpYW4uaHRtbA=="
+  vpc_security_group_ids = []
+  block_device_mappings {
+    device_name  = "/dev/xvda"
+    no_device    = null
+    virtual_name = null
+    ebs {
+      delete_on_termination      = null
+      encrypted                  = null
+      iops                       = 0
+      kms_key_id                 = null
+      snapshot_id                = null
+      throughput                 = 0
+      volume_initialization_rate = 0
+      volume_size                = 200
+      volume_type                = null
+    }
+  }
+  iam_instance_profile {
+    arn  = "arn:aws:iam::221434544570:instance-profile/agx-apiInstanceProfile"
+    name = null
+  }
+  network_interfaces {
+    associate_carrier_ip_address = null
+    associate_public_ip_address  = jsonencode(true)
+    delete_on_termination        = null
+    description                  = null
+    device_index                 = 0
+    interface_type               = null
+    ipv4_address_count           = 0
+    ipv4_addresses               = []
+    ipv4_prefix_count            = 0
+    ipv4_prefixes                = []
+    ipv6_address_count           = 0
+    ipv6_addresses               = []
+    ipv6_prefix_count            = 0
+    ipv6_prefixes                = []
+    network_card_index           = 0
+    network_interface_id         = null
+    primary_ipv6                 = null
+    private_ip_address           = null
+    security_groups              = ["sg-0bfbddac52a0a2b89"]
+    subnet_id                    = null
+  }
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "agrovesto-infra-deployment/agx-apiLaunchTemplate"
+    }
+  }
+  tag_specifications {
+    resource_type = "volume"
+    tags = {
+      Name = "agrovesto-infra-deployment/agx-apiLaunchTemplate"
+    }
+  }
+}
+
+# __generated__ by Terraform from "dms-serverless-premigration-results-dnwcx6llcg"
+resource "aws_s3_bucket" "legacy_dms_serverless_premigration_results_dnwcx6llcg" {
+  bucket              = "dms-serverless-premigration-results-dnwcx6llcg"
+  bucket_prefix       = null
+  force_destroy       = null
+  object_lock_enabled = false
+  tags                = {}
+  tags_all            = {}
+}
+
+# __generated__ by Terraform from "arn:aws:codestar-connections:eu-west-1:221434544570:connection/54bd9bd5-955a-4415-873e-aa936036f835"
+resource "aws_codestarconnections_connection" "legacy_conn_54bd9bd5" {
+  host_arn      = null
+  name          = "agrovesto-GithubConnection"
+  provider_type = "GitHub"
+  tags          = {}
+  tags_all      = {}
+}
+
+# __generated__ by Terraform from "dms-serverless-replication-nomaos"
+resource "aws_cloudwatch_log_group" "legacy_dms_serverless_replication_nomaos" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "dms-serverless-replication-nomaos"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "d24hrz6o3pnmne/agrovesto.com"
+resource "aws_amplify_domain_association" "legacy_d24hrz6o3pnmne_agrovesto_com" {
+  app_id                 = "d24hrz6o3pnmne"
+  domain_name            = "agrovesto.com"
+  enable_auto_sub_domain = false
+  wait_for_verification  = null
+  certificate_settings {
+    custom_certificate_arn = null
+    type                   = "AMPLIFY_MANAGED"
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = ""
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = "www"
+  }
+}
+
+# __generated__ by Terraform from "CDKToolkit"
+resource "aws_cloudformation_stack" "legacy_cdktoolkit" {
+  capabilities       = ["CAPABILITY_AUTO_EXPAND", "CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
+  disable_rollback   = false
+  iam_role_arn       = null
+  name               = "CDKToolkit"
+  notification_arns  = null
+  on_failure         = null
+  parameters         = {}
+  policy_body        = null
+  policy_url         = null
+  tags               = {}
+  tags_all           = {}
+  template_body      = "Description: This stack includes resources needed to deploy AWS CDK apps into this environment\nParameters:\n  TrustedAccounts:\n    Description: List of AWS accounts that are trusted to publish assets and deploy stacks to this environment\n    Default: \"\"\n    Type: CommaDelimitedList\n  TrustedAccountsForLookup:\n    Description: List of AWS accounts that are trusted to look up values in this environment\n    Default: \"\"\n    Type: CommaDelimitedList\n  CloudFormationExecutionPolicies:\n    Description: List of the ManagedPolicy ARN(s) to attach to the CloudFormation deployment role\n    Default: \"\"\n    Type: CommaDelimitedList\n  FileAssetsBucketName:\n    Description: The name of the S3 bucket used for file assets\n    Default: \"\"\n    Type: String\n  FileAssetsBucketKmsKeyId:\n    Description: Empty to create a new key (default), 'AWS_MANAGED_KEY' to use a managed S3 key, or the ID/ARN of an existing key.\n    Default: \"\"\n    Type: String\n  ContainerAssetsRepositoryName:\n    Description: A user-provided custom name to use for the container assets ECR repository\n    Default: \"\"\n    Type: String\n  Qualifier:\n    Description: An identifier to distinguish multiple bootstrap stacks in the same environment\n    Default: hnb659fds\n    Type: String\n    AllowedPattern: \"[A-Za-z0-9_-]{1,10}\"\n    ConstraintDescription: Qualifier must be an alphanumeric identifier of at most 10 characters\n  PublicAccessBlockConfiguration:\n    Description: Whether or not to enable S3 Staging Bucket Public Access Block Configuration\n    Default: \"true\"\n    Type: String\n    AllowedValues:\n      - \"true\"\n      - \"false\"\n  InputPermissionsBoundary:\n    Description: Whether or not to use either the CDK supplied or custom permissions boundary\n    Default: \"\"\n    Type: String\n  UseExamplePermissionsBoundary:\n    Default: \"false\"\n    AllowedValues:\n      - \"true\"\n      - \"false\"\n    Type: String\n  BootstrapVariant:\n    Type: String\n    Default: \"AWS CDK: Default Resources\"\n    Description: Describe the provenance of the resources in this bootstrap stack. Change this when you customize the template. To prevent accidents, the CDK CLI will not overwrite bootstrap stacks with a different variant.\nConditions:\n  HasTrustedAccounts:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Fn::Join:\n              - \"\"\n              - Ref: TrustedAccounts\n  HasTrustedAccountsForLookup:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Fn::Join:\n              - \"\"\n              - Ref: TrustedAccountsForLookup\n  HasCloudFormationExecutionPolicies:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Fn::Join:\n              - \"\"\n              - Ref: CloudFormationExecutionPolicies\n  HasCustomFileAssetsBucketName:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Ref: FileAssetsBucketName\n  CreateNewKey:\n    Fn::Equals:\n      - \"\"\n      - Ref: FileAssetsBucketKmsKeyId\n  UseAwsManagedKey:\n    Fn::Equals:\n      - AWS_MANAGED_KEY\n      - Ref: FileAssetsBucketKmsKeyId\n  ShouldCreatePermissionsBoundary:\n    Fn::Equals:\n      - \"true\"\n      - Ref: UseExamplePermissionsBoundary\n  PermissionsBoundarySet:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Ref: InputPermissionsBoundary\n  HasCustomContainerAssetsRepositoryName:\n    Fn::Not:\n      - Fn::Equals:\n          - \"\"\n          - Ref: ContainerAssetsRepositoryName\n  UsePublicAccessBlockConfiguration:\n    Fn::Equals:\n      - \"true\"\n      - Ref: PublicAccessBlockConfiguration\nResources:\n  FileAssetsBucketEncryptionKey:\n    Type: AWS::KMS::Key\n    Properties:\n      KeyPolicy:\n        Statement:\n          - Action:\n              - kms:Create*\n              - kms:Describe*\n              - kms:Enable*\n              - kms:List*\n              - kms:Put*\n              - kms:Update*\n              - kms:Revoke*\n              - kms:Disable*\n              - kms:Get*\n              - kms:Delete*\n              - kms:ScheduleKeyDeletion\n              - kms:CancelKeyDeletion\n              - kms:GenerateDataKey\n              - kms:TagResource\n              - kms:UntagResource\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n            Resource: \"*\"\n          - Action:\n              - kms:Decrypt\n              - kms:DescribeKey\n              - kms:Encrypt\n              - kms:ReEncrypt*\n              - kms:GenerateDataKey*\n            Effect: Allow\n            Principal:\n              AWS: \"*\"\n            Resource: \"*\"\n            Condition:\n              StringEquals:\n                kms:CallerAccount:\n                  Ref: AWS::AccountId\n                kms:ViaService:\n                  - Fn::Sub: s3.$${AWS::Region}.amazonaws.com\n          - Action:\n              - kms:Decrypt\n              - kms:DescribeKey\n              - kms:Encrypt\n              - kms:ReEncrypt*\n              - kms:GenerateDataKey*\n            Effect: Allow\n            Principal:\n              AWS:\n                Fn::Sub: $${FilePublishingRole.Arn}\n            Resource: \"*\"\n    Condition: CreateNewKey\n    UpdateReplacePolicy: Delete\n    DeletionPolicy: Delete\n  FileAssetsBucketEncryptionKeyAlias:\n    Condition: CreateNewKey\n    Type: AWS::KMS::Alias\n    Properties:\n      AliasName:\n        Fn::Sub: alias/cdk-$${Qualifier}-assets-key\n      TargetKeyId:\n        Ref: FileAssetsBucketEncryptionKey\n  StagingBucket:\n    Type: AWS::S3::Bucket\n    Properties:\n      BucketName:\n        Fn::If:\n          - HasCustomFileAssetsBucketName\n          - Fn::Sub: $${FileAssetsBucketName}\n          - Fn::Sub: cdk-$${Qualifier}-assets-$${AWS::AccountId}-$${AWS::Region}\n      AccessControl: Private\n      BucketEncryption:\n        ServerSideEncryptionConfiguration:\n          - ServerSideEncryptionByDefault:\n              SSEAlgorithm: aws:kms\n              KMSMasterKeyID:\n                Fn::If:\n                  - CreateNewKey\n                  - Fn::Sub: $${FileAssetsBucketEncryptionKey.Arn}\n                  - Fn::If:\n                      - UseAwsManagedKey\n                      - Ref: AWS::NoValue\n                      - Fn::Sub: $${FileAssetsBucketKmsKeyId}\n      PublicAccessBlockConfiguration:\n        Fn::If:\n          - UsePublicAccessBlockConfiguration\n          - BlockPublicAcls: true\n            BlockPublicPolicy: true\n            IgnorePublicAcls: true\n            RestrictPublicBuckets: true\n          - Ref: AWS::NoValue\n      VersioningConfiguration:\n        Status: Enabled\n      LifecycleConfiguration:\n        Rules:\n          - Id: CleanupOldVersions\n            Status: Enabled\n            NoncurrentVersionExpiration:\n              NoncurrentDays: 30\n          - Id: AbortIncompleteMultipartUploads\n            Status: Enabled\n            AbortIncompleteMultipartUpload:\n              DaysAfterInitiation: 1\n    UpdateReplacePolicy: Retain\n    DeletionPolicy: Retain\n  StagingBucketPolicy:\n    Type: AWS::S3::BucketPolicy\n    Properties:\n      Bucket:\n        Ref: StagingBucket\n      PolicyDocument:\n        Id: AccessControl\n        Version: \"2012-10-17\"\n        Statement:\n          - Sid: AllowSSLRequestsOnly\n            Action: s3:*\n            Effect: Deny\n            Resource:\n              - Fn::Sub: $${StagingBucket.Arn}\n              - Fn::Sub: $${StagingBucket.Arn}/*\n            Condition:\n              Bool:\n                aws:SecureTransport: \"false\"\n            Principal: \"*\"\n  ContainerAssetsRepository:\n    Type: AWS::ECR::Repository\n    Properties:\n      ImageTagMutability: IMMUTABLE\n      LifecyclePolicy:\n        LifecyclePolicyText: |\n          {\n            \"rules\": [\n              {\n                \"rulePriority\": 1,\n                \"description\": \"Untagged images should not exist, but expire any older than one year\",\n                \"selection\": {\n                  \"tagStatus\": \"untagged\",\n                  \"countType\": \"sinceImagePushed\",\n                  \"countUnit\": \"days\",\n                  \"countNumber\": 365\n                },\n                \"action\": { \"type\": \"expire\" }\n              }\n            ]\n          }\n      RepositoryName:\n        Fn::If:\n          - HasCustomContainerAssetsRepositoryName\n          - Fn::Sub: $${ContainerAssetsRepositoryName}\n          - Fn::Sub: cdk-$${Qualifier}-container-assets-$${AWS::AccountId}-$${AWS::Region}\n      RepositoryPolicyText:\n        Version: \"2012-10-17\"\n        Statement:\n          - Sid: LambdaECRImageRetrievalPolicy\n            Effect: Allow\n            Principal:\n              Service: lambda.amazonaws.com\n            Action:\n              - ecr:BatchGetImage\n              - ecr:GetDownloadUrlForLayer\n            Condition:\n              StringLike:\n                aws:sourceArn:\n                  Fn::Sub: arn:$${AWS::Partition}:lambda:$${AWS::Region}:$${AWS::AccountId}:function:*\n          - Sid: EmrServerlessImageRetrievalPolicy\n            Effect: Allow\n            Principal:\n              Service: emr-serverless.amazonaws.com\n            Action:\n              - ecr:BatchGetImage\n              - ecr:GetDownloadUrlForLayer\n              - ecr:DescribeImages\n            Condition:\n              StringLike:\n                aws:sourceArn:\n                  Fn::Sub: arn:$${AWS::Partition}:emr-serverless:$${AWS::Region}:$${AWS::AccountId}:/applications/*\n  FilePublishingRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Action: sts:TagSession\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Action: sts:AssumeRole\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Fn::If:\n              - HasTrustedAccounts\n              - Action: sts:AssumeRole\n                Effect: Allow\n                Principal:\n                  AWS:\n                    Ref: TrustedAccounts\n              - Ref: AWS::NoValue\n      RoleName:\n        Fn::Sub: cdk-$${Qualifier}-file-publishing-role-$${AWS::AccountId}-$${AWS::Region}\n      Tags:\n        - Key: aws-cdk:bootstrap-role\n          Value: file-publishing\n  ImagePublishingRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Action: sts:TagSession\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Action: sts:AssumeRole\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Fn::If:\n              - HasTrustedAccounts\n              - Action: sts:AssumeRole\n                Effect: Allow\n                Principal:\n                  AWS:\n                    Ref: TrustedAccounts\n              - Ref: AWS::NoValue\n      RoleName:\n        Fn::Sub: cdk-$${Qualifier}-image-publishing-role-$${AWS::AccountId}-$${AWS::Region}\n      Tags:\n        - Key: aws-cdk:bootstrap-role\n          Value: image-publishing\n  LookupRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Action: sts:TagSession\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Action: sts:AssumeRole\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Fn::If:\n              - HasTrustedAccountsForLookup\n              - Action: sts:AssumeRole\n                Effect: Allow\n                Principal:\n                  AWS:\n                    Ref: TrustedAccountsForLookup\n              - Ref: AWS::NoValue\n          - Fn::If:\n              - HasTrustedAccounts\n              - Action: sts:AssumeRole\n                Effect: Allow\n                Principal:\n                  AWS:\n                    Ref: TrustedAccounts\n              - Ref: AWS::NoValue\n      RoleName:\n        Fn::Sub: cdk-$${Qualifier}-lookup-role-$${AWS::AccountId}-$${AWS::Region}\n      ManagedPolicyArns:\n        - Fn::Sub: arn:$${AWS::Partition}:iam::aws:policy/ReadOnlyAccess\n      Policies:\n        - PolicyDocument:\n            Statement:\n              - Sid: DontReadSecrets\n                Effect: Deny\n                Action:\n                  - kms:Decrypt\n                Resource: \"*\"\n            Version: \"2012-10-17\"\n          PolicyName: LookupRolePolicy\n      Tags:\n        - Key: aws-cdk:bootstrap-role\n          Value: lookup\n  FilePublishingRoleDefaultPolicy:\n    Type: AWS::IAM::Policy\n    Properties:\n      PolicyDocument:\n        Statement:\n          - Action:\n              - s3:GetObject*\n              - s3:GetBucket*\n              - s3:GetEncryptionConfiguration\n              - s3:List*\n              - s3:DeleteObject*\n              - s3:PutObject*\n              - s3:Abort*\n            Resource:\n              - Fn::Sub: $${StagingBucket.Arn}\n              - Fn::Sub: $${StagingBucket.Arn}/*\n            Condition:\n              StringEquals:\n                aws:ResourceAccount:\n                  - Fn::Sub: $${AWS::AccountId}\n            Effect: Allow\n          - Action:\n              - kms:Decrypt\n              - kms:DescribeKey\n              - kms:Encrypt\n              - kms:ReEncrypt*\n              - kms:GenerateDataKey*\n            Effect: Allow\n            Resource:\n              Fn::If:\n                - CreateNewKey\n                - Fn::Sub: $${FileAssetsBucketEncryptionKey.Arn}\n                - Fn::Sub: arn:$${AWS::Partition}:kms:$${AWS::Region}:$${AWS::AccountId}:key/$${FileAssetsBucketKmsKeyId}\n        Version: \"2012-10-17\"\n      Roles:\n        - Ref: FilePublishingRole\n      PolicyName:\n        Fn::Sub: cdk-$${Qualifier}-file-publishing-role-default-policy-$${AWS::AccountId}-$${AWS::Region}\n  ImagePublishingRoleDefaultPolicy:\n    Type: AWS::IAM::Policy\n    Properties:\n      PolicyDocument:\n        Statement:\n          - Action:\n              - ecr:PutImage\n              - ecr:InitiateLayerUpload\n              - ecr:UploadLayerPart\n              - ecr:CompleteLayerUpload\n              - ecr:BatchCheckLayerAvailability\n              - ecr:DescribeRepositories\n              - ecr:DescribeImages\n              - ecr:BatchGetImage\n              - ecr:GetDownloadUrlForLayer\n            Resource:\n              Fn::Sub: $${ContainerAssetsRepository.Arn}\n            Effect: Allow\n          - Action:\n              - ecr:GetAuthorizationToken\n            Resource: \"*\"\n            Effect: Allow\n        Version: \"2012-10-17\"\n      Roles:\n        - Ref: ImagePublishingRole\n      PolicyName:\n        Fn::Sub: cdk-$${Qualifier}-image-publishing-role-default-policy-$${AWS::AccountId}-$${AWS::Region}\n  DeploymentActionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Action: sts:TagSession\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Action: sts:AssumeRole\n            Effect: Allow\n            Principal:\n              AWS:\n                Ref: AWS::AccountId\n          - Fn::If:\n              - HasTrustedAccounts\n              - Action: sts:AssumeRole\n                Effect: Allow\n                Principal:\n                  AWS:\n                    Ref: TrustedAccounts\n              - Ref: AWS::NoValue\n      Policies:\n        - PolicyDocument:\n            Statement:\n              - Sid: CloudFormationPermissions\n                Effect: Allow\n                Action:\n                  - cloudformation:CreateChangeSet\n                  - cloudformation:DeleteChangeSet\n                  - cloudformation:DescribeChangeSet\n                  - cloudformation:DescribeStacks\n                  - cloudformation:ExecuteChangeSet\n                  - cloudformation:CreateStack\n                  - cloudformation:UpdateStack\n                  - cloudformation:RollbackStack\n                  - cloudformation:ContinueUpdateRollback\n                Resource: \"*\"\n              - Sid: PipelineCrossAccountArtifactsBucket\n                Effect: Allow\n                Action:\n                  - s3:GetObject*\n                  - s3:GetBucket*\n                  - s3:List*\n                  - s3:Abort*\n                  - s3:DeleteObject*\n                  - s3:PutObject*\n                Resource: \"*\"\n                Condition:\n                  StringNotEquals:\n                    s3:ResourceAccount:\n                      Ref: AWS::AccountId\n              - Sid: PipelineCrossAccountArtifactsKey\n                Effect: Allow\n                Action:\n                  - kms:Decrypt\n                  - kms:DescribeKey\n                  - kms:Encrypt\n                  - kms:ReEncrypt*\n                  - kms:GenerateDataKey*\n                Resource: \"*\"\n                Condition:\n                  StringEquals:\n                    kms:ViaService:\n                      Fn::Sub: s3.$${AWS::Region}.amazonaws.com\n              - Action: iam:PassRole\n                Resource:\n                  Fn::Sub: $${CloudFormationExecutionRole.Arn}\n                Effect: Allow\n              - Sid: CliPermissions\n                Action:\n                  - cloudformation:DescribeStackEvents\n                  - cloudformation:GetTemplate\n                  - cloudformation:DeleteStack\n                  - cloudformation:UpdateTerminationProtection\n                  - sts:GetCallerIdentity\n                  - cloudformation:GetTemplateSummary\n                Resource: \"*\"\n                Effect: Allow\n              - Sid: CliStagingBucket\n                Effect: Allow\n                Action:\n                  - s3:GetObject*\n                  - s3:GetBucket*\n                  - s3:List*\n                Resource:\n                  - Fn::Sub: $${StagingBucket.Arn}\n                  - Fn::Sub: $${StagingBucket.Arn}/*\n              - Sid: ReadVersion\n                Effect: Allow\n                Action:\n                  - ssm:GetParameter\n                  - ssm:GetParameters\n                Resource:\n                  - Fn::Sub: arn:$${AWS::Partition}:ssm:$${AWS::Region}:$${AWS::AccountId}:parameter$${CdkBootstrapVersion}\n              - Sid: Refactor\n                Effect: Allow\n                Action:\n                  - cloudformation:CreateStackRefactor\n                  - cloudformation:DescribeStackRefactor\n                  - cloudformation:ExecuteStackRefactor\n                  - cloudformation:ListStackRefactorActions\n                  - cloudformation:ListStackRefactors\n                  - cloudformation:ListStacks\n                Resource: \"*\"\n            Version: \"2012-10-17\"\n          PolicyName: default\n      RoleName:\n        Fn::Sub: cdk-$${Qualifier}-deploy-role-$${AWS::AccountId}-$${AWS::Region}\n      Tags:\n        - Key: aws-cdk:bootstrap-role\n          Value: deploy\n  CloudFormationExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Action: sts:AssumeRole\n            Effect: Allow\n            Principal:\n              Service: cloudformation.amazonaws.com\n        Version: \"2012-10-17\"\n      ManagedPolicyArns:\n        Fn::If:\n          - HasCloudFormationExecutionPolicies\n          - Ref: CloudFormationExecutionPolicies\n          - Fn::If:\n              - HasTrustedAccounts\n              - Ref: AWS::NoValue\n              - - Fn::Sub: arn:$${AWS::Partition}:iam::aws:policy/AdministratorAccess\n      RoleName:\n        Fn::Sub: cdk-$${Qualifier}-cfn-exec-role-$${AWS::AccountId}-$${AWS::Region}\n      PermissionsBoundary:\n        Fn::If:\n          - PermissionsBoundarySet\n          - Fn::Sub: arn:$${AWS::Partition}:iam::$${AWS::AccountId}:policy/$${InputPermissionsBoundary}\n          - Ref: AWS::NoValue\n  CdkBoostrapPermissionsBoundaryPolicy:\n    Condition: ShouldCreatePermissionsBoundary\n    Type: AWS::IAM::ManagedPolicy\n    Properties:\n      PolicyDocument:\n        Statement:\n          - Sid: ExplicitAllowAll\n            Action:\n              - \"*\"\n            Effect: Allow\n            Resource: \"*\"\n          - Sid: DenyAccessIfRequiredPermBoundaryIsNotBeingApplied\n            Action:\n              - iam:CreateUser\n              - iam:CreateRole\n              - iam:PutRolePermissionsBoundary\n              - iam:PutUserPermissionsBoundary\n            Condition:\n              StringNotEquals:\n                iam:PermissionsBoundary:\n                  Fn::Sub: arn:$${AWS::Partition}:iam::$${AWS::AccountId}:policy/cdk-$${Qualifier}-permissions-boundary-$${AWS::AccountId}-$${AWS::Region}\n            Effect: Deny\n            Resource: \"*\"\n          - Sid: DenyPermBoundaryIAMPolicyAlteration\n            Action:\n              - iam:CreatePolicyVersion\n              - iam:DeletePolicy\n              - iam:DeletePolicyVersion\n              - iam:SetDefaultPolicyVersion\n            Effect: Deny\n            Resource:\n              Fn::Sub: arn:$${AWS::Partition}:iam::$${AWS::AccountId}:policy/cdk-$${Qualifier}-permissions-boundary-$${AWS::AccountId}-$${AWS::Region}\n          - Sid: DenyRemovalOfPermBoundaryFromAnyUserOrRole\n            Action:\n              - iam:DeleteUserPermissionsBoundary\n              - iam:DeleteRolePermissionsBoundary\n            Effect: Deny\n            Resource: \"*\"\n        Version: \"2012-10-17\"\n      Description: Bootstrap Permission Boundary\n      ManagedPolicyName:\n        Fn::Sub: cdk-$${Qualifier}-permissions-boundary-$${AWS::AccountId}-$${AWS::Region}\n      Path: /\n  CdkBootstrapVersion:\n    Type: AWS::SSM::Parameter\n    Properties:\n      Type: String\n      Name:\n        Fn::Sub: /cdk-bootstrap/$${Qualifier}/version\n      Value: \"28\"\nOutputs:\n  BucketName:\n    Description: The name of the S3 bucket owned by the CDK toolkit stack\n    Value:\n      Fn::Sub: $${StagingBucket}\n  BucketDomainName:\n    Description: The domain name of the S3 bucket owned by the CDK toolkit stack\n    Value:\n      Fn::Sub: $${StagingBucket.RegionalDomainName}\n  FileAssetKeyArn:\n    Description: The ARN of the KMS key used to encrypt the asset bucket (deprecated)\n    Value:\n      Fn::If:\n        - CreateNewKey\n        - Fn::Sub: $${FileAssetsBucketEncryptionKey.Arn}\n        - Fn::Sub: $${FileAssetsBucketKmsKeyId}\n    Export:\n      Name:\n        Fn::Sub: CdkBootstrap-$${Qualifier}-FileAssetKeyArn\n  ImageRepositoryName:\n    Description: The name of the ECR repository which hosts docker image assets\n    Value:\n      Fn::Sub: $${ContainerAssetsRepository}\n  BootstrapVersion:\n    Description: The version of the bootstrap resources that are currently mastered in this stack\n    Value:\n      Fn::GetAtt:\n        - CdkBootstrapVersion\n        - Value\n"
+  template_url       = null
+  timeout_in_minutes = 0
+}
+
+# __generated__ by Terraform from "d4d246twq5d12/insight.nomaos.com"
+resource "aws_amplify_domain_association" "legacy_d4d246twq5d12_insight_nomaos_com" {
+  app_id                 = "d4d246twq5d12"
+  domain_name            = "insight.nomaos.com"
+  enable_auto_sub_domain = false
+  wait_for_verification  = null
+  certificate_settings {
+    custom_certificate_arn = null
+    type                   = "AMPLIFY_MANAGED"
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = ""
+  }
+  sub_domain {
+    branch_name = "master"
+    prefix      = "www"
+  }
+}
+
+# __generated__ by Terraform from "my-first-configuration-set"
+resource "aws_sesv2_configuration_set" "legacy_my_first_configuration_set" {
+  configuration_set_name = "my-first-configuration-set"
+  tags                   = {}
+  tags_all               = {}
+  reputation_options {
+    reputation_metrics_enabled = true
+  }
+  sending_options {
+    sending_enabled = true
+  }
+}
+
+# __generated__ by Terraform from "agrovesto-pipeline-artifacts"
+resource "aws_s3_bucket" "legacy_agrovesto_pipeline_artifacts" {
+  bucket              = "agrovesto-pipeline-artifacts"
+  bucket_prefix       = null
+  force_destroy       = null
+  object_lock_enabled = false
+  tags                = {}
+  tags_all            = {}
+}
+
+# __generated__ by Terraform from "/aws/codebuild/agrovesto-ProdCodeBuildProject"
+resource "aws_cloudwatch_log_group" "legacy_aws_codebuild_agrovesto_prodcodebuildproject" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "/aws/codebuild/agrovesto-ProdCodeBuildProject"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "d4d246twq5d12/master"
+resource "aws_amplify_branch" "legacy_d4d246twq5d12_master" {
+  app_id                        = "d4d246twq5d12"
+  backend_environment_arn       = null
+  basic_auth_credentials        = null # sensitive
+  branch_name                   = "master"
+  description                   = null
+  display_name                  = "master"
+  enable_auto_build             = true
+  enable_basic_auth             = false
+  enable_notification           = false
+  enable_performance_mode       = false
+  enable_pull_request_preview   = false
+  environment_variables         = {}
+  framework                     = "Web"
+  pull_request_environment_name = null
+  stage                         = "PRODUCTION"
+  tags                          = {}
+  tags_all                      = {}
+  ttl                           = jsonencode(5)
+}
+
+# __generated__ by Terraform from "d3po2sm2zq4p71"
+resource "aws_amplify_app" "legacy_d3po2sm2zq4p71" {
+  access_token                  = null # sensitive
+  auto_branch_creation_patterns = []
+  basic_auth_credentials        = null # sensitive
+  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm ci --legacy-peer-deps\n    build:\n      commands:\n        - npm run build\n  artifacts:\n    baseDirectory: .next\n    files:\n      - \"**/*\"\n  cache:\n    paths:\n      - .next/cache/**/*\n      - .npm/**/*\n"
+  compute_role_arn              = null
+  custom_headers                = null
+  description                   = null
+  enable_auto_branch_creation   = false
+  enable_basic_auth             = false
+  enable_branch_auto_build      = false
+  enable_branch_auto_deletion   = false
+  environment_variables         = {}
+  iam_service_role_arn          = "arn:aws:iam::221434544570:role/service-role/AmplifySSRLoggingRole-227acf59-5d64-413b-b600-1a52d75bec84"
+  name                          = "tradeplatform"
+  oauth_token                   = null # sensitive
+  platform                      = "WEB_COMPUTE"
+  repository                    = "https://github.com/Agrovesto/tradeplatform"
+  tags                          = {}
+  tags_all                      = {}
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+  custom_rule {
+    condition = null
+    source    = "/<*>"
+    status    = "404-200"
+    target    = "/index.html"
+  }
+}
+
+# __generated__ by Terraform from "arn:aws:acm:eu-west-1:221434544570:certificate/f493b7d7-a3bb-4092-a2c9-54bd6655dbd1"
+resource "aws_acm_certificate" "legacy_cert_f493b7d7" {
+  certificate_authority_arn = null
+  certificate_body          = null
+  certificate_chain         = null
+  domain_name               = "*.agrovesto.com"
+  early_renewal_duration    = null
+  key_algorithm             = "RSA_2048"
+  private_key               = null # sensitive
+  subject_alternative_names = ["*.agrovesto.com"]
+  tags                      = {}
+  tags_all                  = {}
+  validation_method         = "DNS"
+  options {
+    certificate_transparency_logging_preference = "ENABLED"
+  }
+}
+
+# __generated__ by Terraform from "sg-0e4ef41f521e66695"
+resource "aws_security_group" "legacy_sg_0e4ef41f521e66695" {
+  description = "launch-wizard-2 created 2026-01-12T12:03:55.621Z"
+  egress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = false
+    to_port          = 0
+  }]
+  ingress = [{
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 1433
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 1433
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 22
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 22
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 443
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 443
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 5000
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 5000
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 5001
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 5001
+    }, {
+    cidr_blocks      = ["0.0.0.0/0"]
+    description      = ""
+    from_port        = 80
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "tcp"
+    security_groups  = []
+    self             = false
+    to_port          = 80
+  }]
+  name                   = "noma-agx"
+  name_prefix            = null
+  revoke_rules_on_delete = null
+  tags                   = {}
+  tags_all               = {}
+  vpc_id                 = "vpc-0016f521bae08f4ff"
+}
+
+# __generated__ by Terraform from "arn:aws:acm:eu-west-1:221434544570:certificate/5172b3e7-972d-46c1-87f3-dc104934ac64"
+resource "aws_acm_certificate" "legacy_cert_5172b3e7" {
+  certificate_authority_arn = null
+  certificate_body          = null
+  certificate_chain         = null
+  domain_name               = "*.nomaos.com"
+  early_renewal_duration    = null
+  key_algorithm             = "RSA_2048"
+  private_key               = null # sensitive
+  subject_alternative_names = ["*.nomaos.com"]
+  tags                      = {}
+  tags_all                  = {}
+  validation_method         = "DNS"
+  options {
+    certificate_transparency_logging_preference = "ENABLED"
+  }
+}
+
+# __generated__ by Terraform
+resource "aws_lambda_function" "legacy_agrovesto_infra_deploymen_customvpcrestrictdefault_igfrsxlzx" {
+  architectures                      = ["x86_64"]
+  code_signing_config_arn            = null
+  description                        = "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+  filename                           = null
+  function_name                      = "agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk"
+  handler                            = "__entrypoint__.handler"
+  image_uri                          = null
+  kms_key_arn                        = null
+  layers                             = []
+  memory_size                        = 128
+  package_type                       = "Zip"
+  publish                            = null
+  replace_security_groups_on_destroy = null
+  replacement_security_group_ids     = null
+  reserved_concurrent_executions     = -1
+  role                               = "arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-CustomVpcRestrictDefaultS-Hzq7oZBnIJrR"
+  runtime                            = "nodejs22.x"
+  s3_bucket                          = null
+  s3_key                             = null
+  s3_object_version                  = null
+  skip_destroy                       = false
+  source_code_hash                   = null
+  tags                               = {}
+  tags_all                           = {}
+  timeout                            = 900
+  ephemeral_storage {
+    size = 512
+  }
+  logging_config {
+    application_log_level = null
+    log_format            = "Text"
+    log_group             = "/aws/lambda/agrovesto-infra-deploymen-CustomVpcRestrictDefault-IGFRSXLZxLMk"
+    system_log_level      = null
+  }
+  tracing_config {
+    mode = "PassThrough"
+  }
+}
+
+# __generated__ by Terraform from "vpc-0016f521bae08f4ff"
+resource "aws_default_route_table" "legacy_main_rtb_0fa0841a7b7dac5db" {
+  default_route_table_id = "rtb-0fa0841a7b7dac5db"
+  propagating_vgws       = []
+  route                  = []
+  tags                   = {}
+  tags_all               = {}
+}
+
+# __generated__ by Terraform
+resource "aws_instance" "legacy_i_027ff32f2a26fa600" {
+  ami                                  = "ami-049442a6cf8319180"
+  associate_public_ip_address          = true
+  availability_zone                    = "eu-west-1b"
+  disable_api_stop                     = false
+  disable_api_termination              = true
+  ebs_optimized                        = true
+  enable_primary_ipv6                  = null
+  get_password_data                    = false
+  hibernation                          = false
+  host_id                              = null
+  host_resource_group_arn              = null
+  iam_instance_profile                 = "instanceRole"
+  instance_initiated_shutdown_behavior = "stop"
+  instance_type                        = "t3.medium"
+  ipv6_address_count                   = 0
+  ipv6_addresses                       = []
+  key_name                             = "noma-agx"
+  monitoring                           = true
+  placement_group                      = null
+  placement_partition_number           = 0
+  private_ip                           = "172.96.1.115"
+  secondary_private_ips                = []
+  security_groups                      = []
+  source_dest_check                    = true
+  subnet_id                            = "subnet-0e169f40c70cdfe8b"
+  tags = {
+    Name = "noma-agx"
+  }
+  tags_all = {
+    Name = "noma-agx"
+  }
+  tenancy                     = "default"
+  user_data                   = null
+  user_data_base64            = null
+  user_data_replace_on_change = null
+  volume_tags                 = null
+  vpc_security_group_ids      = ["sg-044858bb412fc2aa0", "sg-05a2722a050c1109b", "sg-0df9c118433af39dd"]
+  capacity_reservation_specification {
+    capacity_reservation_preference = "open"
+  }
+  cpu_options {
+    amd_sev_snp      = null
+    core_count       = 1
+    threads_per_core = 2
+  }
+  credit_specification {
+    cpu_credits = "unlimited"
+  }
+  enclave_options {
+    enabled = false
+  }
+  maintenance_options {
+    auto_recovery = "default"
+  }
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_protocol_ipv6          = "disabled"
+    http_put_response_hop_limit = 2
+    http_tokens                 = "required"
+    instance_metadata_tags      = "disabled"
+  }
+  private_dns_name_options {
+    enable_resource_name_dns_a_record    = false
+    enable_resource_name_dns_aaaa_record = false
+    hostname_type                        = "ip-name"
+  }
+  root_block_device {
+    delete_on_termination = true
+    encrypted             = false
+    iops                  = 3000
+    kms_key_id            = null
+    tags                  = {}
+    tags_all              = {}
+    throughput            = 125
+    volume_size           = 500
+    volume_type           = "gp3"
+  }
+}
+
+# __generated__ by Terraform from "cf-templates-lh5u9ipyvd5c-eu-west-1"
+resource "aws_s3_bucket" "legacy_cf_templates_lh5u9ipyvd5c_eu_west_1" {
+  bucket              = "cf-templates-lh5u9ipyvd5c-eu-west-1"
+  bucket_prefix       = null
+  force_destroy       = null
+  object_lock_enabled = false
+  tags                = {}
+  tags_all            = {}
+}
