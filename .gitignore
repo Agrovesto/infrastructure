@@ -32,3 +32,6 @@ __pycache__/
 zz_import_*.tf
 generated_legacy.tf
 # imports/discovery-*.txt
+
+# plan.sh local bootstrap state never goes to git
+bootstrap/*.tfstate*

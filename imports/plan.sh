@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# =============================================================================
+# imports/plan.sh <bootstrap-dev|bootstrap-prod|prod|monitoring|dev|all>
+#
+# READ-ONLY: stages the import blocks, runs `terraform plan` and saves the
+# output to imports/plans/ so it can be committed for review. Nothing is
+# applied. Run from the repo root.
+# =============================================================================
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/imports/plans"; mkdir -p "$OUT"
+export AWS_REGION=eu-west-1 AWS_PAGER="" TF_IN_AUTOMATION=1
+
+run() { # name dir profile extra-plan-args...
+  local name=$1 dir=$2 profile=$3; shift 3
+  local log="$OUT/$name.txt"
+  echo "=== $name ($dir, $profile) -> imports/plans/$name.txt"
+  (
+    cd "$ROOT/$dir" || exit 1
+    export AWS_PROFILE=$profile
+    rm -f generated_legacy.tf
+    echo "# $name  $(date -u +%FT%TZ)  terraform $(terraform version | head -1)"
+    terraform init -input=false -no-color -reconfigure || exit 1
+    terraform plan -input=false -no-color -lock=false -generate-config-out=generated_legacy.tf "$@"
+    rc=$?
+    echo; echo "# plan exit code: $rc"
+    if [ -f generated_legacy.tf ]; then
+      cp generated_legacy.tf "$OUT/$name.generated_legacy.tf"
+      echo "# generated config copied to imports/plans/$name.generated_legacy.tf"
+    fi
+  ) > "$log" 2>&1
+  grep -E "^Plan:|^Error|No changes|exit code" "$log" | sed 's/^/    /'
+}
+
+stage() { "$ROOT/imports/stage.sh" --unstage "$1" >/dev/null; "$ROOT/imports/stage.sh" "$1" >/dev/null; }
+
+case "${1:-all}" in
+  bootstrap-prod|bootstrap-dev|all)
+    if [ "${1:-all}" != "prod" ]; then stage bootstrap; fi ;;&
+  bootstrap-prod|all) run bootstrap-prod bootstrap agrovesto-prod -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars ;;&
+  bootstrap-dev|all)  run bootstrap-dev  bootstrap agrovesto-dev  -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars ;;&
+  prod|all)       stage prod;       run prod prod agrovesto-prod ;;&
+  monitoring|all) stage monitoring; run monitoring monitoring agrovesto-prod ;;&
+  dev|all)        stage dev;        run dev dev agrovesto-dev ;;
+  bootstrap-prod|bootstrap-dev|prod|monitoring|dev) ;;
+  *) echo "usage: $0 bootstrap-dev|bootstrap-prod|prod|monitoring|dev|all" >&2; exit 2 ;;
+esac
+
+echo
+echo "Before committing imports/plans/, check for secrets (see RUNBOOK):"
+echo "  grep -niE 'password|secret_string|token|private_key|AKIA' imports/plans/*"
