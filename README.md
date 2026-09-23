@@ -19,7 +19,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 ├── dev/                 # Dev environment: EC2 + Docker (nginx, APIs, Vault, MSSQL, Observability)
 ├── prod/                # Prod environment: ECS Fargate + ECR + ALB + RDS SQL Server + Route53
 ├── monitoring/          # Observability: Prometheus, Loki, Tempo, Grafana (ECS Fargate + EFS)
-├── scripts/             # Utility scripts (Infracost, Coverage, Test suites)
+├── scripts/             # Utility scripts (Infracost, Coverage, Tests, AWS discovery)
 ├── docs/                # Architecture diagrams (Mermaid) and narrative docs
 ├── tests/               # Documentation for the Terraform test suites
 ├── .github/workflows/   # CI/CD pipelines (dev.yml, prod.yml, monitoring.yml)
@@ -128,6 +128,33 @@ Use `./scripts/infracost.sh` to generate a full cost report (requires `INFRACOST
 2. Push the Docker image to the ECR repo created by Terraform.
 3. Update the `image` tag in Terraform and apply.
 4. (Optional) Add a Blackbox probe in `monitoring/terraform.auto.tfvars`.
+
+### Finding Resources That Are Not In Terraform (Discovery Scan)
+
+`scripts/aws-inventory-scan.sh` scans both accounts read-only and reports what
+exists in AWS versus what this repo manages, writing each account's report into
+that environment's own folder:
+
+```bash
+./scripts/aws-inventory-scan.sh                 # both accounts -> dev/ and prod/
+./scripts/aws-inventory-scan.sh --env dev       # one account
+./scripts/aws-inventory-scan.sh --with-state    # also settle untaggable resources
+```
+
+- `dev/discovery/` — the dev account; `prod/discovery/` — the prod account;
+  `monitoring/discovery/` — the monitoring rows of the prod-account scan;
+  `.discovery/COMBINED.md` — the two side by side.
+- Each folder holds a `SUMMARY.md` (start here), `inventory.csv`,
+  `unmanaged.csv` (import candidates) and `imports/imports-<stack>.tf.txt`
+  (ready-to-paste Terraform `import` blocks).
+- "Managed" means the resource carries the `ManagedBy = terraform` default tag
+  that all three stacks set; anything else is a candidate to adopt **or delete**.
+- Read-only, no secret values are fetched, and the output is gitignored (it
+  contains account IDs and IP addresses).
+
+Full walkthrough — including the import procedure with
+`terraform plan -generate-config-out` and the cost/security/hygiene findings the
+scan reports — is in [docs/discovery.md](docs/discovery.md).
 
 ### Manual RDS Init
 If `run_db_init = true` is not used, connect to the DB and run:

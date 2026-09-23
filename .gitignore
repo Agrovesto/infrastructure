@@ -26,3 +26,12 @@ __pycache__/
 
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
+
+# AWS discovery scans (scripts/aws-inventory-scan.sh).
+# These hold account IDs, IP addresses, ARNs and internal hostnames, and this
+# repo is public - so scan output stays local. To keep one curated snapshot in
+# git anyway:  git add -f dev/discovery/SUMMARY.md
+dev/discovery/
+prod/discovery/
+monitoring/discovery/
+.discovery/
