@@ -31,4 +31,4 @@ __pycache__/
 # discovery output (account facts), per-account bootstrap local state.
 zz_import_*.tf
 generated_legacy.tf
-# imports/discovery-*.txt
+imports/discovery-*.txt
