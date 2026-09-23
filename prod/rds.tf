@@ -43,7 +43,7 @@ resource "aws_db_instance" "mssql" {
   #trivy:ignore:AVD-AWS-0080
   storage_encrypted = var.mssql_storage_encrypted
 
-  db_subnet_group_name   = aws_db_subnet_group.mssql.name
+  db_subnet_group_name = aws_db_subnet_group.mssql.name
   # The design's RDS SG plus any SGs the adopted instance still relies on
   # (legacy EC2 -> DB paths), so adoption does not cut existing connections.
   vpc_security_group_ids = concat([aws_security_group.rds.id], var.mssql_additional_security_group_ids)
@@ -67,9 +67,9 @@ resource "aws_db_instance" "mssql" {
   # Enhanced monitoring + log exports to CloudWatch + Performance Insights
   # (free 7-day retention tier). The log types are a variable because Express
   # has no SQL Server Agent, so there is no agent log to publish.
-  monitoring_interval                   = 60
-  monitoring_role_arn                   = aws_iam_role.rds_monitoring.arn
-  enabled_cloudwatch_logs_exports       = var.mssql_enabled_cloudwatch_logs_exports
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
+  enabled_cloudwatch_logs_exports = var.mssql_enabled_cloudwatch_logs_exports
   # SQL Server Express does not support Performance Insights.
   performance_insights_enabled          = var.mssql_performance_insights_enabled
   performance_insights_retention_period = var.mssql_performance_insights_enabled ? 7 : null

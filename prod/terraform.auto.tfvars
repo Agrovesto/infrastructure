@@ -189,13 +189,13 @@ private_subnet_cidrs  = ["172.96.11.0/24", "172.96.12.0/24"] # NEW (ECS tasks), 
 manage_default_security_group = false
 
 # --- RDS: migration-prod -------------------------------------------------------
-mssql_identifier               = "migration-prod"
-mssql_engine_version           = "15.00.4445.1.v1"
-mssql_allocated_storage_gb     = 50
-mssql_max_allocated_storage_gb = 63
-mssql_storage_type             = "gp2"
-mssql_master_username          = "agrovesto"
-mssql_subnet_group_name        = "agxdb2subnetgroup"
+mssql_identifier                   = "migration-prod"
+mssql_engine_version               = "15.00.4445.1.v1"
+mssql_allocated_storage_gb         = 50
+mssql_max_allocated_storage_gb     = 63
+mssql_storage_type                 = "gp2"
+mssql_master_username              = "agrovesto"
+mssql_subnet_group_name            = "agxdb2subnetgroup"
 mssql_performance_insights_enabled = false # Express: not supported
 
 # !! migration-prod is NOT encrypted. storage_encrypted is ForceNew, so it must
