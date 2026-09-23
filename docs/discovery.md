@@ -242,3 +242,33 @@ detection, stack attribution (dev / prod / monitoring), cost, security and
 hygiene findings, generated `import` blocks, an optional state cross-check, raw
 JSON per call for writing config by hand, and a record of every call that
 failed so "not scanned" is never mistaken for "does not exist".
+
+## Importing from an AWS Resource Explorer report
+
+`scripts/aws-inventory-scan.sh` needs AWS credentials. When all you have is an
+inventory somebody else exported - an AWS Resource Explorer 2 search, the
+console's bulk ARN copy, a spreadsheet - use this instead:
+
+```bash
+./scripts/import-from-inventory.py --report inventory.md          # markdown table of ARNs
+./scripts/import-from-inventory.py --arns dev=dev.txt --arns prod=prod.txt
+```
+
+It maps each ARN's account id to an environment through the repo's own backend
+blocks (nothing is hard coded), so dev-account rows are written to
+`dev/discovery/` and prod-account rows to `prod/discovery/`, and every resource
+lands in one of five buckets: **A** import now, **B** one command decides the
+address, **C** base network (can force a replacement), **D** a decision rather
+than a discovery, **X** excluded - AWS-owned default, CDK/CloudFormation owns
+it, it is a child of something else (ENIs, security-group rules, `$LATEST`
+versions), it is a backup artifact, or it is already in state.
+
+Output per environment: `discovery/imports/imports-<env>.tf.txt` (only section A
+uncommented; B/C/D carry the exact command that settles them),
+`discovery/TRIAGE.md` (the write-up, committed) and
+`discovery/inventory-<date>.csv` (every row with its bucket, local only).
+
+A Resource Explorer report carries ARNs and nothing else - no names, no tags - so
+it cannot prove who owns a security group, a KMS key or an Amplify app. That is
+why sections B-D exist instead of guesses. For ownership evidence, run
+`scripts/aws-inventory-scan.sh`, which reads tags.

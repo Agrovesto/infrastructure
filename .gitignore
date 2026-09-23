@@ -31,7 +31,16 @@ __pycache__/
 # These hold account IDs, IP addresses, ARNs and internal hostnames, and this
 # repo is public - so scan output stays local. To keep one curated snapshot in
 # git anyway:  git add -f dev/discovery/SUMMARY.md
-dev/discovery/
-prod/discovery/
-monitoring/discovery/
+# ...with two exceptions, so a curated import package can be reviewed in a PR:
+# the triage write-up and the generated import blocks. Everything else in a
+# discovery folder (raw API responses, full inventories, CSVs) stays local.
+dev/discovery/*
+prod/discovery/*
+monitoring/discovery/*
 .discovery/
+!dev/discovery/TRIAGE.md
+!prod/discovery/TRIAGE.md
+!monitoring/discovery/TRIAGE.md
+!dev/discovery/imports/
+!prod/discovery/imports/
+!monitoring/discovery/imports/

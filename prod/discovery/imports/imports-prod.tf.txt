@@ -1,0 +1,1435 @@
+# ============================================================================
+# Import blocks for prod/   -   generated 2026-09-23
+# by scripts/import-from-inventory.py from the AWS Resource Explorer 2 inventory of 2026-09-23 (375 resources, eu-west-1, accounts 353833416626 + 221434544570)
+#
+# 210 resources in the prod account; 20 are section-A imports, 47 need a check,
+# 13 are network, 25 are decisions, 105 are excluded (see ../TRIAGE.md).
+#
+# Only section A is uncommented. B, C and D are comments carrying the one
+# command that settles each of them - run it, then decide.
+#
+# To use section A:
+#   1. cp prod/discovery/imports/imports-prod.tf.txt prod/imports.tf
+#      (a .tf.txt file is inert - Terraform only reads it once renamed .tf)
+#   2. cd prod && terraform init
+#   3. terraform plan -generate-config-out=generated.tf
+#        Terraform writes real config for every import block below.
+#   4. move the generated resources into sensible files, terraform fmt,
+#      delete the import blocks, re-plan: it must say 0 to add, 0 to change.
+#
+# Never apply on the strength of this file alone. Read the plan.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# A - import now   (20 resources)
+# ----------------------------------------------------------------------------
+# Standalone resources nothing in the repo claims. Safe to paste: `terraform
+# plan -generate-config-out=generated.tf` writes the config from the real
+# resource, so the plan ends at 0 to add, 0 to change.
+
+# --- dms resources (4) ---
+
+# DMS endpoint - import so the migration source/target is in code. Note the
+# DMS serverless replications themselves are not in this index, so this is
+# part of a larger picture
+# check:
+#   aws dms describe-endpoints --filters
+#   Name=endpoint-id,Values='BSI5NFYJSVELZMYVPFOMJ56MIM' --query
+#   'Endpoints[].{id:EndpointIdentifier,type:EndpointType,engine:EngineDbType}'
+# arn: arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM
+import {
+  to = aws_dms_endpoint.bsi5nfyjsvelzmyvpfomj56mim
+  id = "BSI5NFYJSVELZMYVPFOMJ56MIM"
+}
+
+# DMS endpoint - import so the migration source/target is in code. Note the
+# DMS serverless replications themselves are not in this index, so this is
+# part of a larger picture
+# check:
+#   aws dms describe-endpoints --filters
+#   Name=endpoint-id,Values='WFZ6YQ2JCJBLLBLRDLCH7XNRWY' --query
+#   'Endpoints[].{id:EndpointIdentifier,type:EndpointType,engine:EngineDbType}'
+# arn: arn:aws:dms:eu-west-1:221434544570:endpoint:WFZ6YQ2JCJBLLBLRDLCH7XNRWY
+import {
+  to = aws_dms_endpoint.wfz6yq2jcjbllblrdlch7xnrwy
+  id = "WFZ6YQ2JCJBLLBLRDLCH7XNRWY"
+}
+
+# DMS endpoint - import so the migration source/target is in code. Note the
+# DMS serverless replications themselves are not in this index, so this is
+# part of a larger picture
+# check:
+#   aws dms describe-endpoints --filters Name=endpoint-id,Values='agxdb'
+#   --query
+#   'Endpoints[].{id:EndpointIdentifier,type:EndpointType,engine:EngineDbType}'
+# arn: arn:aws:dms:eu-west-1:221434544570:endpoint:agxdb
+import {
+  to = aws_dms_endpoint.agxdb
+  id = "agxdb"
+}
+
+# DMS endpoint - import so the migration source/target is in code. Note the
+# DMS serverless replications themselves are not in this index, so this is
+# part of a larger picture
+# check:
+#   aws dms describe-endpoints --filters Name=endpoint-id,Values='nomaos'
+#   --query
+#   'Endpoints[].{id:EndpointIdentifier,type:EndpointType,engine:EngineDbType}'
+# arn: arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos
+import {
+  to = aws_dms_endpoint.nomaos
+  id = "nomaos"
+}
+
+# --- logs resources (9) ---
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix '/nomaos/prod/api'
+#   --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/nomaos/prod/api
+import {
+  to = aws_cloudwatch_log_group.nomaos_prod_api
+  id = "/nomaos/prod/api"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'ec2-auth' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:ec2-auth
+import {
+  to = aws_cloudwatch_log_group.ec2_auth
+  id = "ec2-auth"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'ec2-cloud-init'
+#   --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:ec2-cloud-init
+import {
+  to = aws_cloudwatch_log_group.ec2_cloud_init
+  id = "ec2-cloud-init"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   'ec2-cloud-init-output' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:ec2-cloud-init-output
+import {
+  to = aws_cloudwatch_log_group.ec2_cloud_init_output
+  id = "ec2-cloud-init-output"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'ec2-kernel' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:ec2-kernel
+import {
+  to = aws_cloudwatch_log_group.ec2_kernel
+  id = "ec2-kernel"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'ec2-syslog' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:ec2-syslog
+import {
+  to = aws_cloudwatch_log_group.ec2_syslog
+  id = "ec2-syslog"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'nginx-access'
+#   --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:nginx-access
+import {
+  to = aws_cloudwatch_log_group.nginx_access
+  id = "nginx-access"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'nginx-error' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:nginx-error
+import {
+  to = aws_cloudwatch_log_group.nginx_error
+  id = "nginx-error"
+}
+
+# hand-made log group (not one a service created) - import to pin retention
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'noma-api' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays,tags:tags}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:noma-api
+import {
+  to = aws_cloudwatch_log_group.noma_api
+  id = "noma-api"
+}
+
+# --- s3 resources (1) ---
+
+# S3 bucket holding real data - import so versioning, encryption and the
+# public-access block live in code instead of the console
+# check:
+#   aws s3api get-bucket-versioning --bucket 'agrovesto-storage'; aws s3api
+#   get-bucket-encryption --bucket 'agrovesto-storage'; aws s3api
+#   get-public-access-block --bucket 'agrovesto-storage'; aws s3api
+#   list-objects-v2 --bucket 'agrovesto-storage' --max-items 1
+# arn: arn:aws:s3:::agrovesto-storage
+import {
+  to = aws_s3_bucket.agrovesto_storage
+  id = "agrovesto-storage"
+}
+
+# --- ses resources (4) ---
+
+# SES domain identity - import so the verification and DKIM records are in
+# code
+# check:
+#   aws ses get-identity-verification-attributes --identities 'agrovesto.com'
+# arn: arn:aws:ses:eu-west-1:221434544570:identity/agrovesto.com
+import {
+  to = aws_ses_domain_identity.agrovesto_com
+  id = "agrovesto.com"
+}
+
+# SES email identity - import so its verification state is in code
+# check:
+#   aws ses get-identity-verification-attributes --identities
+#   'info@agrovesto.com' --query 'VerificationAttributes.'info@agrovesto.com''
+# arn: arn:aws:ses:eu-west-1:221434544570:identity/info@agrovesto.com
+import {
+  to = aws_ses_email_identity.info_agrovesto_com
+  id = "info@agrovesto.com"
+}
+
+# SES configuration set - import so its event destinations are in code
+# check:
+#   aws ses get-identity-verification-attributes --identities
+#   'my-first-configuration-set'
+# arn: arn:aws:ses:eu-west-1:221434544570:configuration-set/my-first-configuration-set
+import {
+  to = aws_ses_configuration_set.my_first_configuration_set
+  id = "my-first-configuration-set"
+}
+
+# SES email identity - import so its verification state is in code
+# check:
+#   aws ses get-identity-verification-attributes --identities
+#   'tech@agrovesto.com' --query 'VerificationAttributes.'tech@agrovesto.com''
+# arn: arn:aws:ses:eu-west-1:221434544570:identity/tech@agrovesto.com
+import {
+  to = aws_ses_email_identity.tech_agrovesto_com
+  id = "tech@agrovesto.com"
+}
+
+# --- sns resources (1) ---
+
+# SNS topic - import so its policy and subscriptions are in code
+# check:
+#   aws sns get-topic-attributes --topic-arn
+#   'arn:aws:sns:eu-west-1:221434544570:agrovesto'
+# arn: arn:aws:sns:eu-west-1:221434544570:agrovesto
+import {
+  to = aws_sns_topic.agrovesto
+  id = "arn:aws:sns:eu-west-1:221434544570:agrovesto"
+}
+
+# --- ssm resources (1) ---
+
+# SSM State Manager association - import so its document and schedule are in
+# code
+# check:
+#   aws ssm list-associations --association-filter-list
+#   key=AssociationId,value='ef34e30b-8367-4e4e-96d6-573010af70ef'
+# arn: arn:aws:ssm:eu-west-1:221434544570:association/ef34e30b-8367-4e4e-96d6-573010af70ef
+import {
+  to = aws_ssm_association.ef34e30b_8367_4e4e_96d6_573010af70ef
+  id = "ef34e30b-8367-4e4e-96d6-573010af70ef"
+}
+
+
+# ----------------------------------------------------------------------------
+# B - one command decides the address   (47 resources)
+# ----------------------------------------------------------------------------
+# The report has ARNs but no names, and the correct Terraform address for
+# these depends on a name, a domain or an owner. Run the command in the
+# comment; it prints the missing piece. Then uncomment the block and fix its
+# `to` address.
+
+# --- ACM certificates (which domain?) (2) ---
+
+# prod/acm.tf already defines aws_acm_certificate.wildcard for *.nomaos.com
+# - if this is that certificate it must go into THAT address, not a new one
+# check:
+#   aws acm list-certificates --query
+#   'CertificateSummaryList[?contains(CertificateArn,
+#   `'5172b3e7-972d-46c1-87f3-dc104934ac64'`)].{domain:DomainName,sans:SubjectAlternativeNameSummaries,status:Status}'
+# arn: arn:aws:acm:eu-west-1:221434544570:certificate/5172b3e7-972d-46c1-87f3-dc104934ac64
+# import {
+#   to = aws_acm_certificate.5172b3e7_972d_46c1_87f3_dc104934ac64
+#   id = "arn:aws:acm:eu-west-1:221434544570:certificate/5172b3e7-972d-46c1-87f3-dc104934ac64"
+# }
+
+# prod/acm.tf already defines aws_acm_certificate.wildcard for *.nomaos.com
+# - if this is that certificate it must go into THAT address, not a new one
+# check:
+#   aws acm list-certificates --query
+#   'CertificateSummaryList[?contains(CertificateArn,
+#   `'f493b7d7-a3bb-4092-a2c9-54bd6655dbd1'`)].{domain:DomainName,sans:SubjectAlternativeNameSummaries,status:Status}'
+# arn: arn:aws:acm:eu-west-1:221434544570:certificate/f493b7d7-a3bb-4092-a2c9-54bd6655dbd1
+# import {
+#   to = aws_acm_certificate.f493b7d7_a3bb_4092_a2c9_54bd6655dbd1
+#   id = "arn:aws:acm:eu-west-1:221434544570:certificate/f493b7d7-a3bb-4092-a2c9-54bd6655dbd1"
+# }
+
+# --- Amplify apps/branches/domains (19) ---
+
+# Amplify app d24hrz6o3pnmne - a CDK app (amplify-reactvitetailwind)
+# deployed some of the Amplify apps in this account, and the report has app
+# ids but no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d24hrz6o3pnmne
+# import {
+#   to = aws_amplify_app.d24hrz6o3pnmne
+#   id = "d24hrz6o3pnmne"
+# }
+
+# Amplify branch 'master' of app d24hrz6o3pnmne - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd24hrz6o3pnmne' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d24hrz6o3pnmne/branches/master
+# import {
+#   to = aws_amplify_branch.d24hrz6o3pnmne_master
+#   id = "d24hrz6o3pnmne/master"
+# }
+
+# Amplify custom domain agrovesto.com on app d24hrz6o3pnmne - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first. Note dev/terraform.auto.tfvars sets
+# amplify_enable_custom_domain = false, so the dev stack manages these as
+# Route 53 CNAMEs instead; importing a domain association changes that
+# decision
+# check:
+#   aws amplify get-app --app-id 'd24hrz6o3pnmne' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d24hrz6o3pnmne/domains/agrovesto.com
+# import {
+#   to = aws_amplify_domain_association.d24hrz6o3pnmne_agrovesto_com
+#   id = "d24hrz6o3pnmne/agrovesto.com"
+# }
+
+# Amplify app d2qsjz4yzplkjb - a CDK app (amplify-reactvitetailwind)
+# deployed some of the Amplify apps in this account, and the report has app
+# ids but no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2qsjz4yzplkjb
+# import {
+#   to = aws_amplify_app.d2qsjz4yzplkjb
+#   id = "d2qsjz4yzplkjb"
+# }
+
+# Amplify branch 'master' of app d2qsjz4yzplkjb - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd2qsjz4yzplkjb' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2qsjz4yzplkjb/branches/master
+# import {
+#   to = aws_amplify_branch.d2qsjz4yzplkjb_master
+#   id = "d2qsjz4yzplkjb/master"
+# }
+
+# Amplify custom domain nomaos.com on app d2qsjz4yzplkjb - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first. Note dev/terraform.auto.tfvars sets
+# amplify_enable_custom_domain = false, so the dev stack manages these as
+# Route 53 CNAMEs instead; importing a domain association changes that
+# decision
+# check:
+#   aws amplify get-app --app-id 'd2qsjz4yzplkjb' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2qsjz4yzplkjb/domains/nomaos.com
+# import {
+#   to = aws_amplify_domain_association.d2qsjz4yzplkjb_nomaos_com
+#   id = "d2qsjz4yzplkjb/nomaos.com"
+# }
+
+# Amplify app d2tux0dpg27k42 - a CDK app (amplify-reactvitetailwind)
+# deployed some of the Amplify apps in this account, and the report has app
+# ids but no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2tux0dpg27k42
+# import {
+#   to = aws_amplify_app.d2tux0dpg27k42
+#   id = "d2tux0dpg27k42"
+# }
+
+# Amplify branch 'master' of app d2tux0dpg27k42 - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd2tux0dpg27k42' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2tux0dpg27k42/branches/master
+# import {
+#   to = aws_amplify_branch.d2tux0dpg27k42_master
+#   id = "d2tux0dpg27k42/master"
+# }
+
+# Amplify app d2uzc83ix5qdfu - a CDK app (amplify-reactvitetailwind)
+# deployed some of the Amplify apps in this account, and the report has app
+# ids but no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2uzc83ix5qdfu
+# import {
+#   to = aws_amplify_app.d2uzc83ix5qdfu
+#   id = "d2uzc83ix5qdfu"
+# }
+
+# Amplify branch 'master' of app d2uzc83ix5qdfu - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd2uzc83ix5qdfu' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d2uzc83ix5qdfu/branches/master
+# import {
+#   to = aws_amplify_branch.d2uzc83ix5qdfu_master
+#   id = "d2uzc83ix5qdfu/master"
+# }
+
+# Amplify app d3po2sm2zq4p71 - a CDK app (amplify-reactvitetailwind)
+# deployed some of the Amplify apps in this account, and the report has app
+# ids but no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d3po2sm2zq4p71
+# import {
+#   to = aws_amplify_app.d3po2sm2zq4p71
+#   id = "d3po2sm2zq4p71"
+# }
+
+# Amplify branch 'main' of app d3po2sm2zq4p71 - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd3po2sm2zq4p71' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d3po2sm2zq4p71/branches/main
+# import {
+#   to = aws_amplify_branch.d3po2sm2zq4p71_main
+#   id = "d3po2sm2zq4p71/main"
+# }
+
+# Amplify custom domain trade.agrovesto.com on app d3po2sm2zq4p71 - a CDK
+# app (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first. Note dev/terraform.auto.tfvars sets
+# amplify_enable_custom_domain = false, so the dev stack manages these as
+# Route 53 CNAMEs instead; importing a domain association changes that
+# decision
+# check:
+#   aws amplify get-app --app-id 'd3po2sm2zq4p71' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d3po2sm2zq4p71/domains/trade.agrovesto.com
+# import {
+#   to = aws_amplify_domain_association.d3po2sm2zq4p71_trade_agrovesto_com
+#   id = "d3po2sm2zq4p71/trade.agrovesto.com"
+# }
+
+# Amplify app d4d246twq5d12 - a CDK app (amplify-reactvitetailwind) deployed
+# some of the Amplify apps in this account, and the report has app ids but
+# no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d4d246twq5d12
+# import {
+#   to = aws_amplify_app.d4d246twq5d12
+#   id = "d4d246twq5d12"
+# }
+
+# Amplify branch 'master' of app d4d246twq5d12 - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'd4d246twq5d12' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d4d246twq5d12/branches/master
+# import {
+#   to = aws_amplify_branch.d4d246twq5d12_master
+#   id = "d4d246twq5d12/master"
+# }
+
+# Amplify custom domain insight.nomaos.com on app d4d246twq5d12 - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first. Note dev/terraform.auto.tfvars sets
+# amplify_enable_custom_domain = false, so the dev stack manages these as
+# Route 53 CNAMEs instead; importing a domain association changes that
+# decision
+# check:
+#   aws amplify get-app --app-id 'd4d246twq5d12' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/d4d246twq5d12/domains/insight.nomaos.com
+# import {
+#   to = aws_amplify_domain_association.d4d246twq5d12_insight_nomaos_com
+#   id = "d4d246twq5d12/insight.nomaos.com"
+# }
+
+# Amplify app dm0gdjrq9j06v - a CDK app (amplify-reactvitetailwind) deployed
+# some of the Amplify apps in this account, and the report has app ids but
+# no app names, so ownership must be confirmed first
+# check:
+#   aws amplify list-apps --query
+#   'apps[].{id:appId,name:name,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/dm0gdjrq9j06v
+# import {
+#   to = aws_amplify_app.dm0gdjrq9j06v
+#   id = "dm0gdjrq9j06v"
+# }
+
+# Amplify branch 'master' of app dm0gdjrq9j06v - a CDK app
+# (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first
+# check:
+#   aws amplify get-app --app-id 'dm0gdjrq9j06v' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/dm0gdjrq9j06v/branches/master
+# import {
+#   to = aws_amplify_branch.dm0gdjrq9j06v_master
+#   id = "dm0gdjrq9j06v/master"
+# }
+
+# Amplify custom domain onboarding.nomaos.com on app dm0gdjrq9j06v - a CDK
+# app (amplify-reactvitetailwind) deployed some of the Amplify apps in this
+# account, and the report has app ids but no app names, so ownership must be
+# confirmed first. Note dev/terraform.auto.tfvars sets
+# amplify_enable_custom_domain = false, so the dev stack manages these as
+# Route 53 CNAMEs instead; importing a domain association changes that
+# decision
+# check:
+#   aws amplify get-app --app-id 'dm0gdjrq9j06v' --query
+#   'app.{name:name,repo:repository,platform:platform}'
+# arn: arn:aws:amplify:eu-west-1:221434544570:apps/dm0gdjrq9j06v/domains/onboarding.nomaos.com
+# import {
+#   to = aws_amplify_domain_association.dm0gdjrq9j06v_onboarding_nomaos_com
+#   id = "dm0gdjrq9j06v/onboarding.nomaos.com"
+# }
+
+# --- KMS keys (service vs customer) (6) ---
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id '05d6e0b6-0aef-42ab-9ebc-368642da2498'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id '05d6e0b6-0aef-42ab-9ebc-368642da2498'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/05d6e0b6-0aef-42ab-9ebc-368642da2498
+# import {
+#   to = aws_kms_key.05d6e0b6_0aef_42ab_9ebc_368642da2498
+#   id = "05d6e0b6-0aef-42ab-9ebc-368642da2498"
+# }
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id '6e98aa83-4990-4fbe-938a-284763dad588'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id '6e98aa83-4990-4fbe-938a-284763dad588'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/6e98aa83-4990-4fbe-938a-284763dad588
+# import {
+#   to = aws_kms_key.6e98aa83_4990_4fbe_938a_284763dad588
+#   id = "6e98aa83-4990-4fbe-938a-284763dad588"
+# }
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id '89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id '89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35
+# import {
+#   to = aws_kms_key.89a5cab0_dfa9_4d8a_a3d0_c4cbe9672e35
+#   id = "89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35"
+# }
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id 'af93b781-7db2-418f-ba53-aaf08a0893ba'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id 'af93b781-7db2-418f-ba53-aaf08a0893ba'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/af93b781-7db2-418f-ba53-aaf08a0893ba
+# import {
+#   to = aws_kms_key.af93b781_7db2_418f_ba53_aaf08a0893ba
+#   id = "af93b781-7db2-418f-ba53-aaf08a0893ba"
+# }
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id 'f844da16-3c57-4ba4-9e09-fcd6af19c9f1'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id 'f844da16-3c57-4ba4-9e09-fcd6af19c9f1'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/f844da16-3c57-4ba4-9e09-fcd6af19c9f1
+# import {
+#   to = aws_kms_key.f844da16_3c57_4ba4_9e09_fcd6af19c9f1
+#   id = "f844da16-3c57-4ba4-9e09-fcd6af19c9f1"
+# }
+
+# AWS service keys and customer-managed keys look identical in an ARN, and a
+# service key (alias/aws/...) cannot be imported at all
+# check:
+#   aws kms describe-key --key-id 'fc06a828-b6a4-412a-b5f1-417e4ab693e4'
+#   --query
+#   'KeyMetadata.{manager:KeyManager,desc:Description,created:CreationDate}';
+#   aws kms list-aliases --key-id 'fc06a828-b6a4-412a-b5f1-417e4ab693e4'
+#   --query 'Aliases[].AliasName'
+# arn: arn:aws:kms:eu-west-1:221434544570:key/fc06a828-b6a4-412a-b5f1-417e4ab693e4
+# import {
+#   to = aws_kms_key.fc06a828_b6a4_412a_b5f1_417e4ab693e4
+#   id = "fc06a828-b6a4-412a-b5f1-417e4ab693e4"
+# }
+
+# --- RDS instances (1) ---
+
+# the real database. prod/rds.tf wants identifier 'agrovesto-prod-mssql';
+# this instance is 'migration-prod', so it imports under a NEW address and
+# the two have to be reconciled (rename the instance, or change the stack's
+# identifier) before they can meet
+# check:
+#   aws rds describe-db-instances --db-instance-identifier 'migration-prod'
+#   --query
+#   'DBInstances[].{id:DBInstanceIdentifier,engine:Engine,ver:EngineVersion,class:DBInstanceClass,storage:AllocatedStorage,az:AvailabilityZone,multi:MultiAZ,subgrp:DBSubnetGroup.DBSubnetGroupName,vpc:DBSubnetGroup.VpcId}'
+# arn: arn:aws:rds:eu-west-1:221434544570:db:migration-prod
+# import {
+#   to = aws_db_instance.migration_prod
+#   id = "migration-prod"
+# }
+
+# --- SSM parameters (leading slash?) (1) ---
+
+# an ARN drops the parameter's leading slash, so the import id is either
+# '/AmazonCloudWatch-linux' or 'AmazonCloudWatch-linux' - only get-parameter
+# says which
+# check:
+#   aws ssm get-parameter --name '/AmazonCloudWatch-linux' --query
+#   'Parameter.Name' || aws ssm get-parameter --name 'AmazonCloudWatch-linux'
+#   --query 'Parameter.Name'
+# arn: arn:aws:ssm:eu-west-1:221434544570:parameter/AmazonCloudWatch-linux
+# import {
+#   to = aws_ssm_parameter.amazoncloudwatch_linux
+#   id = "<FILL IN from the check command below>"
+# }
+
+# --- code connections (2) ---
+
+# GitHub connection - the CDK pipeline stack creates one too, so check which
+# tool made this
+# check:
+#   aws codeconnections get-connection --connection-arn
+#   'arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681'
+#   --query
+#   'Connection.{name:ConnectionName,provider:ProviderType,status:ConnectionStatus}'
+# arn: arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681
+# import {
+#   to = aws_codeconnections_connection.da07fb91_02f9_4552_9d01_837a9366b681
+#   id = "arn:aws:codeconnections:eu-west-1:221434544570:connection/da07fb91-02f9-4552-9d01-837a9366b681"
+# }
+
+# GitHub connection - the CDK pipeline stack creates one too, so check which
+# tool made this
+# check:
+#   aws codeconnections get-connection --connection-arn
+#   'arn:aws:codestar-connections:eu-west-1:221434544570:connection/54bd9bd5-955a-4415-873e-aa936036f835'
+#   --query
+#   'Connection.{name:ConnectionName,provider:ProviderType,status:ConnectionStatus}'
+# arn: arn:aws:codestar-connections:eu-west-1:221434544570:connection/54bd9bd5-955a-4415-873e-aa936036f835
+# import {
+#   to = aws_codestarconnections_connection.54bd9bd5_955a_4415_873e_aa936036f835
+#   id = "arn:aws:codestar-connections:eu-west-1:221434544570:connection/54bd9bd5-955a-4415-873e-aa936036f835"
+# }
+
+# --- key pairs (import by name) (3) ---
+
+# aws_key_pair imports by key pair NAME; the report only has the key-pair id
+# check:
+#   aws ec2 describe-key-pairs --key-pair-ids 'key-057e0d6c32eb78e4d' --query
+#   'KeyPairs[].KeyName'
+# arn: arn:aws:ec2:eu-west-1:221434544570:key-pair/key-057e0d6c32eb78e4d
+# import {
+#   to = aws_key_pair.key_057e0d6c32eb78e4d
+#   id = "<FILL IN from the check command below>"
+# }
+
+# aws_key_pair imports by key pair NAME; the report only has the key-pair id
+# check:
+#   aws ec2 describe-key-pairs --key-pair-ids 'key-075e7652029e2c2c5' --query
+#   'KeyPairs[].KeyName'
+# arn: arn:aws:ec2:eu-west-1:221434544570:key-pair/key-075e7652029e2c2c5
+# import {
+#   to = aws_key_pair.key_075e7652029e2c2c5
+#   id = "<FILL IN from the check command below>"
+# }
+
+# aws_key_pair imports by key pair NAME; the report only has the key-pair id
+# check:
+#   aws ec2 describe-key-pairs --key-pair-ids 'key-0b6382b8152c63533' --query
+#   'KeyPairs[].KeyName'
+# arn: arn:aws:ec2:eu-west-1:221434544570:key-pair/key-0b6382b8152c63533
+# import {
+#   to = aws_key_pair.key_0b6382b8152c63533
+#   id = "<FILL IN from the check command below>"
+# }
+
+# --- security groups (need names) (13) ---
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0121823b5aba80621'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0121823b5aba80621
+# import {
+#   to = aws_security_group.sg_0121823b5aba80621
+#   id = "sg-0121823b5aba80621"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-044858bb412fc2aa0'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-044858bb412fc2aa0
+# import {
+#   to = aws_security_group.sg_044858bb412fc2aa0
+#   id = "sg-044858bb412fc2aa0"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-04778d7bdb8e2c026'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-04778d7bdb8e2c026
+# import {
+#   to = aws_security_group.sg_04778d7bdb8e2c026
+#   id = "sg-04778d7bdb8e2c026"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-05a2722a050c1109b'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-05a2722a050c1109b
+# import {
+#   to = aws_security_group.sg_05a2722a050c1109b
+#   id = "sg-05a2722a050c1109b"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-06e44543a37f56828'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-06e44543a37f56828
+# import {
+#   to = aws_security_group.sg_06e44543a37f56828
+#   id = "sg-06e44543a37f56828"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-072ebb62525423c86'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-072ebb62525423c86
+# import {
+#   to = aws_security_group.sg_072ebb62525423c86
+#   id = "sg-072ebb62525423c86"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-094939b554d597e4a'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-094939b554d597e4a
+# import {
+#   to = aws_security_group.sg_094939b554d597e4a
+#   id = "sg-094939b554d597e4a"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-09e61cfd83551d0ec'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-09e61cfd83551d0ec
+# import {
+#   to = aws_security_group.sg_09e61cfd83551d0ec
+#   id = "sg-09e61cfd83551d0ec"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0b555edfc6d445a18'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0b555edfc6d445a18
+# import {
+#   to = aws_security_group.sg_0b555edfc6d445a18
+#   id = "sg-0b555edfc6d445a18"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0bfbddac52a0a2b89'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0bfbddac52a0a2b89
+# import {
+#   to = aws_security_group.sg_0bfbddac52a0a2b89
+#   id = "sg-0bfbddac52a0a2b89"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0df9c118433af39dd'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0df9c118433af39dd
+# import {
+#   to = aws_security_group.sg_0df9c118433af39dd
+#   id = "sg-0df9c118433af39dd"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0e4ef41f521e66695'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0e4ef41f521e66695
+# import {
+#   to = aws_security_group.sg_0e4ef41f521e66695
+#   id = "sg-0e4ef41f521e66695"
+# }
+
+# security group - the report carries no names, so its owner is unknown. If
+# GroupName turns out to be 'default', the address is
+# aws_default_security_group.default (both stacks define one); otherwise it
+# needs a new address
+# check:
+#   aws ec2 describe-security-groups --group-ids 'sg-0f208f7733ec29fbd'
+#   --query
+#   'SecurityGroups[].{name:GroupName,desc:Description,vpc:VpcId,tags:Tags}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:security-group/sg-0f208f7733ec29fbd
+# import {
+#   to = aws_security_group.sg_0f208f7733ec29fbd
+#   id = "sg-0f208f7733ec29fbd"
+# }
+
+
+# ----------------------------------------------------------------------------
+# C - base network: read the warning before touching this   (13 resources)
+# ----------------------------------------------------------------------------
+# VPC, subnets, route tables, internet gateway, NACL, DHCP options. Importing
+# these adopts the LIVE network. If the config's cidr_block or route entries
+# differ from reality, Terraform plans a REPLACEMENT and the environment goes
+# down. Confirm every CIDR first - or let Terraform build a new VPC and move
+# workloads into it deliberately.
+
+# --- base network (13) ---
+
+# base network. Live network-acl, which prod/ does not define at all -
+# importing it adds a new managed resource, but a change here affects the
+# whole VPC - and if cidr_block or the route entries differ from the config,
+# the plan REPLACES it, which takes the environment down
+# check:
+#   aws ec2 describe-network-acls --network-acl-ids 'acl-06b37d7639de1e948'
+#   --query 'NetworkAcls[].{entries:Entries,subnets:Associations[].SubnetId}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:network-acl/acl-06b37d7639de1e948
+# import {
+#   to = aws_network_acl.acl_06b37d7639de1e948
+#   id = "acl-06b37d7639de1e948"
+# }
+
+# base network. Live dhcp-options, which prod/ does not define at all -
+# importing it adds a new managed resource, but a change here affects the
+# whole VPC - and if cidr_block or the route entries differ from the config,
+# the plan REPLACES it, which takes the environment down
+# check:
+#   aws ec2 describe-dhcp-options --dhcp-options-ids 'dopt-00fa0eeec7372ed4f'
+#   --query 'DhcpOptions[].DhcpConfigurations'
+# arn: arn:aws:ec2:eu-west-1:221434544570:dhcp-options/dopt-00fa0eeec7372ed4f
+# import {
+#   to = aws_vpc_dhcp_options.dopt_00fa0eeec7372ed4f
+#   id = "dopt-00fa0eeec7372ed4f"
+# }
+
+# base network. Imported into aws_internet_gateway.main, the address prod/
+# already defines, Terraform adopts the LIVE internet-gateway - and if
+# cidr_block or the route entries differ from the config, the plan REPLACES
+# it, which takes the environment down [aws_internet_gateway.main is already
+# defined in this stack: importing here makes Terraform adopt the live
+# resource into that existing block, which is the point - but the config
+# must then match reality or the plan replaces it]
+# check:
+#   aws ec2 describe-internet-gateways --internet-gateway-ids
+#   'igw-07275a1a62726a4c8' --query 'InternetGateways[].Attachments'
+# arn: arn:aws:ec2:eu-west-1:221434544570:internet-gateway/igw-07275a1a62726a4c8
+# import {
+#   to = aws_internet_gateway.main
+#   id = "igw-07275a1a62726a4c8"
+# }
+
+# base network. Live route-table. prod/ creates its own route tables from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second route-table - and if cidr_block
+# or the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-route-tables --route-table-ids 'rtb-0530eb261b38f735b'
+#   --query
+#   'RouteTables[].{routes:Routes,subnets:Associations[].SubnetId,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0530eb261b38f735b
+# import {
+#   to = aws_route_table.rtb_0530eb261b38f735b
+#   id = "rtb-0530eb261b38f735b"
+# }
+
+# base network. Live route-table. prod/ creates its own route tables from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second route-table - and if cidr_block
+# or the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-route-tables --route-table-ids 'rtb-0614ed06de1bc1d89'
+#   --query
+#   'RouteTables[].{routes:Routes,subnets:Associations[].SubnetId,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0614ed06de1bc1d89
+# import {
+#   to = aws_route_table.rtb_0614ed06de1bc1d89
+#   id = "rtb-0614ed06de1bc1d89"
+# }
+
+# base network. Live route-table. prod/ creates its own route tables from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second route-table - and if cidr_block
+# or the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-route-tables --route-table-ids 'rtb-084528a52ec739f38'
+#   --query
+#   'RouteTables[].{routes:Routes,subnets:Associations[].SubnetId,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-084528a52ec739f38
+# import {
+#   to = aws_route_table.rtb_084528a52ec739f38
+#   id = "rtb-084528a52ec739f38"
+# }
+
+# base network. Live route-table. prod/ creates its own route tables from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second route-table - and if cidr_block
+# or the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-route-tables --route-table-ids 'rtb-0fa0841a7b7dac5db'
+#   --query
+#   'RouteTables[].{routes:Routes,subnets:Associations[].SubnetId,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa0841a7b7dac5db
+# import {
+#   to = aws_route_table.rtb_0fa0841a7b7dac5db
+#   id = "rtb-0fa0841a7b7dac5db"
+# }
+
+# base network. Live route-table. prod/ creates its own route tables from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second route-table - and if cidr_block
+# or the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-route-tables --route-table-ids 'rtb-0fa42099da11b78e9'
+#   --query
+#   'RouteTables[].{routes:Routes,subnets:Associations[].SubnetId,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:route-table/rtb-0fa42099da11b78e9
+# import {
+#   to = aws_route_table.rtb_0fa42099da11b78e9
+#   id = "rtb-0fa42099da11b78e9"
+# }
+
+# base network. Live subnet. prod/ creates its own subnets from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second subnet - and if cidr_block or
+# the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-subnets --subnet-ids 'subnet-00ee6901e53783c86' --query
+#   'Subnets[].{cidr:CidrBlock,az:AvailabilityZone,vpc:VpcId,public:MapPublicIpOnLaunch,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-00ee6901e53783c86
+# import {
+#   to = aws_subnet.subnet_00ee6901e53783c86
+#   id = "subnet-00ee6901e53783c86"
+# }
+
+# base network. Live subnet. prod/ creates its own subnets from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second subnet - and if cidr_block or
+# the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-subnets --subnet-ids 'subnet-084f21457f316c44c' --query
+#   'Subnets[].{cidr:CidrBlock,az:AvailabilityZone,vpc:VpcId,public:MapPublicIpOnLaunch,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-084f21457f316c44c
+# import {
+#   to = aws_subnet.subnet_084f21457f316c44c
+#   id = "subnet-084f21457f316c44c"
+# }
+
+# base network. Live subnet. prod/ creates its own subnets from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second subnet - and if cidr_block or
+# the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-subnets --subnet-ids 'subnet-0b808deeaf8391867' --query
+#   'Subnets[].{cidr:CidrBlock,az:AvailabilityZone,vpc:VpcId,public:MapPublicIpOnLaunch,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0b808deeaf8391867
+# import {
+#   to = aws_subnet.subnet_0b808deeaf8391867
+#   id = "subnet-0b808deeaf8391867"
+# }
+
+# base network. Live subnet. prod/ creates its own subnets from
+# var.*_subnet_cidrs, so importing this one means either matching that
+# variable to reality or accepting a second subnet - and if cidr_block or
+# the route entries differ from the config, the plan REPLACES it, which
+# takes the environment down
+# check:
+#   aws ec2 describe-subnets --subnet-ids 'subnet-0e169f40c70cdfe8b' --query
+#   'Subnets[].{cidr:CidrBlock,az:AvailabilityZone,vpc:VpcId,public:MapPublicIpOnLaunch,name:Tags[?Key==`Name`]|[0].Value}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:subnet/subnet-0e169f40c70cdfe8b
+# import {
+#   to = aws_subnet.subnet_0e169f40c70cdfe8b
+#   id = "subnet-0e169f40c70cdfe8b"
+# }
+
+# base network. Imported into aws_vpc.main, the address prod/ already
+# defines, Terraform adopts the LIVE vpc - and if cidr_block or the route
+# entries differ from the config, the plan REPLACES it, which takes the
+# environment down [aws_vpc.main is already defined in this stack: importing
+# here makes Terraform adopt the live resource into that existing block,
+# which is the point - but the config must then match reality or the plan
+# replaces it]
+# check:
+#   aws ec2 describe-vpcs --vpc-ids 'vpc-0016f521bae08f4ff' --query
+#   'Vpcs[].{cidr:CidrBlock,dns:EnableDnsSupport,hostnames:EnableDnsHostnames,name:Tags[?Key==`Name`]|[0].Value}'
+#   # CidrBlock MUST equal 10.30.0.0/16, or do not import into aws_vpc.main -
+#   change var.vpc_cidr to match reality first
+# arn: arn:aws:ec2:eu-west-1:221434544570:vpc/vpc-0016f521bae08f4ff
+# import {
+#   to = aws_vpc.main
+#   id = "vpc-0016f521bae08f4ff"
+# }
+
+
+# ----------------------------------------------------------------------------
+# D - a decision, not a discovery   (25 resources)
+# ----------------------------------------------------------------------------
+# These exist, but whether Terraform should own them is a policy call: scratch
+# resources, build artifacts, service-created log groups you may want
+# retention on, and compute the stack wants to create fresh.
+
+# --- AMIs and launch templates (2) ---
+
+# launch template - a build artifact. Terraform can own it, but `terraform
+# destroy` then deregisters the image / deletes the template
+# check:
+#   aws ec2 describe-launch-templates --launch-template-ids
+#   'lt-017de20e61da8fe44' --query
+#   'LaunchTemplates[].{id:LaunchTemplateId,name:LaunchTemplateName}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:launch-template/lt-017de20e61da8fe44
+# import {
+#   to = aws_launch_template.lt_017de20e61da8fe44
+#   id = "lt-017de20e61da8fe44"
+# }
+
+# launch template - a build artifact. Terraform can own it, but `terraform
+# destroy` then deregisters the image / deletes the template
+# check:
+#   aws ec2 describe-launch-templates --launch-template-ids
+#   'lt-08897dce459b4913c' --query
+#   'LaunchTemplates[].{id:LaunchTemplateId,name:LaunchTemplateName}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:launch-template/lt-08897dce459b4913c
+# import {
+#   to = aws_launch_template.lt_08897dce459b4913c
+#   id = "lt-08897dce459b4913c"
+# }
+
+# --- EC2 compute the stack also creates (3) ---
+
+# Elastic IP. The stacks create their own (dev: aws_eip.app for the host,
+# prod: aws_eip.nat for the NAT gateway) - adopting this one has to go into
+# the right address or the plan allocates a second IP
+# check:
+#   aws ec2 describe-addresses --allocation-ids 'eipalloc-0a48ffb921e22bb39'
+#   --query 'Addresses[].{alloc:AllocationId,ip:PublicIp,instance:InstanceId}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:elastic-ip/eipalloc-0a48ffb921e22bb39
+# import {
+#   to = aws_eip.eipalloc_0a48ffb921e22bb39
+#   id = "eipalloc-0a48ffb921e22bb39"
+# }
+
+# EC2 instance. dev/ec2.tf creates its own app host (t3.large, Ubuntu AMI,
+# cloud-init user_data); adopting this box instead means matching ami,
+# instance_type, user_data and tags exactly, because user_data is immutable
+# - a mismatch destroys and rebuilds it
+# check:
+#   aws ec2 describe-instances --instance-ids 'i-027ff32f2a26fa600' --query
+#   'Reservations[].Instances[].{id:InstanceId,ami:ImageId,type:InstanceType,state:State.Name,key:KeyName,name:Tags[?Key==`Name`]|[0].Value,vols:BlockDeviceMappings}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:instance/i-027ff32f2a26fa600
+# import {
+#   to = aws_instance.i_027ff32f2a26fa600
+#   id = "i-027ff32f2a26fa600"
+# }
+
+# EBS volume attached to an existing host. The stacks create their own
+# (-mssql-data, -logging-data), so adopting this one means matching size,
+# type, AZ and attachment
+# check:
+#   aws ec2 describe-volumes --volume-ids 'vol-019ff51ce045e3490' --query
+#   'Volumes[].{id:VolumeId,size:Size,type:VolumeType,az:AvailabilityZone,attached:Attachments[].InstanceId}'
+# arn: arn:aws:ec2:eu-west-1:221434544570:volume/vol-019ff51ce045e3490
+# import {
+#   to = aws_ebs_volume.vol_019ff51ce045e3490
+#   id = "vol-019ff51ce045e3490"
+# }
+
+# --- hand-built pipelines (3) ---
+
+# hand-built pipeline. Importing it means importing its artifact bucket and
+# IAM role too, or the next plan wants to replace them
+# check:
+#   aws codepipeline get-pipeline --name 'Agx_Trade' --query
+#   'pipeline.{role:roleArn,store:artifactStore}'
+# arn: arn:aws:codepipeline:eu-west-1:221434544570:Agx_Trade
+# import {
+#   to = aws_codepipeline.agx_trade
+#   id = "Agx_Trade"
+# }
+
+# hand-built pipeline. Importing it means importing its artifact bucket and
+# IAM role too, or the next plan wants to replace them
+# check:
+#   aws codepipeline get-pipeline --name 'noma-api-pipeline' --query
+#   'pipeline.{role:roleArn,store:artifactStore}'
+# arn: arn:aws:codepipeline:eu-west-1:221434544570:noma-api-pipeline
+# import {
+#   to = aws_codepipeline.noma_api_pipeline
+#   id = "noma-api-pipeline"
+# }
+
+# hand-built pipeline. Importing it means importing its artifact bucket and
+# IAM role too, or the next plan wants to replace them
+# check:
+#   aws codepipeline get-pipeline --name 'noma-new' --query
+#   'pipeline.{role:roleArn,store:artifactStore}'
+# arn: arn:aws:codepipeline:eu-west-1:221434544570:noma-new
+# import {
+#   to = aws_codepipeline.noma_new
+#   id = "noma-new"
+# }
+
+# --- other decisions (4) ---
+
+# artifact store of a hand-built CodePipeline. Import it together with the
+# pipeline (see the pipeline block below) or not at all: a bucket without
+# its pipeline policy is a half-managed resource
+# check:
+#   aws s3api get-bucket-policy --bucket 'agrovesto-pipeline-artifacts'
+# arn: arn:aws:s3:::agrovesto-pipeline-artifacts
+# import {
+#   to = aws_s3_bucket.agrovesto_pipeline_artifacts
+#   id = "agrovesto-pipeline-artifacts"
+# }
+
+# created by CloudFormation for its own artifacts. Import only if the thing
+# that uses it moves into Terraform too - otherwise Terraform owns a bucket
+# it did not design and cannot safely change
+# check:
+#   aws s3api get-bucket-versioning --bucket
+#   'cf-templates-lh5u9ipyvd5c-eu-west-1'; aws s3api get-bucket-encryption
+#   --bucket 'cf-templates-lh5u9ipyvd5c-eu-west-1'
+# arn: arn:aws:s3:::cf-templates-lh5u9ipyvd5c-eu-west-1
+# import {
+#   to = aws_s3_bucket.cf_templates_lh5u9ipyvd5c_eu_west_1
+#   id = "cf-templates-lh5u9ipyvd5c-eu-west-1"
+# }
+
+# created by CodePipeline for its own artifacts. Import only if the thing
+# that uses it moves into Terraform too - otherwise Terraform owns a bucket
+# it did not design and cannot safely change
+# check:
+#   aws s3api get-bucket-versioning --bucket
+#   'codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6'; aws s3api
+#   get-bucket-encryption --bucket
+#   'codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6'
+# arn: arn:aws:s3:::codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6
+# import {
+#   to = aws_s3_bucket.codepipeline_eu_west_1_388c27815165_4d9c_97e5_35f4ec8ad1d6
+#   id = "codepipeline-eu-west-1-388c27815165-4d9c-97e5-35f4ec8ad1d6"
+# }
+
+# created by DMS Serverless for its own artifacts. Import only if the thing
+# that uses it moves into Terraform too - otherwise Terraform owns a bucket
+# it did not design and cannot safely change
+# check:
+#   aws s3api get-bucket-versioning --bucket
+#   'dms-serverless-premigration-results-dnwcx6llcg'; aws s3api
+#   get-bucket-encryption --bucket
+#   'dms-serverless-premigration-results-dnwcx6llcg'
+# arn: arn:aws:s3:::dms-serverless-premigration-results-dnwcx6llcg
+# import {
+#   to = aws_s3_bucket.dms_serverless_premigration_results_dnwcx6llcg
+#   id = "dms-serverless-premigration-results-dnwcx6llcg"
+# }
+
+# --- service-created log groups (13) ---
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/amplify/d3po2sm2zq4p71' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/amplify/d3po2sm2zq4p71
+# import {
+#   to = aws_cloudwatch_log_group.aws_amplify_d3po2sm2zq4p71
+#   id = "/aws/amplify/d3po2sm2zq4p71"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codebuild/agrovesto-ProdCodeBuildProject' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codebuild/agrovesto-ProdCodeBuildProject
+# import {
+#   to = aws_cloudwatch_log_group.aws_codebuild_agrovesto_prodcodebuildproject
+#   id = "/aws/codebuild/agrovesto-ProdCodeBuildProject"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/Agx_Trade' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/Agx_Trade
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_agx_trade
+#   id = "/aws/codepipeline/Agx_Trade"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/agreovesto-api' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/agreovesto-api
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_agreovesto_api
+#   id = "/aws/codepipeline/agreovesto-api"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/agxtrade' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/agxtrade
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_agxtrade
+#   id = "/aws/codepipeline/agxtrade"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/argovesto-api-v8' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/argovesto-api-v8
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_argovesto_api_v8
+#   id = "/aws/codepipeline/argovesto-api-v8"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/noma-api-new' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/noma-api-new
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_noma_api_new
+#   id = "/aws/codepipeline/noma-api-new"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/noma-api-pipeline' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/noma-api-pipeline
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_noma_api_pipeline
+#   id = "/aws/codepipeline/noma-api-pipeline"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/codepipeline/noma-new' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/codepipeline/noma-new
+# import {
+#   to = aws_cloudwatch_log_group.aws_codepipeline_noma_new
+#   id = "/aws/codepipeline/noma-new"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   '/aws/rds/instance/migration-prod/error' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:/aws/rds/instance/migration-prod/error
+# import {
+#   to = aws_cloudwatch_log_group.aws_rds_instance_migration_prod_error
+#   id = "/aws/rds/instance/migration-prod/error"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix 'RDSOSMetrics'
+#   --query 'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:RDSOSMetrics
+# import {
+#   to = aws_cloudwatch_log_group.rdsosmetrics
+#   id = "RDSOSMetrics"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   'dms-serverless-replication-agx' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:dms-serverless-replication-agx
+# import {
+#   to = aws_cloudwatch_log_group.dms_serverless_replication_agx
+#   id = "dms-serverless-replication-agx"
+# }
+
+# created automatically by the service that writes to it; import only to pin
+# retention_in_days (unbounded retention is the usual surprise on the bill)
+# check:
+#   aws logs describe-log-groups --log-group-name-prefix
+#   'dms-serverless-replication-nomaos' --query
+#   'logGroups[].{name:logGroupName,retention:retentionInDays}'
+# arn: arn:aws:logs:eu-west-1:221434544570:log-group:dms-serverless-replication-nomaos
+# import {
+#   to = aws_cloudwatch_log_group.dms_serverless_replication_nomaos
+#   id = "dms-serverless-replication-nomaos"
+# }
