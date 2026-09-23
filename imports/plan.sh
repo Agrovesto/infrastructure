@@ -34,17 +34,20 @@ run() { # name dir profile extra-plan-args...
 
 stage() { "$ROOT/imports/stage.sh" --unstage "$1" >/dev/null; "$ROOT/imports/stage.sh" "$1" >/dev/null; }
 
-case "${1:-all}" in
-  bootstrap-prod|bootstrap-dev|all)
-    if [ "${1:-all}" != "prod" ]; then stage bootstrap; fi ;;&
-  bootstrap-prod|all) run bootstrap-prod bootstrap agrovesto-prod -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars ;;&
-  bootstrap-dev|all)  run bootstrap-dev  bootstrap agrovesto-dev  -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars ;;&
-  prod|all)       stage prod;       run prod prod agrovesto-prod ;;&
-  monitoring|all) stage monitoring; run monitoring monitoring agrovesto-prod ;;&
-  dev|all)        stage dev;        run dev dev agrovesto-dev ;;
-  bootstrap-prod|bootstrap-dev|prod|monitoring|dev) ;;
+TARGET="${1:-all}"
+case "$TARGET" in
+  bootstrap-prod|bootstrap-dev|prod|monitoring|dev|all) ;;
   *) echo "usage: $0 bootstrap-dev|bootstrap-prod|prod|monitoring|dev|all" >&2; exit 2 ;;
 esac
+want() { [ "$TARGET" = all ] || [ "$TARGET" = "$1" ]; }
+
+# Plain if-blocks (not `;;&`) so this runs on macOS's bash 3.2 too.
+if want bootstrap-prod || want bootstrap-dev; then stage bootstrap; fi
+if want bootstrap-prod; then run bootstrap-prod bootstrap agrovesto-prod -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars; fi
+if want bootstrap-dev;  then run bootstrap-dev  bootstrap agrovesto-dev  -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars; fi
+if want prod;       then stage prod;       run prod prod agrovesto-prod; fi
+if want monitoring; then stage monitoring; run monitoring monitoring agrovesto-prod; fi
+if want dev;        then stage dev;        run dev dev agrovesto-dev; fi
 
 echo
 echo "Before committing imports/plans/, check for secrets (see RUNBOOK):"
