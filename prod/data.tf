@@ -28,8 +28,8 @@ data "aws_iam_policy_document" "ecs_execution_assume" {
 data "aws_iam_policy_document" "ecs_execution_secrets" {
   #checkov:skip=CKV_AWS_356: access is scoped to this instance's own master secret
   statement {
-    sid       = "ReadMssqlMasterSecret"
-    actions   = ["secretsmanager:GetSecretValue"]
+    sid     = "ReadMssqlMasterSecret"
+    actions = ["secretsmanager:GetSecretValue"]
     # The RDS-managed secret is known only after the instance exists; the
     # placeholder keeps the policy valid in a plan (and in mock tests).
     resources = [local.mssql_master_secret_arn != "" ? local.mssql_master_secret_arn : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:rds!db-*"]
