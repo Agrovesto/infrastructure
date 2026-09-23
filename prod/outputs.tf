@@ -109,8 +109,8 @@ output "mssql_port" {
 }
 
 output "mssql_master_secret_arn" {
-  description = "Secrets Manager ARN holding { username, password } for the SQL Server master user"
-  value       = aws_secretsmanager_secret.mssql_master.arn
+  description = "RDS-managed Secrets Manager secret holding { username, password } for the SQL Server master user"
+  value       = local.mssql_master_secret_arn
 }
 
 output "mssql_databases" {

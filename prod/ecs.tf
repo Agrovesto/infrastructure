@@ -80,8 +80,8 @@ resource "aws_ecs_task_definition" "services" {
       # initialized (see vault.tf) set vault_secrets_enabled = true and these
       # go away — the app reads kv/<service> from Vault instead.
       secrets = var.vault_secrets_enabled ? [] : [
-        { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:username::" },
-        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:password::" }
+        { name = "DB_USER", valueFrom = "${local.mssql_master_secret_arn}:username::" },
+        { name = "DB_PASSWORD", valueFrom = "${local.mssql_master_secret_arn}:password::" }
       ]
 
       logConfiguration = {

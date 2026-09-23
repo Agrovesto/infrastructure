@@ -131,6 +131,19 @@ override_data {
 }
 
 override_data {
+  target = data.aws_db_instance.mssql
+  values = {
+    address = "migration-prod.abc123.eu-west-1.rds.amazonaws.com"
+    port    = 1433
+    master_user_secret = [{
+      secret_arn    = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:rds!db-mock-AbCdEf"
+      secret_status = "active"
+      kms_key_id    = ""
+    }]
+  }
+}
+
+override_data {
   target = data.aws_route53_zone.main
   values = {
     zone_id = "Z0123456789ABCDEF"
@@ -334,6 +347,16 @@ run "database_metrics_are_scheduled" {
   assert {
     condition     = length(aws_iam_role_policy.task_database_secret) == 1
     error_message = "The metrics task needs the policy that reads the database secret."
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "secret:rds!db-mock-AbCdEf")
+    error_message = "The secret policy must be scoped to the adopted instance's RDS-managed secret (data.aws_db_instance.mssql)."
+  }
+
+  assert {
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "migration-prod.abc123.eu-west-1.rds.amazonaws.com")
+    error_message = "DB_HOST must come from the RDS instance data source (managed secrets carry no host)."
   }
 
   assert {

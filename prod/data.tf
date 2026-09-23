@@ -30,7 +30,21 @@ data "aws_iam_policy_document" "ecs_execution_secrets" {
   statement {
     sid       = "ReadMssqlMasterSecret"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.mssql_master.arn]
+    # The RDS-managed secret is known only after the instance exists; the
+    # placeholder keeps the policy valid in a plan (and in mock tests).
+    resources = [local.mssql_master_secret_arn != "" ? local.mssql_master_secret_arn : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:rds!db-*"]
+  }
+
+  # The managed secret is encrypted with the aws/secretsmanager key.
+  statement {
+    sid       = "DecryptMssqlMasterSecret"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.aws_region}.amazonaws.com"]
+    }
   }
 }
 

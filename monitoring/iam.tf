@@ -185,7 +185,7 @@ resource "aws_iam_role_policy" "task_database_secret" {
         Sid      = "ReadDatabaseSecret"
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
+        Resource = [local.mssql_secret_id != "" && startswith(local.mssql_secret_id, "arn:") ? local.mssql_secret_id : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.mssql_secret_id != "" ? local.mssql_secret_id : "rds!db-"}*"]
       },
       {
         Sid      = "DecryptDatabaseSecret"

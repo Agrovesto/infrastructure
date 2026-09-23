@@ -269,6 +269,24 @@ variable "mssql_multi_az" {
   default     = false
 }
 
+variable "mssql_identifier" {
+  description = "RDS instance identifier. Empty = <project>-<environment>-mssql. Set to an existing identifier to adopt that instance (imports/RUNBOOK.md)."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_subnet_group_name" {
+  description = "DB subnet group name. Empty = <project>-<environment>-mssql. Set to the adopted instance's existing group name."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_storage_type" {
+  description = "gp3 for new instances; set to the adopted instance's type (gp2/gp3/io1) so the import is not an in-place storage migration"
+  type        = string
+  default     = "gp3"
+}
+
 variable "mssql_master_username" {
   description = "RDS master user ('sa' is reserved on RDS)"
   type        = string

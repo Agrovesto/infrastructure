@@ -26,3 +26,9 @@ __pycache__/
 
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
+
+# Import window (imports/stage.sh): staged copies, generated config drafts,
+# discovery output (account facts), per-account bootstrap local state.
+zz_import_*.tf
+generated_legacy.tf
+imports/discovery-*.txt

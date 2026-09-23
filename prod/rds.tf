@@ -2,9 +2,9 @@
 # RDS SQL Server — one Multi-AZ instance hosting the same 5 databases as dev
 # (wallet, onboarding, input, moneval, serviceprovider).
 #
-# Credentials: generated here (never in GitHub secrets), stored in Secrets
-# Manager as JSON { username, password, host, port } and injected into the ECS
-# tasks as DB_USER / DB_PASSWORD.
+# Credentials: RDS-managed master password (Secrets Manager secret owned by RDS,
+# never in Terraform state or GitHub secrets), injected into the ECS tasks as
+# DB_USER / DB_PASSWORD.
 #
 # Databases: RDS cannot create databases via the aws_db_instance resource, so
 # when var.run_db_init = true a one-off Fargate task runs `CREATE DATABASE`
@@ -13,38 +13,22 @@
 # printed in the `mssql_db_init_sql` output for manual use.
 # =============================================================================
 
-resource "random_password" "mssql_master" {
-  length      = 32
-  min_lower   = 1
-  min_upper   = 1
-  min_numeric = 1
-  min_special = 1
-  # RDS SQL Server: any printable ASCII except /, ", @ and space.
-  override_special = "!#$%^&*()-_=+[]{}<>:;?"
-}
+# Master password: RDS-managed (manage_master_user_password). RDS generates it,
+# stores it in its own Secrets Manager secret ("rds!db-...") and rotates it.
+# The value never passes through Terraform, so it is not in plan output or in
+# state - consumers read it at runtime via aws_db_instance.mssql
+# .master_user_secret[0].secret_arn (keys: username, password).
+#
+# Adopting the existing instance (imports/RUNBOOK.md): migration-prod already
+# uses a managed secret, so importing it is a no-op for credentials.
 
-resource "aws_secretsmanager_secret" "mssql_master" {
-  name                    = "${local.name}-mssql-master"
-  description             = "Master credentials for the ${local.name} RDS SQL Server instance"
-  recovery_window_in_days = 7 # prod: keep a restore window in case of accidental deletes
-
-  tags = merge(local.tags, { Name = "${local.name}-mssql-master" })
-}
-
-resource "aws_secretsmanager_secret_version" "mssql_master" {
-  secret_id = aws_secretsmanager_secret.mssql_master.id
-  secret_string = jsonencode({
-    username = var.mssql_master_username
-    password = random_password.mssql_master.result
-    engine   = "sqlserver"
-    host     = split(":", aws_db_instance.mssql.endpoint)[0]
-    port     = var.mssql_port
-    dbname   = ""
-  })
+locals {
+  mssql_identifier        = var.mssql_identifier != "" ? var.mssql_identifier : "${local.name}-mssql"
+  mssql_master_secret_arn = try(aws_db_instance.mssql.master_user_secret[0].secret_arn, "")
 }
 
 resource "aws_db_instance" "mssql" {
-  identifier = "${local.name}-mssql"
+  identifier = local.mssql_identifier
 
   engine               = var.mssql_engine
   engine_version       = var.mssql_engine_version
@@ -53,7 +37,7 @@ resource "aws_db_instance" "mssql" {
 
   allocated_storage     = var.mssql_allocated_storage_gb
   max_allocated_storage = var.mssql_max_allocated_storage_gb
-  storage_type          = "gp3"
+  storage_type          = var.mssql_storage_type
   storage_encrypted     = true
 
   db_subnet_group_name   = aws_db_subnet_group.mssql.name
@@ -61,8 +45,8 @@ resource "aws_db_instance" "mssql" {
   publicly_accessible    = false
   port                   = var.mssql_port
 
-  username = var.mssql_master_username
-  password = random_password.mssql_master.result
+  username                    = var.mssql_master_username
+  manage_master_user_password = true
 
   multi_az = var.mssql_multi_az
 
@@ -72,7 +56,7 @@ resource "aws_db_instance" "mssql" {
   copy_tags_to_snapshot   = true
 
   skip_final_snapshot       = var.mssql_skip_final_snapshot
-  final_snapshot_identifier = var.mssql_skip_final_snapshot ? null : "${local.name}-mssql-final-snapshot"
+  final_snapshot_identifier = var.mssql_skip_final_snapshot ? null : "${local.mssql_identifier}-final-snapshot"
   deletion_protection       = var.deletion_protection
 
   # Enhanced monitoring + log exports to CloudWatch + Performance Insights
@@ -87,7 +71,7 @@ resource "aws_db_instance" "mssql" {
   auto_minor_version_upgrade = true
   apply_immediately          = false
 
-  tags = merge(local.tags, { Name = "${local.name}-mssql" })
+  tags = merge(local.tags, { Name = local.mssql_identifier })
 }
 
 # -----------------------------------------------------------------------------
@@ -143,8 +127,8 @@ resource "aws_ecs_task_definition" "db_init" {
       ]
 
       secrets = [
-        { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:username::" },
-        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.mssql_master.arn}:password::" }
+        { name = "DB_USER", valueFrom = "${local.mssql_master_secret_arn}:username::" },
+        { name = "DB_PASSWORD", valueFrom = "${local.mssql_master_secret_arn}:password::" }
       ]
 
       logConfiguration = {

@@ -333,6 +333,12 @@ variable "mssql_secret_name" {
   default     = "agrovesto-prod-mssql-master"
 }
 
+variable "mssql_instance_identifier" {
+  description = "Prod RDS instance identifier. When set, the metrics task reads the host and the RDS-managed master secret from the instance (data source) instead of var.mssql_secret_name."
+  type        = string
+  default     = ""
+}
+
 variable "mssql_database" {
   description = "Database the metrics queries run against (DMVs are server-wide)"
   type        = string

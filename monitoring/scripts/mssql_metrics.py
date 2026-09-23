@@ -60,7 +60,11 @@ COUNTER_METRICS = {
 def read_secret():
     client = boto3.client("secretsmanager", region_name=REGION)
     payload = json.loads(client.get_secret_value(SecretId=SECRET_NAME)["SecretString"])
-    return payload["username"], payload["password"], payload["host"], int(payload.get("port", 1433))
+    # RDS-managed secrets hold only username/password; host/port then come
+    # from the task environment (set from the aws_db_instance data source).
+    host = os.environ.get("DB_HOST") or payload["host"]
+    port = int(os.environ.get("DB_PORT") or payload.get("port", 1433))
+    return payload["username"], payload["password"], host, port
 
 
 def push(metrics, instance):

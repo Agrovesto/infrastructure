@@ -42,12 +42,14 @@ probe_targets = {
   grafana         = "https://grafana.nomaos.com/api/health"
 }
 
-# RDS: the prod secret name is the only input needed (it stores host, port,
-# username and password). The metrics task runs hourly with no CloudWatch,
+# RDS: the adopted prod instance. Host, port and the ARN of its RDS-managed
+# master secret are read from the instance (data source), so no credentials
+# are copied into this state. The metrics task runs hourly with no CloudWatch,
 # Performance Insights or enhanced monitoring involved.
-enable_rds_monitoring = true
-mssql_secret_name     = "agrovesto-prod-mssql-master"
-mssql_database        = "master"
+enable_rds_monitoring     = true
+mssql_secret_name         = "" # superseded by the RDS-managed secret of the adopted instance
+mssql_instance_identifier = "migration-prod"
+mssql_database            = "master"
 
 # Cost levers.
 use_fargate_spot       = false

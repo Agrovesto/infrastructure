@@ -243,18 +243,32 @@ run "credentials" {
   command = plan
 
   assert {
-    condition     = aws_secretsmanager_secret.mssql_master.name == "${var.project}-${var.environment}-mssql-master"
-    error_message = "Master credentials live in a conventionally named secret."
+    condition     = aws_db_instance.mssql.manage_master_user_password == true
+    error_message = "The master password must be RDS-managed so it never enters Terraform state."
   }
 
   assert {
-    condition     = aws_secretsmanager_secret.mssql_master.recovery_window_in_days == 7
-    error_message = "Keep a 7-day recovery window on the prod secret."
+    condition     = aws_db_instance.mssql.password == null
+    error_message = "No master password may be set from Terraform."
   }
 
   assert {
-    condition     = random_password.mssql_master.length == 32
-    error_message = "The generated master password is 32 characters."
+    condition     = aws_db_instance.mssql.identifier == "${var.project}-${var.environment}-mssql"
+    error_message = "Default identifier follows the <project>-<environment>-mssql convention."
+  }
+}
+
+run "adopt_existing_instance" {
+  command = plan
+
+  variables {
+    mssql_identifier   = "migration-prod"
+    mssql_storage_type = "gp2"
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.identifier == "migration-prod" && aws_db_instance.mssql.storage_type == "gp2"
+    error_message = "var.mssql_identifier / var.mssql_storage_type must drive the adopted instance."
   }
 }
 

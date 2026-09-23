@@ -2,8 +2,21 @@
 # RDS enhanced-monitoring agent: a scheduled Fargate task runs DMV queries over
 # TDS and pushes the results to Pushgateway, where Prometheus scrapes them.
 
+# Adopted instance (imports/RUNBOOK.md): credentials live in the RDS-managed
+# secret, read by ARN at runtime - nothing sensitive is copied into this state.
+data "aws_db_instance" "mssql" {
+  count = var.mssql_instance_identifier != "" ? 1 : 0
+
+  db_instance_identifier = var.mssql_instance_identifier
+}
+
 locals {
-  mssql_enabled = var.enable_rds_monitoring && var.mssql_secret_name != ""
+  mssql_enabled = var.enable_rds_monitoring && (var.mssql_secret_name != "" || var.mssql_instance_identifier != "")
+
+  # Secret id handed to the task (name or ARN both work with GetSecretValue).
+  mssql_secret_id = var.mssql_instance_identifier != "" ? try(data.aws_db_instance.mssql[0].master_user_secret[0].secret_arn, "") : var.mssql_secret_name
+  mssql_host      = var.mssql_instance_identifier != "" ? try(data.aws_db_instance.mssql[0].address, "") : ""
+  mssql_port      = var.mssql_instance_identifier != "" ? try(tostring(data.aws_db_instance.mssql[0].port), "1433") : ""
 
   mssql_log_config = {
     logDriver = "awslogs"
@@ -54,7 +67,9 @@ resource "aws_ecs_task_definition" "mssql_metrics" {
       command = ["sh", "-c", "pip install --quiet --no-cache-dir pytds boto3 && python /rds/config/mssql_metrics.py"]
 
       environment = [
-        { name = "DB_SECRET_NAME", value = var.mssql_secret_name },
+        { name = "DB_SECRET_NAME", value = local.mssql_secret_id },
+        { name = "DB_HOST", value = local.mssql_host },
+        { name = "DB_PORT", value = local.mssql_port },
         { name = "DB_NAME", value = var.mssql_database },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "PUSHGATEWAY_URL", value = local.endpoints.pushgateway },

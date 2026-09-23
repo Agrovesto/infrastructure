@@ -166,7 +166,9 @@ resource "aws_route_table_association" "database" {
 }
 
 resource "aws_db_subnet_group" "mssql" {
-  name       = "${local.name}-mssql"
+  # var.mssql_subnet_group_name adopts the existing instance's group (the
+  # instance's subnet group is ForceNew, so it must keep the same one).
+  name       = var.mssql_subnet_group_name != "" ? var.mssql_subnet_group_name : "${local.name}-mssql"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.tags, { Name = "${local.name}-mssql-subnets" })
