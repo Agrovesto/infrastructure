@@ -35,3 +35,4 @@ generated_legacy.tf
 
 # plan.sh local bootstrap state never goes to git
 bootstrap/*.tfstate*
+legacy_lambda_placeholder.zip
