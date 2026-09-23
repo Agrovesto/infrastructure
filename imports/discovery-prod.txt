@@ -1,0 +1,120 @@
+
+=== VPC  (vpc_cidr = ...) ===
+vpc-0016f521bae08f4ff	172.96.0.0/16	None	agrovesto-vpc
+  enableDnsHostnames=True
+  AZ order used by the new code (first N available):
+  eu-west-1a	eu-west-1b	eu-west-1c
+
+=== SUBNET  id  cidr  az  public-ip-on-launch  route(0.0.0.0/0)  route-table  name ===
+  subnet-084f21457f316c44c 172.96.3.0/24 eu-west-1b False private:None rtb-084528a52ec739f38 agrovesto-infra-deployment/agrovesto-vpc/privateSubnet2
+  subnet-00ee6901e53783c86 172.96.2.0/24 eu-west-1a False private:None rtb-0fa42099da11b78e9 agrovesto-infra-deployment/agrovesto-vpc/privateSubnet1
+  subnet-0e169f40c70cdfe8b 172.96.1.0/24 eu-west-1b True public:igw-07275a1a62726a4c8 None rtb-0614ed06de1bc1d89 agrovesto-infra-deployment/agrovesto-vpc/publicSubnet2
+  subnet-0b808deeaf8391867 172.96.0.0/24 eu-west-1a True public:igw-07275a1a62726a4c8 None rtb-0530eb261b38f735b agrovesto-infra-deployment/agrovesto-vpc/publicSubnet1
+
+=== ROUTE TABLES  id  main  associations  routes ===
+  rtb-0614ed06de1bc1d89	None	subnet-0e169f40c70cdfe8b	172.96.0.0/16>local,0.0.0.0/0>igw-07275a1a62726a4c8
+  rtb-0fa42099da11b78e9	None	subnet-00ee6901e53783c86	172.96.0.0/16>local
+  rtb-0fa0841a7b7dac5db	True		172.96.0.0/16>local
+  rtb-0530eb261b38f735b	None	subnet-0b808deeaf8391867	172.96.0.0/16>local,0.0.0.0/0>igw-07275a1a62726a4c8
+  rtb-084528a52ec739f38	None	subnet-084f21457f316c44c	172.96.0.0/16>local
+
+=== NAT GATEWAYS ===
+
+=== SG  id  name  DEFAULT?  vpc  #in  #out   (default SG -> aws_default_security_group.default) ===
+  sg-04778d7bdb8e2c026 ec2-rds-3 - vpc-0016f521bae08f4ff 0 1
+  sg-0e4ef41f521e66695 noma-agx - vpc-0016f521bae08f4ff 6 1
+  sg-06e44543a37f56828 rds-ec2-2 - vpc-0016f521bae08f4ff 1 0
+  sg-044858bb412fc2aa0 ec2-rds-1 - vpc-0016f521bae08f4ff 0 1
+  sg-072ebb62525423c86 agrovesto-db-sg - vpc-0016f521bae08f4ff 1 1
+  sg-0f208f7733ec29fbd agrovesto-infra-deployment-agxdbRotationSingleUserSecurityGroup123C71F0-PJlfciPOXQY9 - vpc-0016f521bae08f4ff 0 1
+  sg-0121823b5aba80621 rds-ec2-1 - vpc-0016f521bae08f4ff 1 0
+  sg-0df9c118433af39dd ec2-rds-2 - vpc-0016f521bae08f4ff 0 1
+  sg-0b555edfc6d445a18 rds-ec2-3 - vpc-0016f521bae08f4ff 1 0
+  sg-05a2722a050c1109b default DEFAULT vpc-0016f521bae08f4ff 8 1
+  sg-094939b554d597e4a agrovesto-infra-deployment-nomaosdbRotationSingleUserSecurityGroup1AEE7A58-WzSrmmV4Q1zV - vpc-0016f521bae08f4ff 0 1
+  sg-09e61cfd83551d0ec agrovesto-alb-sg - vpc-0016f521bae08f4ff 4 1
+  sg-0bfbddac52a0a2b89 agrovesto-ec2-sg - vpc-0016f521bae08f4ff 3 1
+
+=== NACL (default ones become aws_default_network_acl) ===
+acl-06b37d7639de1e948	vpc-0016f521bae08f4ff	True	subnet-0e169f40c70cdfe8b,subnet-00ee6901e53783c86,subnet-084f21457f316c44c,subnet-0b808deeaf8391867
+
+=== INSTANCES  id  state  type  ami  subnet  key  sgs  profile  name ===
+i-027ff32f2a26fa600	running	t3.medium	ami-049442a6cf8319180	subnet-0e169f40c70cdfe8b	noma-agx	sg-044858bb412fc2aa0,sg-05a2722a050c1109b,sg-0df9c118433af39dd	arn:aws:iam::221434544570:instance-profile/instanceRole	noma-agx
+
+=== VOLUMES  id  size  type  az  attached-to  device  ROOT? ===
+  vol-019ff51ce045e3490 500 gp3 eu-west-1b i-027ff32f2a26fa600 /dev/sda1 ROOT
+
+=== EIP  alloc  ip  instance  assoc ===
+eipalloc-0a48ffb921e22bb39	34.254.5.223	i-027ff32f2a26fa600	eipassoc-0ddcefae99b95b539
+
+=== KEY PAIRS  key-id  NAME (import id = name) ===
+key-075e7652029e2c2c5	noma-agx
+key-057e0d6c32eb78e4d	rdsjumpserverkeypair
+key-0b6382b8152c63533	deployment-ssh
+
+=== KMS  key  manager  state  aliases   (only CUSTOMER keys are importable) ===
+  05d6e0b6-0aef-42ab-9ebc-368642da2498 AWS Enabled alias/aws/dms
+  6e98aa83-4990-4fbe-938a-284763dad588 AWS Enabled alias/aws/s3
+  89a5cab0-dfa9-4d8a-a3d0-c4cbe9672e35 AWS Enabled alias/aws/secretsmanager
+  af93b781-7db2-418f-ba53-aaf08a0893ba AWS Enabled alias/aws/rds
+  f844da16-3c57-4ba4-9e09-fcd6af19c9f1 AWS Enabled alias/aws/acm
+  fc06a828-b6a4-412a-b5f1-417e4ab693e4 AWS Enabled alias/aws/lambda
+
+=== RDS  (mssql_* tfvars for adoption) ===
+migration-prod	sqlserver-ex	15.00.4445.1.v1	db.t3.micro	50	63	gp2	False	False	1433	agrovesto	agxdb2subnetgroup	sg-05a2722a050c1109b,sg-0b555edfc6d445a18	2	04:13-04:43	mon:22:43-mon:23:13	False	True
+agxdb2subnetgroup	vpc-0016f521bae08f4ff	subnet-084f21457f316c44c,subnet-00ee6901e53783c86
+agxdbsubnetgroup	vpc-0016f521bae08f4ff	subnet-084f21457f316c44c,subnet-00ee6901e53783c86
+nomaosdbsubnetgroup	vpc-0016f521bae08f4ff	subnet-084f21457f316c44c,subnet-00ee6901e53783c86
+
+=== SECRETS  name  owning-service  rotation   (metadata only) ===
+nomaosDBcredentials	None	True
+agxDBcredentials	None	True
+rds!db-9bf3a548-e703-4bfe-a868-2a5b81fa436a	rds	False
+
+=== DMS ENDPOINTS  arn  IDENTIFIER (import id) ===
+arn:aws:dms:eu-west-1:221434544570:endpoint:agxdb	agxdb2instance	sqlserver
+arn:aws:dms:eu-west-1:221434544570:endpoint:WFZ6YQ2JCJBLLBLRDLCH7XNRWY	agxdb-snapshot-restore	sqlserver
+arn:aws:dms:eu-west-1:221434544570:endpoint:BSI5NFYJSVELZMYVPFOMJ56MIM	nomaosdbinstance	sqlserver
+arn:aws:dms:eu-west-1:221434544570:endpoint:nomaos	nomaosinstance-snapshot-restore	sqlserver
+
+=== ACM  arn  domain  SANs  status  in-use-by ===
+  arn:aws:acm:eu-west-1:221434544570:certificate/5172b3e7-972d-46c1-87f3-dc104934ac64	*.nomaos.com	*.nomaos.com	ISSUED	0
+  arn:aws:acm:eu-west-1:221434544570:certificate/f493b7d7-a3bb-4092-a2c9-54bd6655dbd1	*.agrovesto.com	*.agrovesto.com	ISSUED	0
+
+=== ROUTE53 hosted zones (prod design creates nomaos.com + agrovesto.com) ===
+/hostedzone/Z00055662LTUSSMS5ZA84	agrovesto.com.	False
+/hostedzone/Z0208643NZ0W8WF5RQ9F	nomaos.com.	False
+
+=== AMPLIFY apps  id  name  repo  branches  domains ===
+  d24hrz6o3pnmne E-Trade-Web https://github.com/Agrovesto/E-Trade-Web branches=master domains=agrovesto.com
+  d2qsjz4yzplkjb nomaos-landingpage https://github.com/Agrovesto/nomaos-landingpage branches=master domains=nomaos.com
+  d2tux0dpg27k42 nomaos-centralcontrol https://github.com/Agrovesto/nomaos-centralcontrol branches=master domains=-
+  d2uzc83ix5qdfu nomaos-landingpage https://github.com/Agrovesto/nomaos-landingpage branches=master domains=-
+  d3po2sm2zq4p71 tradeplatform https://github.com/Agrovesto/tradeplatform branches=main domains=trade.agrovesto.com
+  d4d246twq5d12 Monitoring-and-Evaluation-as-service https://github.com/Agrovesto/Monitoring-and-Evaluation-as-service branches=master domains=insight.nomaos.com
+  dm0gdjrq9j06v onboarding-as-a-service https://github.com/Agrovesto/onboarding-as-a-service branches=master domains=onboarding.nomaos.com
+
+=== CLOUDFORMATION stacks  name  status  (decouple/own - RUNBOOK §0) ===
+agrovesto-infra-deployment-agxdbRotationSingleUser48A10562-A75L3B7S0Q6S	CREATE_COMPLETE
+agrovesto-infra-deployment-nomaosdbRotationSingleUserE9E23701-1JE28HJLBB6CF	UPDATE_COMPLETE
+agrovesto-infra-deployment	UPDATE_COMPLETE
+CDKToolkit	CREATE_COMPLETE
+agrovesto-infra-pipeline	CREATE_COMPLETE
+
+=== BOOTSTRAP  state bucket / deploy role ===
+  STATE lifecycle: yes
+  STATE policy: yes
+agrovesto-infra-deploymen-CustomVpcRestrictDefaultS-Hzq7oZBnIJrR	arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-CustomVpcRestrictDefaultS-Hzq7oZBnIJrR
+agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-UepjS11Nv8aU	arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-UepjS11Nv8aU
+agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-yDIdim0P5oKG	arn:aws:iam::221434544570:role/agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-yDIdim0P5oKG
+agrovesto-prod-github-deploy	arn:aws:iam::221434544570:role/agrovesto-prod-github-deploy
+cdk-hnb659fds-deploy-role-221434544570-eu-west-1	arn:aws:iam::221434544570:role/cdk-hnb659fds-deploy-role-221434544570-eu-west-1
+nomaos-prod-github-terraform	arn:aws:iam::221434544570:role/nomaos-prod-github-terraform
+arn:aws:iam::221434544570:oidc-provider/token.actions.githubusercontent.com
+
+=== RESOURCES NOT IN THE INVENTORY (Resource Explorer does not index them; the new code manages them) ===
+agrovesto-infra-deploymen-CustomVpcRestrictDefaultS-Hzq7oZBnIJrR	agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-UepjS11Nv8aU	agrovesto-infra-deploymen-SecretsManagerRDSSQLServe-yDIdim0P5oKG	agrovesto-infra-pipeline-CodePipelineRole-OF4B386rGJe4	agrovesto-prod-github-deploy	AmplifySSRLoggingRole-227acf59-5d64-413b-b600-1a52d75bec84	AWSCodePipelineServiceRole-eu-west-1-argovesto-api-v8	AWSReservedSSO_AdministratorAccess_bf9552b39d2cb66a	AWSSystemsManagerDefaultEC2InstanceManagementRole	cdk-hnb659fds-cfn-exec-role-221434544570-eu-west-1	cdk-hnb659fds-deploy-role-221434544570-eu-west-1	cdk-hnb659fds-file-publishing-role-221434544570-eu-west-1	cdk-hnb659fds-image-publishing-role-221434544570-eu-west-1	cdk-hnb659fds-lookup-role-221434544570-eu-west-1	CloudWatchAgentServerPolicy	CodeBuildDeploymentRole	CodeBuildServiceRole	dms-cloudwatch-logs-role	dms-vpc-role	DMSSecretManagerAccessRole-agxdb2DBcredentials	DMSSecretManagerAccessRole-nomaosDBcredentials	ec2_role-d0f2b8	GitHubActionsCDKDeploy	instanceRole	nomaos-prod-github-terraform	rds-monitoring-role
+agrovesto.com.	nomaos.com.
+arn:aws:sns:eu-west-1:221434544570:amplify-d24hrz6o3pnmne_main	email
+
+saved to imports/discovery-prod.txt
