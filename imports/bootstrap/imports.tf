@@ -5,14 +5,8 @@
 # Run it once per account, each with its own local state file (RUNBOOK §2):
 #
 #   imports/stage.sh bootstrap && cd bootstrap && terraform init
-#   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate \
-#     -var account_id=221434544570            # role agrovesto-prod-github-deploy
-#   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate \
-#     -var account_id=353833416626 -var environment=dev \
-#     -var deploy_role_name=<nomaos-dev-github-terraform | nomaos-bootstrap-dev-deploy> \
-#     -var state_bucket_kms_key_arn=arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6
-#   (the dev bucket was created by a "nomaos-bootstrap-dev" setup whose KMS key
-#   exists. Keep the KMS arg only if `aws s3api get-bucket-encryption` shows aws:kms)
+#   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars
+#   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars
 # =============================================================================
 
 variable "account_id" {
@@ -61,19 +55,29 @@ import {
   id = var.deploy_role_name
 }
 
-# Scoped policy (deploy_admin_access = false, the default). If the role has
-# AdministratorAccess instead, pass -var deploy_admin_access=true and replace
-# these two blocks with:
-#   to = aws_iam_role_policy_attachment.deploy_admin[0]
-#   id = "<role>/arn:aws:iam::aws:policy/AdministratorAccess"
+variable "import_deploy_policy" {
+  description = "Import the existing <role>-policy + its attachment (true when this module created the role, false when the policy doesn't exist yet: apply creates it)"
+  type        = bool
+  default     = true
+}
+
+# Scoped policy (deploy_admin_access = false). for_each on import needs Terraform >= 1.7.
 import {
-  to = aws_iam_policy.deploy_scoped[0]
-  id = local.import_policy_arn
+  for_each = var.import_deploy_policy && !var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_policy.deploy_scoped[0]
+  id       = local.import_policy_arn
 }
 
 import {
-  to = aws_iam_role_policy_attachment.deploy_scoped[0]
-  id = "${var.deploy_role_name}/${local.import_policy_arn}"
+  for_each = var.import_deploy_policy && !var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_role_policy_attachment.deploy_scoped[0]
+  id       = "${var.deploy_role_name}/${local.import_policy_arn}"
+}
+
+import {
+  for_each = var.deploy_admin_access ? toset(["this"]) : toset([])
+  to       = aws_iam_role_policy_attachment.deploy_admin[0]
+  id       = "${var.deploy_role_name}/arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
 import {

@@ -99,11 +99,8 @@ commented slot and tfvar in §4. You can also do it yourself by following §4.
 ```bash
 imports/stage.sh bootstrap && cd bootstrap && terraform init
 # prod
-AWS_PROFILE=agrovesto-prod terraform plan  -state=prod.tfstate -var account_id=221434544570
-AWS_PROFILE=agrovesto-prod terraform apply -state=prod.tfstate -var account_id=221434544570
-# dev (bootstrap defaults are prod-flavoured - override)
-AWS_PROFILE=agrovesto-dev terraform plan -state=dev.tfstate -var account_id=353833416626 \
-  -var environment=dev -var deploy_role_name=<dev role from discover.sh>
+AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars
+AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars
 ```
 
 What to expect in the plan:
@@ -232,7 +229,7 @@ will fail with "already exists":
 | 8 | **Route53 `nomaos.com` / `agrovesto.com` exist in prod** | Adopted as `aws_route53_zone.this[0]` / `.agrovesto`, so no duplicate zones get created | The design's records are added; Amplify-managed records are untouched. |
 | 9 | **Dev Amplify:** `onboarding-frontend` (branch `dev`) and `nomaos-landingpage` (branch `staging`) | Adopted into `amplify_apps.onboarding` / `.landing` with their real names. `ignore_changes` on build spec and env, so their builds aren't overwritten. | – |
 | 10 | 5 key pairs, 4 DMS endpoints, 1 customer KMS key | Concrete import ids filled in. The 11 AWS-managed `aws/*` keys and 3 root volumes are SKIP. | – |
-| 11 | Deploy roles: prod `agrovesto-prod-github-deploy`; dev has `nomaos-dev-github-terraform` **and** `nomaos-bootstrap-dev-deploy` | Commands in `imports/bootstrap/imports.tf` | **Tell me which one dev CI uses** (check the `AWS_ROLE_ARN_DEV` secret). |
+| 11 | Deploy roles: prod `agrovesto-prod-github-deploy`; dev CI uses **`nomaos-dev-github-terraform`** (confirmed). `nomaos-bootstrap-dev-deploy` isn't used by CI. | `imports/bootstrap/{dev,prod}.tfvars`. The dev trust patterns include `refs/heads/dev`. | Before the dev bootstrap plan, run the two `aws iam` checks in `dev.tfvars` (trust policy, attached policies) and set `deploy_admin_access` / `import_deploy_policy` to match. |
 | 12 | Lots of IAM roles that Resource Explorer doesn't index (Amplify/CDK/CodePipeline/DMS service roles…) | Not imported: they're owned by services or by the CDK/CFN stacks. None collide with names the design creates (`agrovesto-prod-*`, `agrovesto-dev-*`). | – |
 
 > ⚠️ `imports/discovery-*.txt` are now **committed** (you un-ignored them). They hold
