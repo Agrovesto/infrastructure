@@ -1,14 +1,35 @@
+tests/coverage.tftest.hcl... in progress
+  run "every_task_definition_is_complete"... pass
+  run "secondary_ingress_rules_are_pinned"... pass
+  run "policies_grant_the_minimum"... pass
+  run "storage_and_schedule_settings"... pass
+  run "alertmanager_publishes_to_sns"... pass
+  run "no_sns_receiver_when_unset"... pass
+  run "config_bucket_is_private_and_tls_only"... pass
+tests/coverage.tftest.hcl... tearing down
+tests/coverage.tftest.hcl... pass
+tests/monitoring.tftest.hcl... in progress
+  run "components_run_on_fargate_with_their_own_state"... pass
+  run "dashboards_and_datasources_are_provisioned"... pass
+  run "traces_are_exported_as_span_metrics"... pass
+  run "grafana_is_reachable_through_the_prod_alb_only"... pass
+  run "exporters_cover_uptime_and_push_metrics"... pass
+  run "cost_pipeline_is_wired"... pass
+  run "database_metrics_are_scheduled"... pass
+  run "ecs_collector_is_scheduled"... pass
+  run "scheduled_tasks_can_be_turned_off"... pass
+  run "monthly_report_is_mailed"... pass
+  run "the_report_task_may_send_mail"... pass
+tests/monitoring.tftest.hcl... tearing down
+tests/monitoring.tftest.hcl... pass
+tests/platform.tftest.hcl... in progress
+  run "discovers_the_prod_network"... pass
+  run "storage_is_encrypted_and_shared"... pass
+  run "security_groups_only_open_what_is_needed"... pass
+  run "iam_is_scoped"... pass
+  run "cloud_map_publishes_component_endpoints"... pass
+  run "config_is_published_for_the_init_container"... pass
+tests/platform.tftest.hcl... tearing down
+tests/platform.tftest.hcl... pass
 
-Error: Invalid character
-
-  on terraform.auto.tfvars line 35:
-  35: report_recipients     = tech@agrovesto.com
-
-This character is not used within the language.
-
-Error: Missing newline after argument
-
-  on terraform.auto.tfvars line 35:
-  35: report_recipients     = tech@agrovesto.com
-
-An argument definition must end with a newline.
+Success! 24 passed, 0 failed.

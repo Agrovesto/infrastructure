@@ -53,30 +53,17 @@ tests/rds.tftest.hcl... in progress
   run "multi_az_mode"... pass
   run "monitoring"... pass
   run "credentials"... pass
-  run "adopt_existing_instance"... fail
-
-Error: Unknown condition value
-
-  on tests/rds.tftest.hcl line 320, in run "adopt_existing_instance":
- 320:     condition     = length(aws_db_instance.mssql.vpc_security_group_ids) == 3
-    ├────────────────
-    │ aws_db_instance.mssql.vpc_security_group_ids is set of string with 3 elements
-
-Condition expression could not be evaluated at this time. This means you have
-executed a `run` block with `command = plan` and one of the values your
-condition depended on is not known until after the plan has been applied.
-Either remove this value from your condition, or execute an `apply` command
-from this `run` block.
-  run "db_init_disabled_by_default"... skip
-  run "db_init_enabled"... skip
-  run "step_up_to_small"... skip
-  run "standard_edition_step_up"... skip
-  run "db_size_guard"... skip
-  run "db_size_guard_with_email"... skip
-  run "db_size_guard_disabled"... skip
-  run "express_log_exports"... skip
+  run "adopt_existing_instance"... pass
+  run "db_init_disabled_by_default"... pass
+  run "db_init_enabled"... pass
+  run "step_up_to_small"... pass
+  run "standard_edition_step_up"... pass
+  run "db_size_guard"... pass
+  run "db_size_guard_with_email"... pass
+  run "db_size_guard_disabled"... pass
+  run "express_log_exports"... pass
 tests/rds.tftest.hcl... tearing down
-tests/rds.tftest.hcl... fail
+tests/rds.tftest.hcl... pass
 tests/security_groups.tftest.hcl... in progress
   run "alb_security_group"... pass
   run "ecs_security_group"... pass
@@ -103,4 +90,4 @@ tests/vpc.tftest.hcl... in progress
 tests/vpc.tftest.hcl... tearing down
 tests/vpc.tftest.hcl... pass
 
-Failure! 55 passed, 1 failed, 8 skipped.
+Success! 64 passed, 0 failed.
