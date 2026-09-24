@@ -43,8 +43,8 @@ resource "aws_instance" "app" {
     logging_volume_id = var.logging.enabled ? replace(aws_ebs_volume.logging[0].id, "-", "") : ""
     grafana_parameter = var.logging.enabled ? aws_ssm_parameter.grafana_admin_password[0].name : ""
 
-    redis          = var.redis
-    redis_parameter = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
+    redis             = var.redis
+    redis_parameter   = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
 
     sonarqube           = var.sonarqube
     sonarqube_volume_id = var.sonarqube.enabled ? replace(aws_ebs_volume.sonarqube[0].id, "-", "") : ""
