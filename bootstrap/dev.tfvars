@@ -25,7 +25,7 @@ github_sub_patterns = [
 #   aws iam list-attached-role-policies --role-name nomaos-dev-github-terraform
 # - AdministratorAccess attached -> deploy_admin_access = true
 # - a "<role>-policy" customer policy -> leave false and import_deploy_policy = true
-deploy_admin_access  = false
+deploy_admin_access  = true # checked 2026-09-24: only AdministratorAccess attached, no inline policies
 import_deploy_policy = false
 
 # Match the live bucket (import plan 2026-09-23: SSE-KMS with bucket key,
