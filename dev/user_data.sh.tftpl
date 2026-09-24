@@ -5,6 +5,9 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::=--force-confold
 apt-get install -y docker.io git xfsprogs curl
+apt-get install -y unzip
+curl -sSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
 systemctl enable --now docker
 usermod -aG docker ubuntu
 
