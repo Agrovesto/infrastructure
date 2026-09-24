@@ -1,0 +1,93 @@
+tests/acm.tftest.hcl... [37min progress[0m
+[0m  run "certificate"... [31mfail[0m[0m
+  run "validation_records"... [37mskip[0m[0m
+  run "validation_records_follow_the_domain_variable"... [37mskip[0m[0m
+tests/acm.tftest.hcl... [37mtearing down[0m
+[0mtests/acm.tftest.hcl... [31mfail[0m[0m
+tests/alb.tftest.hcl... [37min progress[0m
+[0m  run "load_balancer"... [31mfail[0m[0m
+  run "access_logs"... [37mskip[0m[0m
+  run "target_groups"... [37mskip[0m[0m
+  run "listeners"... [37mskip[0m[0m
+  run "listener_rules"... [37mskip[0m[0m
+  run "listener_rules_follow_the_domain_variable"... [37mskip[0m[0m
+tests/alb.tftest.hcl... [37mtearing down[0m
+[0mtests/alb.tftest.hcl... [31mfail[0m[0m
+tests/compute.tftest.hcl... [37min progress[0m
+[0m  run "cluster"... [31mfail[0m[0m
+  run "task_definitions"... [37mskip[0m[0m
+  run "services"... [37mskip[0m[0m
+  run "services_single_az_pin"... [37mskip[0m[0m
+  run "log_groups"... [37mskip[0m[0m
+  run "iam"... [37mskip[0m[0m
+  run "container_definitions"... [37mskip[0m[0m
+  run "container_definitions_with_vault_secrets"... [37mskip[0m[0m
+  run "autoscaling"... [37mskip[0m[0m
+  run "autoscaling_disabled"... [37mskip[0m[0m
+  run "graviton_tasks"... [37mskip[0m[0m
+  run "x86_fallback"... [37mskip[0m[0m
+  run "sns_and_alarms"... [37mskip[0m[0m
+  run "iam_documents_and_wiring"... [37mskip[0m[0m
+  run "db_init_bootstrap"... [37mskip[0m[0m
+  run "rekognition"... [37mskip[0m[0m
+  run "rekognition_minimal"... [37mskip[0m[0m
+tests/compute.tftest.hcl... [37mtearing down[0m
+[0mtests/compute.tftest.hcl... [31mfail[0m[0m
+tests/dns.tftest.hcl... [37min progress[0m
+[0m  run "hosted_zones"... [31mfail[0m[0m
+  run "existing_zone_mode"... [37mskip[0m[0m
+  run "service_alias_records"... [37mskip[0m[0m
+  run "no_extra_records_by_default"... [37mskip[0m[0m
+  run "extra_records"... [37mskip[0m[0m
+  run "apex_record_uses_the_bare_domain"... [37mskip[0m[0m
+tests/dns.tftest.hcl... [37mtearing down[0m
+[0mtests/dns.tftest.hcl... [31mfail[0m[0m
+tests/ecr.tftest.hcl... [37min progress[0m
+[0m  run "repositories"... [31mfail[0m[0m
+  run "lifecycle_policy"... [37mskip[0m[0m
+tests/ecr.tftest.hcl... [37mtearing down[0m
+[0mtests/ecr.tftest.hcl... [31mfail[0m[0m
+tests/rds.tftest.hcl... [37min progress[0m
+[0m  run "instance"... [31mfail[0m[0m
+  run "availability_and_safety"... [37mskip[0m[0m
+  run "multi_az_mode"... [37mskip[0m[0m
+  run "monitoring"... [37mskip[0m[0m
+  run "credentials"... [37mskip[0m[0m
+  run "adopt_existing_instance"... [37mskip[0m[0m
+  run "db_init_disabled_by_default"... [37mskip[0m[0m
+  run "db_init_enabled"... [37mskip[0m[0m
+  run "step_up_to_small"... [37mskip[0m[0m
+  run "standard_edition_step_up"... [37mskip[0m[0m
+  run "db_size_guard"... [37mskip[0m[0m
+  run "db_size_guard_with_email"... [37mskip[0m[0m
+  run "db_size_guard_disabled"... [37mskip[0m[0m
+  run "express_log_exports"... [37mskip[0m[0m
+tests/rds.tftest.hcl... [37mtearing down[0m
+[0mtests/rds.tftest.hcl... [31mfail[0m[0m
+tests/security_groups.tftest.hcl... [37min progress[0m
+[0m  run "alb_security_group"... [31mfail[0m[0m
+  run "ecs_security_group"... [37mskip[0m[0m
+  run "service_port_rules"... [37mskip[0m[0m
+  run "service_port_rules_without_vault"... [37mskip[0m[0m
+  run "database_and_efs_security_groups"... [37mskip[0m[0m
+  run "efs_security_group_without_vault"... [37mskip[0m[0m
+tests/security_groups.tftest.hcl... [37mtearing down[0m
+[0mtests/security_groups.tftest.hcl... [31mfail[0m[0m
+tests/vault.tftest.hcl... [37min progress[0m
+[0m  run "kms_and_efs"... [31mfail[0m[0m
+  run "service"... [37mskip[0m[0m
+  run "vault_disabled"... [37mskip[0m[0m
+  run "vault_task_platform"... [37mskip[0m[0m
+tests/vault.tftest.hcl... [37mtearing down[0m
+[0mtests/vault.tftest.hcl... [31mfail[0m[0m
+tests/vpc.tftest.hcl... [37min progress[0m
+[0m  run "vpc"... [31mfail[0m[0m
+  run "subnets"... [37mskip[0m[0m
+  run "routing_counts_are_known_at_plan_time"... [37mskip[0m[0m
+  run "single_nat_gateway_mode"... [37mskip[0m[0m
+  run "per_az_nat_gateway_mode"... [37mskip[0m[0m
+  run "flow_logs"... [37mskip[0m[0m
+tests/vpc.tftest.hcl... [37mtearing down[0m
+[0mtests/vpc.tftest.hcl... [31mfail[0m[0m
+
+[31mFailure![0m[0m 0 passed, 9 failed, 55 skipped.

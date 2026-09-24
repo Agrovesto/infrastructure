@@ -1,0 +1,45 @@
+tests/ec2.tftest.hcl... [37min progress[0m
+[0m  run "instance"... [31mfail[0m[0m
+  run "storage"... [37mskip[0m[0m
+  run "elastic_ip"... [37mskip[0m[0m
+  run "no_elastic_ip"... [37mskip[0m[0m
+  run "mssql_edition"... [37mskip[0m[0m
+  run "mssql_edition_overridable"... [37mskip[0m[0m
+  run "sns_and_alarms"... [37mskip[0m[0m
+tests/ec2.tftest.hcl... [37mtearing down[0m
+[0mtests/ec2.tftest.hcl... [31mfail[0m[0m
+tests/logging.tftest.hcl... [37min progress[0m
+[0m  run "logging_stack_resources"... [31mfail[0m[0m
+  run "compose_services"... [37mskip[0m[0m
+  run "alloy_pipeline"... [37mskip[0m[0m
+  run "json_log_services"... [37mskip[0m[0m
+  run "json_log_services_extended"... [37mskip[0m[0m
+  run "retention"... [37mskip[0m[0m
+  run "retention_shared_for_every_stream"... [37mskip[0m[0m
+  run "nginx_vhost_defaults_to_loopback"... [37mskip[0m[0m
+  run "nginx_allowlist"... [37mskip[0m[0m
+  run "bootstrap"... [37mskip[0m[0m
+  run "host_role"... [37mskip[0m[0m
+  run "disabled"... [37mskip[0m[0m
+tests/logging.tftest.hcl... [37mtearing down[0m
+[0mtests/logging.tftest.hcl... [31mfail[0m[0m
+tests/platform.tftest.hcl... [37min progress[0m
+[0m  run "vpc"... [31mfail[0m[0m
+  run "scheduler"... [37mskip[0m[0m
+  run "scheduler_disabled"... [37mskip[0m[0m
+  run "backup_bucket"... [37mskip[0m[0m
+  run "ecr"... [37mskip[0m[0m
+  run "amplify"... [37mskip[0m[0m
+  run "amplify_custom_domains"... [37mskip[0m[0m
+  run "dns_managed_by_prod"... [37mskip[0m[0m
+  run "dns_managed_by_dev"... [37mskip[0m[0m
+  run "network_edges"... [37mskip[0m[0m
+  run "storage_buckets_and_volumes"... [37mskip[0m[0m
+  run "scheduler_iam"... [37mskip[0m[0m
+  run "extra_alias_records"... [37mskip[0m[0m
+  run "rekognition"... [37mskip[0m[0m
+  run "rekognition_minimal"... [37mskip[0m[0m
+tests/platform.tftest.hcl... [37mtearing down[0m
+[0mtests/platform.tftest.hcl... [31mfail[0m[0m
+
+[31mFailure![0m[0m 0 passed, 3 failed, 31 skipped.
