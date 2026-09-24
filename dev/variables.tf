@@ -520,3 +520,9 @@ variable "rekognition" {
   })
   default = {}
 }
+
+variable "import_existing" {
+  description = "Enable the one-shot import blocks in imports.tf. terraform test sets false (mock providers cannot import)."
+  type        = bool
+  default     = true
+}

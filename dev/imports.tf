@@ -5,61 +5,72 @@
 # =============================================================================
 
 import {
-  to = aws_vpc.main
-  id = "vpc-0d9b566c353787d53"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_vpc.main
+  id       = "vpc-0d9b566c353787d53"
 }
 
 import {
-  to = aws_internet_gateway.main
-  id = "igw-04e4d65d903b2b67d"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_internet_gateway.main
+  id       = "igw-04e4d65d903b2b67d"
 }
 
 # Default SG has 0 rules today, so the deny-all design changes nothing.
 import {
-  to = aws_default_security_group.default[0]
-  id = "sg-032197de8d143373f"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_default_security_group.default[0]
+  id       = "sg-032197de8d143373f"
 }
 
 # One public subnet by design: the one the running app host is in.
 import {
-  to = aws_subnet.public[0]
-  id = "subnet-0739cfd4c412deb3f" # 172.96.0.0/24 eu-west-1a
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_subnet.public[0]
+  id       = "subnet-0739cfd4c412deb3f" # 172.96.0.0/24 eu-west-1a
 }
 
 import {
-  to = aws_route_table.public
-  id = "rtb-018e7f1b9df073189"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_route_table.public
+  id       = "rtb-018e7f1b9df073189"
 }
 
 import {
-  to = aws_route_table_association.public[0]
-  id = "subnet-0739cfd4c412deb3f/rtb-018e7f1b9df073189"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_route_table_association.public[0]
+  id       = "subnet-0739cfd4c412deb3f/rtb-018e7f1b9df073189"
 }
 
 import {
-  to = aws_route.internet
-  id = "rtb-018e7f1b9df073189_0.0.0.0/0"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_route.internet
+  id       = "rtb-018e7f1b9df073189_0.0.0.0/0"
 }
 
 # --- Amplify ------------------------------------------------------------------
 import {
-  to = aws_amplify_app.this["onboarding"]
-  id = "d3v79u00ot9glq" # onboarding-frontend, branch dev
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_amplify_app.this["onboarding"]
+  id       = "d3v79u00ot9glq" # onboarding-frontend, branch dev
 }
 
 import {
-  to = aws_amplify_branch.this["onboarding"]
-  id = "d3v79u00ot9glq/dev"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_amplify_branch.this["onboarding"]
+  id       = "d3v79u00ot9glq/dev"
 }
 
 import {
-  to = aws_amplify_app.this["landing"]
-  id = "dfvk5chhp2iln" # nomaos-landingpage
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_amplify_app.this["landing"]
+  id       = "dfvk5chhp2iln" # nomaos-landingpage
 }
 
 import {
-  to = aws_amplify_branch.this["landing"]
-  id = "dfvk5chhp2iln/staging"
+  for_each = var.import_existing ? toset(["this"]) : toset([])
+  to       = aws_amplify_branch.this["landing"]
+  id       = "dfvk5chhp2iln/staging"
 }
 
 # NOT adopted: the running host i-00af32231113d64f9 (new-noma-api) and its EIP.

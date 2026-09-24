@@ -36,6 +36,8 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
   domain_name     = "nomaos.com"
   mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 

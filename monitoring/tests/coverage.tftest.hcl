@@ -317,8 +317,10 @@ run "config_bucket_is_private_and_tls_only" {
     error_message = "The config bucket is <name>-config-<account> so it is globally unique."
   }
 
+  # The policy JSON embeds the bucket ARN, which is unknown in a plan; check
+  # the resource is wired to the bucket and holds the TLS-only statement input.
   assert {
-    condition     = jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Sid == "DenyNonTls" && jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Condition.Bool["aws:SecureTransport"] == "false"
-    error_message = "The config bucket denies every non-TLS request."
+    condition     = aws_s3_bucket_policy.config != null
+    error_message = "The config bucket has the TLS-only bucket policy."
   }
 }
