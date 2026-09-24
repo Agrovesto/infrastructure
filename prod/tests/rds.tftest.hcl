@@ -287,7 +287,7 @@ run "adopt_existing_instance" {
     mssql_storage_encrypted             = false
     mssql_performance_insights_enabled  = true
     mssql_manage_master_user_password   = false
-    mssql_existing_master_secret_arn    = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:agxdb2DBcredentials-26LKpW"
+    mssql_existing_master_secret_arn    = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:nomaosDBcredentials-GIwHiK"
     mssql_monitoring_role_arn           = "arn:aws:iam::123456789012:role/rds-monitoring-role"
     mssql_master_username               = "agrovesto"
     mssql_subnet_group_name             = "agxdb2subnetgroup"
