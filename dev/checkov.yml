@@ -27,7 +27,3 @@ skip-check:
 
 compact: true
 quiet: false
-
-# Existing resources imported as-is (not the new design); fixed separately.
-skip-path:
-  - legacy.tf

@@ -27,8 +27,6 @@ __pycache__/
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
 
-# Import window: draft of generated config before it is cleaned into legacy.tf
-generated_legacy.tf
 
 # bootstrap local state (per account) never goes to git
 bootstrap/*.tfstate*
