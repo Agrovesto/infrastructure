@@ -212,7 +212,7 @@ run "dashboards_and_datasources_are_provisioned" {
 }
 
 run "production_grafana_github_sso_maps_team_roles_and_uses_ssm" {
-  command = plan
+  command = apply
 
   variables {
     grafana_github_client_id     = "test-grafana-client-id"
