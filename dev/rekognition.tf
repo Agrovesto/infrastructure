@@ -253,6 +253,7 @@ resource "aws_cognito_identity_pool_roles_attachment" "liveness" {
 # --- What the application may do ---------------------------------------------
 resource "aws_iam_role_policy" "app_rekognition" {
   #checkov:skip=CKV_AWS_355: only the "AnalysisNoResourceTypes" statement uses "*": DetectFaces/Labels/Text/Moderation/PPE, CompareFaces/celebrity/liveness/video Start*/Get* have no resource-level permissions in Rekognition; collections, S3, SQS and PassRole are all scoped to ARNs  name = "${local.name}-app-rekognition"
+  name = "${local.name}-app-rekognition"
   role = aws_iam_role.ec2.id
   policy = jsonencode({
     Version = "2012-10-17"

@@ -457,6 +457,7 @@ run "extra_alias_records" {
   }
 }
 
+
 # --- Rekognition --------------------------------------------------------------
 run "rekognition" {
   # plan: a full mocked apply of the dev stack feeds random strings into ARN
@@ -467,6 +468,7 @@ run "rekognition" {
     condition     = aws_s3_bucket_versioning.rekognition.versioning_configuration[0].status == "Enabled"
     error_message = "The media bucket is versioned (old versions expire after 7 days)."
   }
+
   assert {
     condition     = [for c in aws_rekognition_collection.this : c.collection_id] == ["${local.name}-customers"]
     error_message = "One KYC face collection by default, named after the stack."
@@ -487,19 +489,43 @@ run "rekognition" {
     error_message = "The backup and host-config buckets carry an HTTPS-only bucket policy."
   }
 
+  # --- S3 access-log bucket: one check per property, so a failure names it --
+  assert {
+    condition     = aws_s3_bucket_acl.access_logs.acl == "log-delivery-write" && startswith(aws_s3_bucket.access_logs.bucket, "${local.name}-s3-access-logs-")
+    error_message = "access-logs: bucket name / log-delivery-write ACL."
+  }
 
   assert {
-    condition = (
-      aws_s3_bucket_acl.access_logs.acl == "log-delivery-write" &&
-      aws_s3_bucket_ownership_controls.access_logs.rule[0].object_ownership == "BucketOwnerPreferred" &&
-      aws_s3_bucket_public_access_block.access_logs.restrict_public_buckets &&
-      aws_s3_bucket_versioning.access_logs.versioning_configuration[0].status == "Enabled" &&
-      one(aws_s3_bucket_server_side_encryption_configuration.access_logs.rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256" &&
-      aws_s3_bucket_lifecycle_configuration.access_logs.rule[0].expiration[0].days == 90 &&
-      aws_s3_bucket_policy.access_logs != null &&
-      startswith(aws_s3_bucket.access_logs.bucket, "${local.name}-s3-access-logs-")
-    )
-    error_message = "The S3 access-log bucket is private, versioned, encrypted, expiring and writable only by S3 log delivery."
+    condition     = [for r in aws_s3_bucket_ownership_controls.access_logs.rule : r.object_ownership] == ["BucketOwnerPreferred"]
+    error_message = "access-logs: ownership must be BucketOwnerPreferred so the log-delivery ACL works."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.access_logs.restrict_public_buckets && aws_s3_bucket_policy.access_logs != null
+    error_message = "access-logs: private, with a delivery + TLS-only policy."
+  }
+
+  assert {
+    condition     = [for v in aws_s3_bucket_versioning.access_logs.versioning_configuration : v.status] == ["Enabled"]
+    error_message = "access-logs: versioning enabled."
+  }
+
+  assert {
+    condition = flatten([
+      for r in aws_s3_bucket_server_side_encryption_configuration.access_logs.rule : [
+        for d in r.apply_server_side_encryption_by_default : d.sse_algorithm
+      ]
+    ]) == ["AES256"]
+    error_message = "access-logs: SSE-S3 (the only encryption S3 log delivery supports)."
+  }
+
+  assert {
+    condition = flatten([
+      for r in aws_s3_bucket_lifecycle_configuration.access_logs.rule : [
+        for e in r.expiration : e.days
+      ]
+    ]) == [90]
+    error_message = "access-logs: logs expire after 90 days."
   }
 
   assert {
@@ -554,8 +580,8 @@ run "rekognition" {
   }
 
   assert {
-    condition     = aws_iam_role_policy.app_rekognition.name == "${local.name}-app-rekognition"
-    error_message = "The application role gets the Rekognition policy."
+    condition     = aws_iam_role_policy.app_rekognition != null && aws_iam_role_policy.app_rekognition.name == "${local.name}-app-rekognition"
+    error_message = "The application role gets the Rekognition policy, with a fixed name (a missing name = line makes AWS generate one and replace it every deploy)."
   }
 }
 
