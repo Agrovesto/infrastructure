@@ -1,149 +1,72 @@
 tests/acm.tftest.hcl... in progress
-  run "certificate"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "validation_records"... skip
-  run "validation_records_follow_the_domain_variable"... skip
+  run "certificate"... pass
+  run "validation_records"... pass
+  run "validation_records_follow_the_domain_variable"... pass
 tests/acm.tftest.hcl... tearing down
-tests/acm.tftest.hcl... fail
+tests/acm.tftest.hcl... pass
 tests/alb.tftest.hcl... in progress
-  run "load_balancer"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "access_logs"... skip
-  run "target_groups"... skip
-  run "listeners"... skip
-  run "listener_rules"... skip
-  run "listener_rules_follow_the_domain_variable"... skip
+  run "load_balancer"... pass
+  run "access_logs"... pass
+  run "target_groups"... pass
+  run "listeners"... pass
+  run "listener_rules"... pass
+  run "listener_rules_follow_the_domain_variable"... pass
 tests/alb.tftest.hcl... tearing down
-tests/alb.tftest.hcl... fail
+tests/alb.tftest.hcl... pass
 tests/compute.tftest.hcl... in progress
-  run "cluster"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "task_definitions"... skip
-  run "services"... skip
-  run "services_single_az_pin"... skip
-  run "log_groups"... skip
-  run "iam"... skip
-  run "container_definitions"... skip
-  run "container_definitions_with_vault_secrets"... skip
-  run "autoscaling"... skip
-  run "autoscaling_disabled"... skip
-  run "graviton_tasks"... skip
-  run "x86_fallback"... skip
-  run "sns_and_alarms"... skip
-  run "iam_documents_and_wiring"... skip
-  run "db_init_bootstrap"... skip
-  run "rekognition"... skip
-  run "rekognition_minimal"... skip
+  run "cluster"... pass
+  run "task_definitions"... pass
+  run "services"... pass
+  run "services_single_az_pin"... pass
+  run "log_groups"... pass
+  run "iam"... pass
+  run "container_definitions"... pass
+  run "container_definitions_with_vault_secrets"... pass
+  run "autoscaling"... pass
+  run "autoscaling_disabled"... pass
+  run "graviton_tasks"... pass
+  run "x86_fallback"... pass
+  run "sns_and_alarms"... pass
+  run "iam_documents_and_wiring"... pass
+  run "db_init_bootstrap"... pass
+  run "rekognition"... pass
+  run "rekognition_minimal"... pass
 tests/compute.tftest.hcl... tearing down
-tests/compute.tftest.hcl... fail
+tests/compute.tftest.hcl... pass
 tests/dns.tftest.hcl... in progress
-  run "hosted_zones"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "existing_zone_mode"... skip
-  run "service_alias_records"... skip
-  run "no_extra_records_by_default"... skip
-  run "extra_records"... skip
-  run "apex_record_uses_the_bare_domain"... skip
+  run "hosted_zones"... pass
+  run "existing_zone_mode"... pass
+  run "service_alias_records"... pass
+  run "no_extra_records_by_default"... pass
+  run "extra_records"... pass
+  run "apex_record_uses_the_bare_domain"... pass
 tests/dns.tftest.hcl... tearing down
-tests/dns.tftest.hcl... fail
+tests/dns.tftest.hcl... pass
 tests/ecr.tftest.hcl... in progress
-  run "repositories"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "lifecycle_policy"... skip
+  run "repositories"... pass
+  run "lifecycle_policy"... pass
 tests/ecr.tftest.hcl... tearing down
-tests/ecr.tftest.hcl... fail
+tests/ecr.tftest.hcl... pass
 tests/rds.tftest.hcl... in progress
-  run "instance"... fail
+  run "instance"... pass
+  run "availability_and_safety"... pass
+  run "multi_az_mode"... pass
+  run "monitoring"... pass
+  run "credentials"... pass
+  run "adopt_existing_instance"... fail
 
-Error: Invalid import request
+Error: Unknown condition value
 
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
+  on tests/rds.tftest.hcl line 320, in run "adopt_existing_instance":
+ 320:     condition     = length(aws_db_instance.mssql.vpc_security_group_ids) == 3
+    ├────────────────
+    │ aws_db_instance.mssql.vpc_security_group_ids is set of string with 3 elements
 
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "availability_and_safety"... skip
-  run "multi_az_mode"... skip
-  run "monitoring"... skip
-  run "credentials"... skip
-  run "adopt_existing_instance"... skip
+Condition expression could not be evaluated at this time. This means you have
+executed a `run` block with `command = plan` and one of the values your
+condition depended on is not known until after the plan has been applied.
+Either remove this value from your condition, or execute an `apply` command
+from this `run` block.
   run "db_init_disabled_by_default"... skip
   run "db_init_enabled"... skip
   run "step_up_to_small"... skip
@@ -155,74 +78,29 @@ to targeting the specific resource being imported instead.
 tests/rds.tftest.hcl... tearing down
 tests/rds.tftest.hcl... fail
 tests/security_groups.tftest.hcl... in progress
-  run "alb_security_group"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "ecs_security_group"... skip
-  run "service_port_rules"... skip
-  run "service_port_rules_without_vault"... skip
-  run "database_and_efs_security_groups"... skip
-  run "efs_security_group_without_vault"... skip
+  run "alb_security_group"... pass
+  run "ecs_security_group"... pass
+  run "service_port_rules"... pass
+  run "service_port_rules_without_vault"... pass
+  run "database_and_efs_security_groups"... pass
+  run "efs_security_group_without_vault"... pass
 tests/security_groups.tftest.hcl... tearing down
-tests/security_groups.tftest.hcl... fail
+tests/security_groups.tftest.hcl... pass
 tests/vault.tftest.hcl... in progress
-  run "kms_and_efs"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "service"... skip
-  run "vault_disabled"... skip
-  run "vault_task_platform"... skip
+  run "kms_and_efs"... pass
+  run "service"... pass
+  run "vault_disabled"... pass
+  run "vault_task_platform"... pass
 tests/vault.tftest.hcl... tearing down
-tests/vault.tftest.hcl... fail
+tests/vault.tftest.hcl... pass
 tests/vpc.tftest.hcl... in progress
-  run "vpc"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "subnets"... skip
-  run "routing_counts_are_known_at_plan_time"... skip
-  run "single_nat_gateway_mode"... skip
-  run "per_az_nat_gateway_mode"... skip
-  run "flow_logs"... skip
+  run "vpc"... pass
+  run "subnets"... pass
+  run "routing_counts_are_known_at_plan_time"... pass
+  run "single_nat_gateway_mode"... pass
+  run "per_az_nat_gateway_mode"... pass
+  run "flow_logs"... pass
 tests/vpc.tftest.hcl... tearing down
-tests/vpc.tftest.hcl... fail
+tests/vpc.tftest.hcl... pass
 
-Failure! 0 passed, 9 failed, 55 skipped.
+Failure! 55 passed, 1 failed, 8 skipped.

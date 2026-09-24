@@ -1,42 +1,29 @@
 tests/ec2.tftest.hcl... in progress
-  run "instance"... fail
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "storage"... skip
-  run "elastic_ip"... skip
-  run "no_elastic_ip"... skip
-  run "mssql_edition"... skip
-  run "mssql_edition_overridable"... skip
-  run "sns_and_alarms"... skip
+  run "instance"... pass
+  run "storage"... pass
+  run "elastic_ip"... pass
+  run "no_elastic_ip"... pass
+  run "mssql_edition"... pass
+  run "mssql_edition_overridable"... pass
+  run "sns_and_alarms"... pass
 tests/ec2.tftest.hcl... tearing down
-tests/ec2.tftest.hcl... fail
+tests/ec2.tftest.hcl... pass
 tests/logging.tftest.hcl... in progress
-  run "logging_stack_resources"... fail
+  run "logging_stack_resources"... pass
+  run "compose_services"... fail
 
-Error: Configuration for import target does not exist
+Error: Unknown condition value
 
-The configuration for the given import aws_amplify_app.this["onboarding"]
-does not exist. All target instances must have an associated configuration to
-be imported.
+  on tests/logging.tftest.hcl line 204, in run "compose_services":
+ 204:     condition     = strcontains(local.alertmanager_config, "sns_configs:") && strcontains(local.alertmanager_config, "sigv4:")
+    ├────────────────
+    │ local.alertmanager_config is a string
 
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "compose_services"... skip
+Condition expression could not be evaluated at this time. This means you have
+executed a `run` block with `command = plan` and one of the values your
+condition depended on is not known until after the plan has been applied.
+Either remove this value from your condition, or execute an `apply` command
+from this `run` block.
   run "alloy_pipeline"... skip
   run "json_log_services"... skip
   run "json_log_services_extended"... skip
@@ -50,37 +37,38 @@ to targeting the specific resource being imported instead.
 tests/logging.tftest.hcl... tearing down
 tests/logging.tftest.hcl... fail
 tests/platform.tftest.hcl... in progress
-  run "vpc"... fail
+  run "vpc"... pass
+  run "scheduler"... pass
+  run "scheduler_disabled"... pass
+  run "backup_bucket"... pass
+  run "ecr"... pass
+  run "amplify"... pass
+  run "amplify_custom_domains"... pass
+  run "dns_managed_by_prod"... pass
+  run "dns_managed_by_dev"... pass
+  run "network_edges"... pass
+  run "storage_buckets_and_volumes"... pass
+  run "scheduler_iam"... fail
 
-Error: Invalid import request
+Error: Unknown condition value
 
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
+  on tests/platform.tftest.hcl line 433, in run "scheduler_iam":
+ 433:     condition     = aws_iam_role_policy.scheduler.name == "${var.project}-${var.environment}-scheduler-policy" && can(jsondecode(aws_iam_role_policy.scheduler.policy))
+    ├────────────────
+    │ aws_iam_role_policy.scheduler.name is "agrovesto-dev-scheduler-policy"
+    │ aws_iam_role_policy.scheduler.policy is a string
+    │ var.environment is "dev"
+    │ var.project is "agrovesto"
 
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-
-Error: Invalid import request
-
-Cannot import resources from mock providers. Use an `override_resource` block
-to targeting the specific resource being imported instead.
-  run "scheduler"... skip
-  run "scheduler_disabled"... skip
-  run "backup_bucket"... skip
-  run "ecr"... skip
-  run "amplify"... skip
-  run "amplify_custom_domains"... skip
-  run "dns_managed_by_prod"... skip
-  run "dns_managed_by_dev"... skip
-  run "network_edges"... skip
-  run "storage_buckets_and_volumes"... skip
-  run "scheduler_iam"... skip
+Condition expression could not be evaluated at this time. This means you have
+executed a `run` block with `command = plan` and one of the values your
+condition depended on is not known until after the plan has been applied.
+Either remove this value from your condition, or execute an `apply` command
+from this `run` block.
   run "extra_alias_records"... skip
   run "rekognition"... skip
   run "rekognition_minimal"... skip
 tests/platform.tftest.hcl... tearing down
 tests/platform.tftest.hcl... fail
 
-Failure! 0 passed, 3 failed, 31 skipped.
+Failure! 19 passed, 2 failed, 13 skipped.
