@@ -34,6 +34,7 @@ budget_alert_ratio     = 0.8
 enable_monthly_report = true
 report_recipients     = tech@agrovesto.com
 
+
 # Uptime probes (blackbox exporter). Add or remove entries freely.
 probe_targets = {
   wallet          = "https://wallet-api.nomaos.com/"
