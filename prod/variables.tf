@@ -270,7 +270,7 @@ variable "mssql_multi_az" {
 }
 
 variable "mssql_identifier" {
-  description = "RDS instance identifier. Empty = <project>-<environment>-mssql. Set to an existing identifier to adopt that instance (imports/RUNBOOK.md)."
+  description = "RDS instance identifier. Empty = <project>-<environment>-mssql. Set to an existing identifier to adopt that instance (docs/import-runbook.md)."
   type        = string
   default     = ""
 }
