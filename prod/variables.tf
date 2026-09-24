@@ -169,6 +169,103 @@ variable "log_retention_days" {
 }
 
 # -----------------------------------------------------------------------------
+# OpenTelemetry export (traces + metrics) to the monitoring stack
+#
+# The monitoring stack already owns the whole receiving side, and none of it is
+# AWS-native — no X-Ray, no ADOT sidecar, no CloudWatch traces:
+#
+#   service task --OTLP--> Alloy (edge task, 4317 gRPC / 4318 HTTP)
+#                            |-- traces  -> Tempo      -> EFS, 14d
+#                            |-- metrics -> Prometheus (remote write), 15d
+#                            '-- logs    -> Loki       -> EFS, 30d
+#
+# Tempo's metrics-generator then remote-writes span metrics back into Prometheus,
+# so request rates and latencies show up in Grafana without an agent, and
+# Grafana's Tempo datasource is already wired for trace-to-log jumps.
+#
+# The network path is open already: monitoring/security_groups.tf allows OTLP
+# 4317-4318 from the whole prod VPC CIDR, the Cloud Map namespace
+# (monitoring.internal) lives in that same VPC, and the ECS security group has
+# unrestricted egress. So enabling this creates no AWS resource at all — it only
+# adds environment variables to the task definitions.
+#
+# WHAT THIS DOES *NOT* DO: make an image emit telemetry. These are the standard
+# OTel environment variables, which an SDK reads at start-up — so the image has
+# to load one. For the ASP.NET APIs that means OpenTelemetry.Extensions.Hosting
+# plus OpenTelemetry.Exporter.OpenTelemetryProtocol (and the ASP.NET Core /
+# HttpClient / SqlClient instrumentation packages). Until an image does that, the
+# variables are inert and nothing is exported.
+# -----------------------------------------------------------------------------
+
+variable "otel" {
+  description = "OpenTelemetry SDK configuration injected into every ECS service task"
+
+  type = object({
+    enabled = optional(bool, true)
+
+    # Alloy in the monitoring stack's edge task. Reached by Cloud Map private DNS
+    # inside the prod VPC, so this is a name, not an address — nothing here has to
+    # change when the monitoring stack redeploys.
+    endpoint = optional(string, "http://alloy.monitoring.internal:4317")
+    # grpc -> 4317, http/protobuf -> 4318. Both are open on the edge task; grpc
+    # is the default because it is what the .NET OTLP exporter defaults to.
+    protocol = optional(string, "grpc")
+
+    traces_exporter  = optional(string, "otlp")
+    metrics_exporter = optional(string, "otlp")
+    # none, deliberately: service logs already reach CloudWatch Logs through the
+    # awslogs driver on the task definition. Exporting them a second time over
+    # OTLP would store every line twice (CloudWatch *and* Loki) and double the
+    # ingest on a stack that is sized for one copy. Flip to "otlp" if the apps
+    # start emitting structured logs that Loki is a better home for, and drop the
+    # awslogs driver at the same time rather than paying for both.
+    logs_exporter = optional(string, "none")
+
+    # Sample everything: five services at one task each is not enough volume for
+    # tail sampling to earn its keep, and a dropped trace is one you cannot go
+    # and look at later. Lower this (0.1 = 10%) if the Tempo volume on EFS grows.
+    traces_sampler     = optional(string, "parentbased_traceidratio")
+    traces_sampler_arg = optional(string, "1.0")
+
+    # W3C trace context is what makes a span cross a service boundary; baggage
+    # carries the correlation IDs an API might want to propagate.
+    propagators = optional(list(string), ["tracecontext", "baggage"])
+
+    # Extra OTEL_RESOURCE_ATTRIBUTES, merged over the computed defaults
+    # (deployment.environment, service.namespace, cloud.region/provider and the
+    # ECS cluster name). Keys are the OTel semantic-convention names.
+    resource_attributes = optional(map(string), {})
+  })
+
+  default = {}
+
+  validation {
+    condition     = contains(["grpc", "http/protobuf", "http/json"], var.otel.protocol)
+    error_message = "otel.protocol must be grpc, http/protobuf or http/json."
+  }
+
+  # The port has to match the protocol or the SDK connects to a listener that is
+  # speaking the other dialect, and fails with a confusing timeout.
+  validation {
+    condition = (
+      (var.otel.protocol == "grpc" && can(regex(":4317$", var.otel.endpoint))) ||
+      (var.otel.protocol != "grpc" && can(regex(":4318$", var.otel.endpoint)))
+    )
+    error_message = "otel.endpoint must end in :4317 for protocol grpc, or :4318 for http/protobuf and http/json (Alloy listens on both)."
+  }
+
+  validation {
+    condition     = alltrue([for e in [var.otel.traces_exporter, var.otel.metrics_exporter, var.otel.logs_exporter] : contains(["otlp", "none"], e)])
+    error_message = "otel exporters must be \"otlp\" or \"none\": there is no other collector in this VPC to send to."
+  }
+
+  validation {
+    condition     = can(regex("^(0(\\.\\d+)?|1(\\.0+)?)$", var.otel.traces_sampler_arg))
+    error_message = "otel.traces_sampler_arg must be a ratio between 0.0 and 1.0 for the traceidratio samplers."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # ECR
 # -----------------------------------------------------------------------------
 

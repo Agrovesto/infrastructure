@@ -33,13 +33,22 @@ resource "aws_instance" "app" {
     backup_bucket      = aws_s3_bucket.backup.bucket
     aws_region         = var.aws_region
     ecr_registry       = local.ecr_registry
-    db_list            = join(" ", var.mssql_databases)
+    # Every database that gets created, including SonarQube's, so the nightly
+    # backup loop covers the same set init-dbs.sql does.
+    db_list            = join(" ", local.mssql_all_databases)
     host_config_bucket = local.host_config_bucket
 
     logging           = var.logging
     logging_root      = local.logging_root
     logging_volume_id = var.logging.enabled ? replace(aws_ebs_volume.logging[0].id, "-", "") : ""
     grafana_parameter = var.logging.enabled ? aws_ssm_parameter.grafana_admin_password[0].name : ""
+
+    redis          = var.redis
+    redis_parameter = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
+
+    sonarqube           = var.sonarqube
+    sonarqube_volume_id = var.sonarqube.enabled ? replace(aws_ebs_volume.sonarqube[0].id, "-", "") : ""
+    sonarqube_parameter = var.sonarqube.enabled ? aws_ssm_parameter.sonarqube_db_password[0].name : ""
   })
 
   # user_data learns the bucket as a rendered string, which is no dependency at

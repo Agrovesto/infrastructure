@@ -68,6 +68,50 @@ services = {
   }
 }
 
+# --- OpenTelemetry (traces + metrics) ------------------------------------------
+# The monitoring stack already receives this: Alloy in its edge task listens for
+# OTLP on 4317 (gRPC) and 4318 (HTTP), sends traces to Tempo and metrics to
+# Prometheus, and Tempo's metrics-generator writes span metrics back into
+# Prometheus. The security group already allows 4317-4318 from the whole prod VPC
+# and the Cloud Map name resolves inside it, so turning this on creates no AWS
+# resource — it only adds environment variables to the five task definitions.
+#
+# Grafana is where you look: https://grafana.nomaos.com, Tempo datasource, with
+# trace-to-log jumps already wired to Loki.
+#
+# NOT YET VISIBLE, and this is the part worth knowing: the service images below
+# are still `ealen/echo-server` placeholders, and an OTLP exporter only exists if
+# the image loads an SDK. For the ASP.NET APIs that means adding
+#   OpenTelemetry.Extensions.Hosting
+#   OpenTelemetry.Exporter.OpenTelemetryProtocol
+#   OpenTelemetry.Instrumentation.AspNetCore / .HttpClient / .SqlClient
+# and `builder.Services.AddOpenTelemetry().WithTracing(...).WithMetrics(...)`.
+# These variables are the standard ones that SDK reads, so once an image does
+# that, its traces appear with no further infrastructure change.
+otel = {
+  enabled  = true
+  endpoint = "http://alloy.monitoring.internal:4317"
+  protocol = "grpc"
+
+  # Traces and metrics out; logs deliberately not, because the awslogs driver on
+  # the task definition already puts every service log line in CloudWatch Logs.
+  # Exporting them again over OTLP would store each line twice (CloudWatch *and*
+  # Loki). Flip to "otlp" only together with removing that driver.
+  traces_exporter  = "otlp"
+  metrics_exporter = "otlp"
+  logs_exporter    = "none"
+
+  # Sample everything. Five services at one task each is nowhere near the volume
+  # where sampling pays for itself, and a sampled-out trace is one nobody can go
+  # and read afterwards. Drop to "0.1" if the Tempo volume on EFS starts to grow.
+  traces_sampler     = "parentbased_traceidratio"
+  traces_sampler_arg = "1.0"
+
+  # deployment.environment, service.namespace, cloud.region, cloud.provider and
+  # aws.ecs.cluster.name are computed; anything here is merged over them.
+  # resource_attributes = { "team" = "backend" }
+}
+
 # --- RDS SQL Server databases (same names as dev) -----------------------------
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
@@ -166,6 +210,13 @@ db_size_alarm_enabled = false
 #   # record the UI is still reachable through the SSH tunnel printed by
 #   # `terraform -chdir=../dev output logging_access`.
 #   "dev-logs"                 = "<dev EC2 Elastic IP>"
+#   # Dev SonarQube. Not dev-prefixed on purpose: sonar.nomaos.com is the name the
+#   # SONAR_HOST_URL secret and the sonar-project-*.properties files use, and it
+#   # is served by nginx on the dev EC2 host (dev/terraform.auto.tfvars ->
+#   # sonarqube.subdomain). Without this record the name does not resolve at all;
+#   # with it, the nginx vhost still answers 127.0.0.1 only until
+#   # sonarqube.allowed_cidrs is filled in on the dev side.
+#   "sonar"                    = "<dev EC2 Elastic IP>"
 # }
 # extra_cname_records = {
 #   "landing.dev"    = "dev.<landing Amplify default domain>"

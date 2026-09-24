@@ -220,6 +220,208 @@ variable "vault" {
 }
 
 # -----------------------------------------------------------------------------
+# Redis (shared cache for the APIs on the host)
+# -----------------------------------------------------------------------------
+
+variable "redis" {
+  description = <<-EOT
+    Redis on the dev EC2 docker host. Every API container reaches it as
+    redis:6379 over the compose network; the published port is loopback-only and
+    the security group has no ingress for it, so reaching it from a laptop is an
+    SSH tunnel (`redis_access` output prints the command).
+
+    Cache semantics by default: no password, no persistence, allkeys-lru eviction
+    at maxmemory_mb. That is deliberate — the box already runs SQL Server, so a
+    cache that grows without bound is what takes the APIs down. Flip
+    persistence = true when an API needs queues or sessions to survive a restart.
+  EOT
+
+  type = object({
+    enabled   = optional(bool, true)
+    image     = optional(string, "redis:8.8-alpine")
+    host_port = optional(number, 6379)
+
+    # Off by default: the port is loopback-only and the compose network is
+    # private to this host, so a password would only protect it from the APIs
+    # themselves. Turn it on the moment Redis is reachable from anywhere else,
+    # and add REDIS_PASSWORD to the API env at the same time.
+    password = optional(string, "") # ggignore - empty means no AUTH; override via TF_VAR_redis
+
+    # Eviction, not growth: maxmemory is the reason this container cannot eat
+    # SQL Server's memory. allkeys-lru suits a cache; use noeviction for queues.
+    maxmemory_mb     = optional(number, 256)
+    maxmemory_policy = optional(string, "allkeys-lru")
+
+    # RDB + AOF into a bind mount on the root disk. Costs a restart-time rewrite
+    # and is off because a dev cache is allowed to be empty after a reboot.
+    persistence = optional(bool, false)
+    data_dir    = optional(string, "/data/redis")
+
+    cpu_limit       = optional(string, "0.25")
+    memory_limit_mb = optional(number, 384)
+  })
+
+  default = {}
+
+  validation {
+    condition     = contains(["allkeys-lru", "allkeys-lfu", "volatile-lru", "volatile-lfu", "volatile-ttl", "allkeys-random", "volatile-random", "noeviction"], var.redis.maxmemory_policy)
+    error_message = "redis.maxmemory_policy must be one of Redis' eviction policies (allkeys-lru, volatile-lru, noeviction, ...)."
+  }
+
+  validation {
+    condition     = var.redis.maxmemory_mb > 0 && var.redis.memory_limit_mb > var.redis.maxmemory_mb
+    error_message = "redis.memory_limit_mb must exceed maxmemory_mb: Redis needs room for replication buffers and fragmentation on top of the dataset."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# SonarQube (code quality, backed by the on-host SQL Server)
+# -----------------------------------------------------------------------------
+
+variable "sonarqube" {
+  description = <<-EOT
+    SonarQube Community Build on the dev EC2 docker host, using the SQL Server
+    container that is already on this box. This is the server the CI pipelines
+    push to via SONAR_HOST_URL / SONAR_TOKEN (see .github/workflows and
+    run-sonar.sh); the sonar-project-*.properties files in the repo root point
+    at it.
+
+    Two SonarSource requirements drive the database settings below and are not
+    negotiable, so they are pinned rather than free-form:
+      * collation MUST be case- AND accent-sensitive (CS_AS). The SQL Server
+        default here is case-insensitive, so the sonar database is created with
+        an explicit COLLATE (see local.init_sql).
+      * READ_COMMITTED_SNAPSHOT must be ON, or analyses deadlock under load.
+
+    Resource caps are small on purpose: SonarSource's own guidance is 4 GB of
+    RAM for a small installation, and this host is a t3.large (8 GiB) that also
+    runs SQL Server, five APIs and the logging stack. See README for the
+    trade-off; raise instance_type before raising these numbers.
+  EOT
+
+  type = object({
+    enabled   = optional(bool, true)
+    image     = optional(string, "sonarqube:26.9.0.129388-community")
+    host_port = optional(number, 9000)
+    subdomain = optional(string, "sonar")
+
+    # --- database -----------------------------------------------------------
+    # Added to local.mssql_all_databases automatically, so it is both created by
+    # init-dbs.sql and included in the nightly backup loop without being listed
+    # in var.mssql_databases as well (listing it there is harmless: the union is
+    # deduplicated).
+    database_name      = optional(string, "sonar")
+    database_collation = optional(string, "SQL_Latin1_General_CP1_CS_AS")
+
+    # A login of its own rather than `sa`: SonarQube only ever touches one
+    # database, so it should not hold sysadmin over the other five. The password
+    # travels into the container through .env and into CREATE LOGIN as a sqlcmd
+    # variable, so it never lands in the S3 config bucket.
+    #
+    # CHECK_POLICY is left on, so an override has to satisfy Windows complexity
+    # (three of upper/lower/digit/symbol) and must not contain the login name —
+    # both are enforced by SQL Server, not by Terraform.
+    database_username      = optional(string, "sonarqube")
+    database_password      = optional(string, "Agrovesto-Dev-Quality-2026") # ggignore - dev-only default, override via TF_VAR_sonarqube
+    jdbc_encrypt           = optional(string, "true")
+    jdbc_trust_server_cert = optional(bool, true)
+
+    # --- JVM heaps ----------------------------------------------------------
+    # The three SonarQube processes, each capped. SonarSource suggests giving
+    # Elasticsearch half of available RAM; on this host that is not an option,
+    # so Elasticsearch gets 1 GB and analyses of anything large will be slow.
+    es_java_opts  = optional(string, "-Xms512m -Xmx1g")
+    web_java_opts = optional(string, "-Xms256m -Xmx512m")
+    ce_java_opts  = optional(string, "-Xms256m -Xmx512m")
+
+    # --- caps ---------------------------------------------------------------
+    # memory_limit_mb is what keeps a heavy analysis from OOM-killing SQL Server:
+    # the cgroup kills this container instead of the kernel picking a victim.
+    cpu_limit       = optional(string, "1.00")
+    memory_limit_mb = optional(number, 3072)
+
+    # --- host kernel limits --------------------------------------------------
+    # Elasticsearch fails a bootstrap check and refuses to start unless the host
+    # can map this many virtual memory areas; Ubuntu's default is 65530. These
+    # are written to /etc/sysctl.d by user_data, so they are host-wide — there is
+    # no per-container vm.max_map_count.
+    vm_max_map_count = optional(number, 262144)
+    fs_file_max      = optional(number, 131072)
+
+    # --- storage ------------------------------------------------------------
+    # Elasticsearch's indices are I/O heavy and worth 20-30 GB over time, so
+    # they get a volume of their own rather than the root disk, and that volume
+    # is not delete_on_termination: replacing the instance keeps the analyses.
+    volume_size_gb = optional(number, 20)
+    volume_device  = optional(string, "/dev/sdh")
+    data_dir       = optional(string, "/data/sonarqube")
+
+    # --- reaching the UI -----------------------------------------------------
+    expose_via_nginx = optional(bool, true)
+    # The scheme of the public URL. http today: nginx on this host terminates
+    # nothing but port 80 and there is no certificate for it (the prod ACM
+    # wildcard cannot be attached to an EC2-hosted nginx). It has to be correct,
+    # not merely plausible — SonarQube builds absolute links from it and rejects
+    # an OAuth redirect whose origin does not match, so GitHub login breaks if
+    # this says http while the browser arrives over https.
+    scheme = optional(string, "http")
+    # Same shape as logging.allowed_cidrs: empty means 127.0.0.1, i.e. the vhost
+    # answers an SSH tunnel and nobody else. Note that this also decides whether
+    # the GitHub Actions scanner can reach the server — see terraform.auto.tfvars.
+    allowed_cidrs = optional(list(string), [])
+  })
+
+  default = {}
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.sonarqube.subdomain))
+    error_message = "sonarqube.subdomain must be a single DNS label (lowercase letters, digits and dashes)."
+  }
+
+  validation {
+    condition     = contains(["http", "https"], var.sonarqube.scheme)
+    error_message = "sonarqube.scheme must be \"http\" or \"https\"."
+  }
+
+  validation {
+    condition     = var.sonarqube.vm_max_map_count >= 262144
+    error_message = "sonarqube.vm_max_map_count must be at least 262144: below that Elasticsearch fails its bootstrap check and SonarQube never starts."
+  }
+
+  validation {
+    condition     = can(regex("_CS_AS$", var.sonarqube.database_collation))
+    error_message = "sonarqube.database_collation must be case-sensitive AND accent-sensitive (ending in _CS_AS); SonarQube fails to start otherwise."
+  }
+
+  validation {
+    condition     = alltrue([for c in var.sonarqube.allowed_cidrs : can(cidrhost(c, 0))])
+    error_message = "sonarqube.allowed_cidrs entries must be IPv4 CIDRs, e.g. \"10.0.0.0/16\" or \"203.0.113.7/32\"."
+  }
+
+  # CHECK_POLICY is left on for this login, so SQL Server itself rejects a weak
+  # password — but it rejects it at boot, inside a container, on a box that is
+  # stopped every evening. Failing at plan time instead is much cheaper to debug.
+  validation {
+    condition = !var.sonarqube.enabled || (
+      length(var.sonarqube.database_password) >= 12 &&
+      can(regex("[A-Z]", var.sonarqube.database_password)) &&
+      can(regex("[a-z]", var.sonarqube.database_password)) &&
+      can(regex("[0-9]", var.sonarqube.database_password)) &&
+      !can(regex("(?i)${var.sonarqube.database_username}", var.sonarqube.database_password))
+    )
+    error_message = "sonarqube.database_password must be >=12 characters with an uppercase letter, a lowercase letter and a digit, and must not contain the login name (SQL Server's CHECK_POLICY enforces all of this and will otherwise reject CREATE LOGIN at boot)."
+  }
+
+  # The password is substituted literally into init-dbs.sql by `sqlcmd -v`, so a
+  # quote in it would terminate the SQL string and turn the rest of the script
+  # into a syntax error at best.
+  validation {
+    condition     = !can(regex("['\"]", var.sonarqube.database_password))
+    error_message = "sonarqube.database_password must not contain a single or double quote: it is substituted literally into init-dbs.sql."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # EventBridge Scheduler (start/stop the EC2 host)
 # -----------------------------------------------------------------------------
 

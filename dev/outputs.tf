@@ -100,6 +100,53 @@ output "mssql_fqdn" {
   value = local.mssql_fqdn
 }
 
+# =============================================================================
+# Redis
+# =============================================================================
+
+output "redis_endpoint" {
+  description = "What the APIs on this host connect to. Reachable only from inside the compose network; the published host port is loopback-only."
+  value       = var.redis.enabled ? "redis:6379" : ""
+}
+
+output "redis_access" {
+  description = "How to reach Redis from a laptop. There is no public endpoint and no security group ingress for it, so the tunnel is the only way in."
+  value = var.redis.enabled ? {
+    ssh_tunnel = "ssh -N -L ${var.redis.host_port}:127.0.0.1:${var.redis.host_port} ubuntu@${local.ec2_public_ip}"
+    redis_cli  = "redis-cli -h 127.0.0.1 -p ${var.redis.host_port}${var.redis.password != "" ? " -a \"$REDIS_PASSWORD\"  # from /opt/agrovesto/compose/.env on the host, or SSM /${local.name}/redis_password" : "  # no AUTH configured"}"
+    maxmemory  = "${var.redis.maxmemory_mb}mb, evicting ${var.redis.maxmemory_policy}"
+    persisted  = var.redis.persistence
+  } : null
+}
+
+# =============================================================================
+# SonarQube
+# =============================================================================
+
+output "sonarqube_url" {
+  description = "Set this as the SONAR_HOST_URL repository secret. Empty when sonarqube.enabled = false or expose_via_nginx = false, in which case there is no public name and CI cannot reach the server."
+  value       = local.sonarqube_nginx.enabled ? "${var.sonarqube.scheme}://${local.sonar_fqdn}" : ""
+}
+
+output "sonarqube_fqdn" {
+  description = "The hostname to point at the dev Elastic IP in the prod account's zone (prod/terraform.auto.tfvars -> extra_a_records), since dev manages no DNS of its own."
+  value       = local.sonar_fqdn
+}
+
+output "sonarqube_access" {
+  description = "How to reach SonarQube, and what to expect on first boot"
+  value = var.sonarqube.enabled ? {
+    # With allowed_cidrs empty the nginx vhost denies everything but 127.0.0.1,
+    # so the tunnel is the way in — and the reason CI cannot scan yet.
+    ssh_tunnel = local.sonarqube_nginx.enabled && length(var.sonarqube.allowed_cidrs) == 0 ? "ssh -N -L ${var.sonarqube.host_port}:127.0.0.1:${var.sonarqube.host_port} ubuntu@${local.ec2_public_ip}" : "(allow list is not empty; use the URL directly)"
+    local_url  = "http://localhost:${var.sonarqube.host_port}  (first login is admin/admin and SonarQube forces a password change)"
+    dns_record = "add \"${var.sonarqube.subdomain}\" = \"${local.ec2_public_ip}\" to extra_a_records in prod/terraform.auto.tfvars"
+    database   = "${var.sonarqube.database_name} on the on-host SQL Server, collation ${var.sonarqube.database_collation}, login ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)"
+    first_boot = "SonarQube starts before init-dbs.sql has run, fails to reach its database and is restarted by compose until the schema exists. Expect a few restarts and 2-5 minutes before the UI answers on a 1 GB heap."
+    scanner_ip = length(var.sonarqube.allowed_cidrs) == 0 ? "WARNING: sonarqube.allowed_cidrs is empty, so the nginx vhost answers 127.0.0.1 only and GitHub Actions runners are denied. Add your runner or NAT egress CIDR before pointing CI at this server." : "allowed: ${join(", ", var.sonarqube.allowed_cidrs)}"
+  } : null
+}
+
 output "scheduler" {
   value = {
     start = aws_scheduler_schedule.start.arn
