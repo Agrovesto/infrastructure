@@ -42,6 +42,10 @@ out_dir = os.path.dirname(os.path.abspath(path))
 PLACEHOLDER_ZIP = "legacy_lambda_placeholder.zip"
 zip_path = os.path.join(out_dir, PLACEHOLDER_ZIP)
 
+def hcl_str(v):
+    """JSON-quote a string and escape HCL template sequences (${ and %{)."""
+    return json.dumps(v).replace("${", "$${").replace("%{", "%%{")
+
 def kv(line):
     m = re.match(r'^\s*([a-z0-9_]+)\s*=\s*(.*?)\s*$', line)
     return (m.group(1), m.group(2)) if m else (None, None)
@@ -139,13 +143,13 @@ for b in blocks:
             body = body[:-1] + ['  value = "placeholder-real-value-kept-by-ignore_changes"'] + body[-1:]
         else:
             live = ssm_value(pname) if pname else None
-            body = body[:-1] + [f"  insecure_value = {json.dumps(live if live is not None else 'placeholder')}"] + body[-1:]
+            body = body[:-1] + [f"  insecure_value = {hcl_str(live if live is not None else 'placeholder')}"] + body[-1:]
         extra_ignore = ["value", "insecure_value"]
     elif rtype == "aws_key_pair":
         kname = next((kv(l)[1].strip('"') for l in body if kv(l)[0] == "key_name"), None)
         pub = key_public(kname) if kname else None
         pub = pub or "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPLACEHOLDERPLACEHOLDERPLACEHOLDERPLACEHOLD placeholder"
-        body = [re.sub(r'null\s*$', json.dumps(pub), l) if kv(l) == ("public_key", "null") else l
+        body = [re.sub(r'null\s*$', lambda _m: hcl_str(pub), l) if kv(l) == ("public_key", "null") else l
                 for l in body]
         extra_ignore = ["public_key"]
 
