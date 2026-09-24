@@ -37,6 +37,46 @@ locals {
   nat_count = var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)
 
   # ---------------------------------------------------------------------------
+  # OpenTelemetry
+  # ---------------------------------------------------------------------------
+
+  # OTEL_RESOURCE_ATTRIBUTES: comma-separated key=value pairs that label every
+  # span, metric and log the SDK emits, so Grafana can group a trace by
+  # environment or cluster without the app having to set them.
+  #
+  # The computed defaults go first and var.otel.resource_attributes is merged
+  # over them, so a caller can override deployment.environment but cannot
+  # accidentally produce a string with no identity in it. `for` over a map
+  # iterates in lexical key order, which keeps the rendered string — and
+  # therefore the task definition, and therefore the plan — stable.
+  otel_resource_attributes = join(",", [
+    for k, v in merge(
+      {
+        "deployment.environment" = var.environment
+        "service.namespace"      = var.project
+        "cloud.provider"         = "aws"
+        "cloud.region"           = var.aws_region
+        "aws.ecs.cluster.name"   = local.name
+      },
+      var.otel.resource_attributes,
+    ) : "${k}=${v}"
+  ])
+
+  # The OTel environment block, identical for every service except
+  # OTEL_SERVICE_NAME (which each task definition sets to its own key).
+  otel_environment = var.otel.enabled ? [
+    { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel.endpoint },
+    { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel.protocol },
+    { name = "OTEL_TRACES_EXPORTER", value = var.otel.traces_exporter },
+    { name = "OTEL_METRICS_EXPORTER", value = var.otel.metrics_exporter },
+    { name = "OTEL_LOGS_EXPORTER", value = var.otel.logs_exporter },
+    { name = "OTEL_TRACES_SAMPLER", value = var.otel.traces_sampler },
+    { name = "OTEL_TRACES_SAMPLER_ARG", value = var.otel.traces_sampler_arg },
+    { name = "OTEL_PROPAGATORS", value = join(",", var.otel.propagators) },
+    { name = "OTEL_RESOURCE_ATTRIBUTES", value = local.otel_resource_attributes },
+  ] : []
+
+  # ---------------------------------------------------------------------------
   # Services / DNS
   # ---------------------------------------------------------------------------
 

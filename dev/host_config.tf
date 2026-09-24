@@ -47,6 +47,36 @@ resource "aws_ssm_parameter" "grafana_admin_password" {
   tags   = local.tags
 }
 
+# SonarQube's own SQL login, so the analysis server never holds `sa` over the
+# five application databases. Read once at boot by user_data, which writes it
+# into compose/.env and passes it to CREATE LOGIN as a sqlcmd variable — it is
+# deliberately not rendered into scripts/init-dbs.sql, because that file is an
+# object in the config bucket below.
+resource "aws_ssm_parameter" "sonarqube_db_password" {
+  count = var.sonarqube.enabled ? 1 : 0
+
+  name   = "/${local.name}/sonarqube_db_password"
+  type   = "SecureString"
+  value  = var.sonarqube.database_password
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+# Redis AUTH, only when one is configured (the default is no password: the port
+# is loopback-only and the compose network is private to this host). Goes through
+# SSM rather than being interpolated into user_data for the same reason the
+# others do — instance user data is readable from instance metadata, and this
+# host allows two IMDS hops so containers can use the instance role.
+resource "aws_ssm_parameter" "redis_password" {
+  count = var.redis.enabled && var.redis.password != "" ? 1 : 0
+
+  name   = "/${local.name}/redis_password"
+  type   = "SecureString"
+  value  = var.redis.password
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
 resource "aws_s3_bucket" "host_config" {
   # "dev-" prefix comes from local.name, so the prod stack can never write here.
   bucket = local.host_config_bucket

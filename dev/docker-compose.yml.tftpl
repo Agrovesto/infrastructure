@@ -28,6 +28,13 @@ services:
       - ${name}
 %{ endfor ~}
       - vault
+%{ if sonarqube.enabled ~}
+      # nginx resolves a static proxy_pass hostname at start-up, so a container
+      # that is not up yet makes nginx fail to start rather than answer 502.
+      # SonarQube is listed for that reason only — nginx does proxy to it, and
+      # it is the slowest thing on this box to come up.
+      - sonarqube
+%{ endif ~}
 
 %{ for name, api in apis ~}
   ${name}:
@@ -68,6 +75,130 @@ services:
       - "127.0.0.1:${vault.host_port}:8200"
     command: server -dev
     restart: unless-stopped
+%{ if redis.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Redis: shared cache for the APIs above. Reachable from every container on
+  # this network as redis:6379 (and from the host as 127.0.0.1:${redis.host_port},
+  # which the security group does not open either — redis-cli from a laptop is
+  # an SSH tunnel away, see the redis_access output).
+  #
+  # --maxmemory is the line that matters on this box: SQL Server lives here too,
+  # so a cache that grows without bound is what takes the APIs down. It evicts
+  # instead (allkeys-lru). Switch maxmemory_policy to noeviction the moment an
+  # API stores queues or locks here rather than cache entries — evicting those
+  # silently loses work.
+  # ─────────────────────────────────────────────────────────────────────────
+  redis:
+    image: ${redis.image}
+    container_name: agrovesto-redis
+    command:
+      - redis-server
+      - --maxmemory ${redis.maxmemory_mb}mb
+      - --maxmemory-policy ${redis.maxmemory_policy}
+%{ if redis.persistence ~}
+      - --appendonly yes
+      - --appendfsync everysec
+%{ else ~}
+      - --appendonly no
+      # Two list entries, not one: `- --save ""` would hand redis the literal
+      # four-character string `""` instead of an empty snapshot schedule.
+      - --save
+      - ""
+%{ endif ~}
+%{ if redis.password != "" ~}
+      # Visible in `docker inspect` and in the process list — acceptable while
+      # the port is loopback-only, and the reason to revisit this the moment
+      # Redis is reachable from anywhere else.
+      - --requirepass $${REDIS_PASSWORD}
+%{ endif ~}
+    ports:
+      - "127.0.0.1:${redis.host_port}:6379"
+%{ if redis.persistence ~}
+    volumes:
+      # A bind mount on the root disk, not an EBS volume of its own: this is
+      # dev, the root volume is delete_on_termination, and losing a queue on an
+      # instance replacement is a smaller problem than another volume to manage.
+      - ${redis.data_dir}:/data
+%{ endif ~}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    cpus: "${redis.cpu_limit}"
+    mem_limit: ${redis.memory_limit_mb}M
+%{ endif ~}
+%{ if sonarqube.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SonarQube Community Build — the server the CI pipelines push to
+  # (SONAR_HOST_URL / SONAR_TOKEN, see run-sonar.sh and
+  # sonar-project-*.properties in the repository root).
+  #
+  # Its database is the mssql container above rather than a bundled H2 or a
+  # Postgres of its own: analyses then survive a container rebuild and are
+  # covered by the same nightly S3 backup as every other database on this box.
+  # The CS_AS collation and READ_COMMITTED_SNAPSHOT that SonarSource requires
+  # are set when the database is created (see local.init_sql in dev/locals.tf) —
+  # neither can be changed afterwards without rebuilding the database.
+  #
+  # The caps below are the whole argument about running this here. SonarSource's
+  # own guidance is 4 GB of RAM for a small installation; this is a t3.large
+  # (8 GiB) that also runs SQL Server, five APIs, Vault and the logging stack.
+  # So Elasticsearch gets a 1 GB heap and the container is capped, which means a
+  # heavy analysis makes *this* container slow — or gets it killed by its own
+  # cgroup — instead of letting the kernel OOM-kill SQL Server. Raise
+  # instance_type before raising these numbers.
+  # ─────────────────────────────────────────────────────────────────────────
+  sonarqube:
+    image: ${sonarqube.image}
+    container_name: agrovesto-sonarqube
+    environment:
+      SONAR_JDBC_URL: "${sonar_jdbc_url}"
+      SONAR_JDBC_USERNAME: "${sonarqube.database_username}"
+      # From compose/.env, which user_data fills from SSM at boot — the password
+      # is not rendered into this file, so it never reaches the config bucket.
+      SONAR_JDBC_PASSWORD: "$${SONAR_DB_PASSWORD}"
+      SONAR_ES_JAVA_OPTS: "${sonarqube.es_java_opts}"
+      SONAR_WEB_JAVA_OPTS: "${sonarqube.web_java_opts}"
+      SONAR_CE_JAVA_OPTS: "${sonarqube.ce_java_opts}"
+      SONAR_TELEMETRY_ENABLE: "false"
+      # Must match the public hostname or SonarQube builds wrong links in its
+      # UI and, more importantly, rejects OAuth redirects (GitHub login).
+      SONAR_WEB_BASEURL: "${sonar_web_baseurl}"
+    ports:
+      - "127.0.0.1:${sonarqube.host_port}:9000"
+    volumes:
+      # data/ holds the Elasticsearch indices, extensions/ the installed plugins.
+      # Both on the dedicated volume (dev/sonarqube.tf), which is not
+      # delete_on_termination, so replacing the instance keeps the analyses.
+      # conf/ is deliberately not mounted: the image generates it, and a bind
+      # mount would pin an empty directory over the generated one.
+      - ${sonarqube.data_dir}/data:/opt/sonarqube/data
+      - ${sonarqube.data_dir}/extensions:/opt/sonarqube/extensions
+      - ${sonarqube.data_dir}/logs:/opt/sonarqube/logs
+    healthcheck:
+      # Port-level only, and on purpose: the image ships a JDK and bash but no
+      # curl or wget, and /api/system/status needs an HTTP client. The same
+      # trade-off the Loki container above makes. A long start_period because
+      # booting three JVMs on a 1 GB heap takes minutes on this box.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9000' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+    depends_on:
+      # Start order only. On the very first boot this still races the database
+      # bootstrap that user_data runs after `docker compose up`, so SonarQube
+      # exits and the restart policy brings it back once init-dbs.sql has landed.
+      - mssql
+    cpus: "${sonarqube.cpu_limit}"
+    mem_limit: ${sonarqube.memory_limit_mb}M
+%{ endif ~}
 %{ if logging.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────

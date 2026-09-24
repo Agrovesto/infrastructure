@@ -73,7 +73,23 @@ resource "aws_ecs_task_definition" "services" {
         ],
         # Services always know where Vault lives once it exists; they only
         # *need* it after var.vault_secrets_enabled flips the creds source.
-        var.enable_vault ? [{ name = "VAULT_ADDR", value = "https://${var.vault_subdomain}.${var.domain_name}" }] : []
+        var.enable_vault ? [{ name = "VAULT_ADDR", value = "https://${var.vault_subdomain}.${var.domain_name}" }] : [],
+        # OpenTelemetry, sent to Alloy in the monitoring stack's edge task and
+        # fanned out from there to Tempo (traces) and Prometheus (metrics).
+        # Everything but the service name is shared, so it lives in
+        # local.otel_environment; OTEL_SERVICE_NAME is what makes a span
+        # attributable, and it is the service key — the same string as DB_NAME
+        # and as the Route53 subdomain prefix, so a trace, a log line and a
+        # database all carry one name.
+        #
+        # Inert until the image loads an OTel SDK (see var.otel). Worth having
+        # here anyway: the service images are still placeholders, and this way
+        # the day the real ASP.NET images land, traces start flowing with no
+        # infrastructure change and no redeploy of the monitoring stack.
+        var.otel.enabled ? concat(
+          [{ name = "OTEL_SERVICE_NAME", value = each.key }],
+          local.otel_environment,
+        ) : []
       )
 
       # Bootstrap mode: DB creds injected from Secrets Manager. Once Vault is

@@ -240,6 +240,103 @@ run "task_definitions" {
 }
 
 # -----------------------------------------------------------------------------
+# OpenTelemetry export
+#
+# The receiving side belongs to the monitoring stack (Alloy -> Tempo and
+# Prometheus); these assertions cover the sending side, which is nothing but
+# environment variables on the task definition. They are worth having because
+# the failure mode is silent: an OTLP endpoint on the wrong port, or a service
+# name that is not the service key, produces an empty Grafana rather than an
+# error anywhere.
+# -----------------------------------------------------------------------------
+
+run "otel_environment" {
+  command = plan
+
+  locals {
+    wallet_env = {
+      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
+      e.name => e.value
+    }
+  }
+
+  assert {
+    condition     = local.wallet_env["OTEL_SERVICE_NAME"] == "wallet"
+    error_message = "Each task names itself with its own service key, so a span is attributable to exactly one service."
+  }
+
+  assert {
+    condition     = local.wallet_env["OTEL_EXPORTER_OTLP_ENDPOINT"] == var.otel.endpoint
+    error_message = "Telemetry goes to the configured OTLP endpoint."
+  }
+
+  assert {
+    condition     = local.wallet_env["OTEL_EXPORTER_OTLP_PROTOCOL"] == "grpc" && can(regex(":4317$", local.wallet_env["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    error_message = "Protocol and port agree: gRPC is 4317, http/protobuf is 4318."
+  }
+
+  assert {
+    condition = alltrue([
+      for k, s in aws_ecs_task_definition.services : contains(
+        [for e in jsondecode(s.container_definitions)[0].environment : e.name],
+        "OTEL_SERVICE_NAME"
+      )
+    ])
+    error_message = "Every service exports telemetry, not just the first one in the map."
+  }
+
+  assert {
+    condition     = local.wallet_env["OTEL_LOGS_EXPORTER"] == "none"
+    error_message = "Logs stay on the awslogs driver; exporting them over OTLP as well would store every line twice."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.wallet_env["OTEL_RESOURCE_ATTRIBUTES"], "deployment.environment=prod") &&
+      strcontains(local.wallet_env["OTEL_RESOURCE_ATTRIBUTES"], "service.namespace=agrovesto")
+    )
+    error_message = "Spans carry environment and namespace, so a trace cannot be mistaken for another stack's."
+  }
+}
+
+run "otel_disabled" {
+  command = plan
+
+  variables {
+    otel = { enabled = false }
+  }
+
+  assert {
+    condition = !contains(
+      [for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.name],
+      "OTEL_SERVICE_NAME"
+    )
+    error_message = "Turning telemetry off removes every OTEL_* variable instead of leaving a dead endpoint in the task."
+  }
+}
+
+run "otel_per_service_override" {
+  command = plan
+
+  variables {
+    otel = {
+      enabled             = true
+      resource_attributes = { "team" = "backend" }
+    }
+  }
+
+  assert {
+    condition     = strcontains(local.otel_resource_attributes, "team=backend")
+    error_message = "Extra resource attributes are merged into the ones computed here."
+  }
+
+  assert {
+    condition     = strcontains(local.otel_resource_attributes, "deployment.environment=prod")
+    error_message = "Overriding one attribute cannot drop the computed identity attributes."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Services
 # -----------------------------------------------------------------------------
 

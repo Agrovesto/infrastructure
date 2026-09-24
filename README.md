@@ -5,8 +5,8 @@ Comprehensive technical documentation for the Agrovesto AWS infrastructure. This
 ## 📌 Project Overview
 
 Agrovesto infrastructure is split into three primary logical blocks:
-- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 5 APIs, SQL Server, Vault, and a local observability stack.
-- **Prod (`prod/`)**: A production-grade ECS Fargate environment with RDS SQL Server, HashiCorp Vault, and authoritative DNS.
+- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 5 APIs, SQL Server, Redis, SonarQube, Vault, and a local observability stack.
+- **Prod (`prod/`)**: A production-grade ECS Fargate environment with RDS SQL Server, HashiCorp Vault, and authoritative DNS. Services export OpenTelemetry traces and metrics to the monitoring stack.
 - **Monitoring (`monitoring/`)**: An open-source observability stack (Prometheus, Loki, Tempo, Grafana) running in the Prod account to monitor production services without AWS-native costs.
 
 ---
@@ -16,13 +16,16 @@ Agrovesto infrastructure is split into three primary logical blocks:
 ```text
 .
 ├── bootstrap/           # One-time manual setup: S3 state bucket, GitHub OIDC, Deploy role
-├── dev/                 # Dev environment: EC2 + Docker (nginx, APIs, Vault, MSSQL, Observability)
-├── prod/                # Prod environment: ECS Fargate + ECR + ALB + RDS SQL Server + Route53
+├── dev/                 # Dev environment: EC2 + Docker (nginx, APIs, Vault, MSSQL, Redis, SonarQube, Observability)
+├── prod/                # Prod environment: ECS Fargate + ECR + ALB + RDS SQL Server + Route53 + OpenTelemetry export
 ├── monitoring/          # Observability: Prometheus, Loki, Tempo, Grafana (ECS Fargate + EFS)
 ├── scripts/             # Utility scripts (Infracost, Coverage, Test suites)
-├── docs/                # Architecture diagrams (Mermaid) and narrative docs
+├── docs/                # Architecture diagrams (Mermaid), narrative docs, team.md
 ├── tests/               # Documentation for the Terraform test suites
-├── .github/workflows/   # CI/CD pipelines (dev.yml, prod.yml, monitoring.yml)
+├── .github/
+│   ├── workflows/       # CI/CD pipelines (dev.yml, prod.yml, terraform-pipeline.yml)
+│   ├── CODEOWNERS       # Who reviews what (teams, not individuals)
+│   └── PULL_REQUEST_TEMPLATE.md  # Replacements, cost, rollout, verification
 └── README.md            # You are here (Master Documentation)
 ```
 
@@ -32,30 +35,36 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 | Folder | Account | Stack | Networking | DNS |
 | :--- | :--- | :--- | :--- | :--- |
-| **Dev** | Dev | EC2 (t3.large) + Docker Compose | Single Public Subnet | `*.dev.nomaos.com` (managed by Prod) |
+| **Dev** | Dev | EC2 (t3.large) + Docker Compose | Single Public Subnet | `dev-*.nomaos.com` + `sonar.nomaos.com` (records created in the Prod zone) |
 | **Prod** | Prod | ECS Fargate + RDS SQL Server | VPC (Pub/Priv/DB) + NAT | `nomaos.com` (Authoritative) |
 | **Monitoring**| Prod | ECS Fargate + EFS | Private Subnets | `grafana.nomaos.com` |
 
 ### 🛠 Component Details
 
 #### 1. Compute
-- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
+- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 5 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 7 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
 - **Prod**: 5 ECS Fargate services (ASPNETCORE APIs) running on Graviton (ARM64) for better price-performance. Scaling is managed via Application Auto Scaling (min 1, max 4).
 - **Monitoring**: 5 always-on Fargate tasks (Prometheus, Loki, Tempo, Grafana, Edge) plus several scheduled batch jobs.
 
 #### 2. Databases (SQL Server)
-- **Dev**: SQL Server 2022 running as a container on the EC2 host. Backups are synced to S3.
+- **Dev**: SQL Server 2022 running as a container on the EC2 host. Six databases: the five services plus `sonar`, which is created with a `CS_AS` collation and `READ_COMMITTED_SNAPSHOT` because SonarQube requires both. Backups are synced to S3.
 - **Prod**: RDS SQL Server **Express** (`db.t3.micro`).
     - **Note**: Express has a 10GB per-database cap and no Multi-AZ support.
     - **Scaling**: Upgrade path to Web/Standard on `db.m7i.large` when Multi-AZ or >10GB is required.
     - **Init**: Databases are created via a one-off Fargate task triggered by Terraform (`run_db_init = true`).
 
-#### 3. Secrets (HashiCorp Vault)
+#### 3. Caching & Code Quality (Dev)
+- **Redis**: `redis:6379` on the compose network for the APIs, published on the host's loopback only. Bounded at 256 MB with `allkeys-lru` eviction, because SQL Server shares the box and an unbounded cache is what takes the APIs down. No AUTH and no persistence by default; both are one flag away (`var.redis`).
+- **SonarQube**: Community Build on its own EBS volume, backed by the on-host SQL Server. This is the server CI pushes to via `SONAR_HOST_URL`. Served by nginx at `sonar.nomaos.com`, IP-gated the same way the Grafana vhost is.
+    - **Memory**: SonarSource asks for 4 GB; this host has 8 GiB and SQL Server is on it. Elasticsearch therefore runs on a 1 GB heap inside a 3 GB cgroup limit, so a heavy analysis kills SonarQube rather than the kernel OOM-killing the database. `t3.xlarge` is the fix if that starts happening.
+    - **Kernel**: `vm.max_map_count=262144` is written to `/etc/sysctl.d` at boot — Elasticsearch fails a hard bootstrap check without it.
+
+#### 4. Secrets (HashiCorp Vault)
 - Both environments use HashiCorp Vault.
 - **Prod**: Fargate-based Vault with Raft storage on EFS and AWS KMS auto-unseal.
 - **Migration**: Services can source secrets from AWS Secrets Manager (bootstrap) or switch to Vault (`vault_secrets_enabled = true`).
 
-#### 4. Networking & DNS
+#### 5. Networking & DNS
 - **Prod** account is authoritative for the root domain `nomaos.com`.
 - **ALB**: Prod uses an internet-facing ALB with an ACM wildcard certificate.
 - **NAT**: A single NAT Gateway is used in Prod to balance cost and redundancy.
@@ -67,10 +76,12 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while the monitoring stack uses open-source tooling for application metrics, logs, traces, and alert routing. Container Insights and X-Ray are not enabled:
 
-- **Metrics**: Prometheus scrapes targets and stores metrics on EFS.
+- **Metrics**: Prometheus scrapes targets and stores metrics on EFS. Prod services also push their own OTLP metrics through Alloy into Prometheus (remote write).
 - **Logs**: Loki ingest logs from Docker (Dev) and CloudWatch Logs via a collector (Prod).
-- **Traces**: Tempo handles OTLP traces.
-- **Dashboards**: Grafana OSS provides unified visualization.
+- **Traces**: Tempo handles OTLP traces. The receiving side has always been there; the sending side is now wired too — every prod ECS task definition carries `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.internal:4317` and the sampler/exporter settings, so traces flow the moment an image loads an OTel SDK. See `var.otel` in `prod/variables.tf`.
+    - **Still required in the application image**: the OTLP exporter is a library, not a sidecar. For the ASP.NET APIs that means `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Exporter.OpenTelemetryProtocol` and the ASP.NET Core / HttpClient / SqlClient instrumentation packages. The environment variables are inert until then.
+    - **Logs stay on the awslogs driver** (`OTEL_LOGS_EXPORTER=none`): exporting them over OTLP as well would store every line in CloudWatch *and* Loki.
+- **Dashboards**: Grafana OSS provides unified visualization, with trace-to-log jumps from Tempo to Loki already wired.
 - **Alerts**: Alertmanager routes alerts to Email/Webhooks.
 
 ### Accessing Logs
@@ -79,6 +90,32 @@ The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while
   ```bash
   ssh -N -L 3000:127.0.0.1:3000 -L 3100:127.0.0.1:3100 -L 9090:127.0.0.1:9090 ubuntu@<DEV_EIP>
   ```
+
+### Accessing SonarQube and Redis (Dev)
+Both publish loopback ports only and have no security-group ingress, so the
+tunnel is the way in. `terraform -chdir=dev output sonarqube_access redis_access`
+prints the exact commands.
+
+```bash
+# SonarQube UI (first login is admin/admin, then it forces a password change).
+# First boot takes 2-5 minutes on a 1 GB Elasticsearch heap.
+ssh -N -L 9000:127.0.0.1:9000 ubuntu@<DEV_EIP>
+
+# Redis, for redis-cli against the shared cache.
+ssh -N -L 6379:127.0.0.1:6379 ubuntu@<DEV_EIP>
+```
+
+> **Before pointing CI at SonarQube**: `sonarqube.allowed_cidrs` defaults to `[]`,
+> which makes the nginx vhost answer `127.0.0.1` only. GitHub-hosted runner
+> addresses are not a fixed set, so "allow GitHub Actions" cannot be expressed as
+> a CIDR list — use a self-hosted runner or an allowlisted NAT egress. Until one
+> of those is in the list, scanners are denied at the edge and the
+> `SONAR_HOST_URL` secret will not be reachable.
+>
+> SonarQube is also served over plain HTTP: nginx on the dev host terminates port
+> 80 only and there is no certificate for it (the prod ACM wildcard cannot be
+> attached to an EC2-hosted nginx). **That is why GitHub SSO cannot be enabled
+> against it yet** — SonarSource and GitHub both require an HTTPS callback.
 
 ---
 
@@ -129,12 +166,39 @@ Use `./scripts/infracost.sh` to generate a full cost report (requires `INFRACOST
 3. Update the `image` tag in Terraform and apply.
 4. (Optional) Add a Blackbox probe in `monitoring/terraform.auto.tfvars`.
 
+What the service gets for free, without further configuration:
+
+- **Redis (Dev)**: `REDIS_HOST=redis` / `REDIS_PORT=6379` are injected into every
+  API container in the map, so a new service reaches the shared cache by name.
+- **OpenTelemetry (Prod)**: `OTEL_SERVICE_NAME` is set to the service key
+  automatically, along with the endpoint, sampler and exporter settings from
+  `var.otel`. Nothing per-service to add — but the image still has to load an OTel
+  SDK for anything to be exported.
+- **Database**: the service key is used as the database name in both environments
+  (`DB_NAME`), and in Dev it is created by `init-dbs.sql` and included in the
+  nightly S3 backup once it appears in `mssql_databases`.
+
 ### Manual RDS Init
 If `run_db_init = true` is not used, connect to the DB and run:
 ```sql
 IF DB_ID('wallet') IS NULL CREATE DATABASE [wallet];
 -- Repeat for onboarding, input, moneval, serviceprovider
 ```
+
+The dev host's `sonar` database is **not** a plain create — SonarQube requires a
+case- and accent-sensitive collation and snapshot isolation, and neither can be
+changed after data exists:
+
+```sql
+IF DB_ID('sonar') IS NULL CREATE DATABASE [sonar] COLLATE SQL_Latin1_General_CP1_CS_AS;
+GO
+ALTER DATABASE [sonar] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
+```
+
+Terraform renders exactly this (plus a least-privilege login scoped to `db_owner`
+of that one database) into `scripts/init-dbs.sql`, so the manual route is only
+needed when `run_db_init` is off in prod or the dev bootstrap has to be re-run by
+hand: `/opt/agrovesto/scripts/init-mssql.sh`.
 
 ---
 
