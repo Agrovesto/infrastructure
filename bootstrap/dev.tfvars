@@ -16,6 +16,8 @@ github_sub_patterns = [
   "repo:Agrovesto@101108012/*:ref:refs/heads/dev",
   "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
   "repo:Agrovesto@101108012/*:pull_request",
+  # Apply jobs run in the "dev" GitHub Environment, which changes the sub claim
+  "repo:Agrovesto@101108012/*:environment:dev",
 ]
 
 # The role was not created by this module, so its policy may not be named
