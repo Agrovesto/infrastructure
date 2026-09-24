@@ -325,7 +325,7 @@ run "nginx_vhost" {
   assert {
     condition     = strcontains(local.nginx_conf, "allow 127.0.0.1;") && strcontains(local.nginx_conf, "deny all;")
     error_message = "An empty allow list is not 'everyone': the vhost falls back to 127.0.0.1, i.e. SSH-tunnel-only."
-    }
+  }
 
   assert {
     condition     = strcontains(local.nginx_conf, "client_max_body_size 100m;")

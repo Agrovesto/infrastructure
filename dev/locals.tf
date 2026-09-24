@@ -195,9 +195,9 @@ locals {
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
   # the dev SNS alerts topic (sns.tf), the same place the CloudWatch alarms go.
   prometheus_rules = templatefile("${path.module}/prometheus-rules.yml.tftpl", {
-    cpu_percent         = var.alert_rules.cpu_percent
-    memory_percent      = var.alert_rules.memory_percent
-    disk_free_percent   = var.alert_rules.disk_free_percent
+    cpu_percent       = var.alert_rules.cpu_percent
+    memory_percent    = var.alert_rules.memory_percent
+    disk_free_percent = var.alert_rules.disk_free_percent
     # The containers that should always be up. Redis and SonarQube join the list
     # only when they exist, otherwise ContainerDown fires for a service that was
     # deliberately turned off.

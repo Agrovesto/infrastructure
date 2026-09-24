@@ -367,7 +367,7 @@ run "dns_managed_by_dev" {
     error_message = "manage_dns = true creates the zone for var.domain_name."
   }
 
-# 5 APIs + mssql; plus sonarqube when enabled and exposed. Vault is deliberately not exposed via public DNS.
+  # 5 APIs + mssql; plus sonarqube when enabled and exposed. Vault is deliberately not exposed via public DNS.
   assert {
     condition     = length(aws_route53_record.a) == 6 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
     error_message = "Only the APIs, mssql, and optionally sonarqube get A records to the EC2 host."
