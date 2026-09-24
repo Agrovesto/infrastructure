@@ -30,4 +30,4 @@ __pycache__/
 
 # bootstrap local state (per account) never goes to git
 bootstrap/*.tfstate*
-terraformer/
+terraformer/*
