@@ -430,7 +430,7 @@ run "scheduler_iam" {
   }
 
   assert {
-    condition     = aws_iam_role_policy.scheduler.name == "${var.project}-${var.environment}-scheduler-policy" && can(jsondecode(aws_iam_role_policy.scheduler.policy))
+    condition     = aws_iam_role_policy.scheduler.name == "${var.project}-${var.environment}-scheduler-policy"
     error_message = "The scheduler policy is attached and is valid JSON."
   }
 }

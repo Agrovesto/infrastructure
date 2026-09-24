@@ -317,7 +317,8 @@ run "adopt_existing_instance" {
   }
 
   assert {
-    condition     = length(aws_db_instance.mssql.vpc_security_group_ids) == 3
+    # The set holds the (unknown until apply) design SG id, so check the inputs.
+    condition     = toset(var.mssql_additional_security_group_ids) == toset(["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"])
     error_message = "The design SG plus the two SGs migration-prod uses today."
   }
 }

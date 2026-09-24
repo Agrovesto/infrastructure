@@ -32,7 +32,7 @@ budget_alert_ratio     = 0.8
 # Monthly cost/usage/analysis PDF by email (SES). The sending domain is verified
 # in Route53 here; fill report_recipients in (or alert_email above) to switch it on.
 enable_monthly_report = true
-report_recipients     = tech@agrovesto.com
+report_recipients     = ["tech@agrovesto.com"]
 
 
 # Uptime probes (blackbox exporter). Add or remove entries freely.
