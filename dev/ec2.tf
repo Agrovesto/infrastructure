@@ -47,6 +47,9 @@ resource "aws_instance" "app" {
 
   metadata_options {
     http_tokens = "required"
+    # 2 hops so containers (Alertmanager -> SNS, APIs -> Rekognition/SNS) can
+    # use the instance role through IMDSv2. Changes in place.
+    http_put_response_hop_limit = 2
   }
 
   tags = merge(local.tags, { Name = "${local.name}-app-host" })

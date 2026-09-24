@@ -39,3 +39,26 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
   ok_actions          = [aws_sns_topic.alerts.arn]
   tags                = local.tags
 }
+
+# --- Alertmanager on the host publishes to the same topic ---------------------
+resource "aws_iam_role_policy" "ec2_alerts_sns" {
+  name = "${local.name}-ec2-alerts-sns"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "AlertmanagerPublish"
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.alerts.arn
+      },
+      {
+        Sid      = "EncryptForSns"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+        Resource = aws_kms_key.sns.arn
+      }
+    ]
+  })
+}

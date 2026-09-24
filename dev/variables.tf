@@ -354,6 +354,7 @@ variable "logging" {
     prometheus_image    = optional(string, "prom/prometheus:v3.1.0")
     cadvisor_image      = optional(string, "ghcr.io/google/cadvisor:v0.57.0")
     node_exporter_image = optional(string, "prom/node-exporter:v1.9.1")
+    alertmanager_image  = optional(string, "prom/alertmanager:v0.28.1")
 
     # Published on 127.0.0.1 on the host only, and the security group has no
     # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
@@ -364,6 +365,7 @@ variable "logging" {
     prometheus_port    = optional(number, 9090)
     cadvisor_port      = optional(number, 8080)
     node_exporter_port = optional(number, 9100)
+    alertmanager_port  = optional(number, 9093)
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
@@ -416,6 +418,7 @@ variable "logging" {
       prometheus    = "0.50"
       cadvisor      = "0.25"
       node-exporter = "0.10"
+      alertmanager  = "0.10"
     })
     memory_limits_mb = optional(map(number), {
       loki          = 384
@@ -424,6 +427,7 @@ variable "logging" {
       prometheus    = 384
       cadvisor      = 128
       node-exporter = 48
+      alertmanager  = 64
     })
 
     # --- the containers' own logs ---------------------------------------------
@@ -494,4 +498,25 @@ variable "app_topic_emails" {
 variable "alarm_cpu_percent" {
   type    = number
   default = 85
+}
+
+variable "alert_rules" {
+  description = "Thresholds for the dev host's Prometheus alert rules (Alertmanager -> SNS alerts topic)"
+  type = object({
+    cpu_percent       = optional(number, 90)
+    memory_percent    = optional(number, 90)
+    disk_free_percent = optional(number, 10)
+  })
+  default = {}
+}
+
+variable "rekognition" {
+  description = "Amazon Rekognition: face collections (KYC), liveness guest pool and media retention"
+  type = object({
+    collections             = optional(list(string), ["customers"])
+    liveness_identity_pool  = optional(bool, true)
+    liveness_retention_days = optional(number, 30)
+    upload_retention_days   = optional(number, 90)
+  })
+  default = {}
 }

@@ -147,3 +147,15 @@ output "sns_app_topic_arns" {
   description = "Application topics, by name"
   value       = { for k, t in aws_sns_topic.app : k => t.arn }
 }
+
+output "rekognition" {
+  description = "Values the apps need to call Rekognition"
+  value = {
+    collection_ids            = [for c in aws_rekognition_collection.this : c.collection_id]
+    media_bucket              = aws_s3_bucket.rekognition.bucket
+    video_sns_topic_arn       = aws_sns_topic.rekognition_video.arn
+    video_role_arn            = aws_iam_role.rekognition_video.arn
+    video_queue_url           = aws_sqs_queue.rekognition_video.id
+    liveness_identity_pool_id = one(aws_cognito_identity_pool.liveness[*].id)
+  }
+}

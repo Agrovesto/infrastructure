@@ -588,3 +588,14 @@ variable "alarm_ecs_percent" {
   type        = number
   default     = 85
 }
+
+variable "rekognition" {
+  description = "Amazon Rekognition: face collections (KYC), liveness guest pool and media retention"
+  type = object({
+    collections             = optional(list(string), ["customers"])
+    liveness_identity_pool  = optional(bool, true)
+    liveness_retention_days = optional(number, 30)
+    upload_retention_days   = optional(number, 90)
+  })
+  default = {}
+}

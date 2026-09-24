@@ -11,7 +11,7 @@
 # file makes a change visible without a Terraform run, and apply makes it final.
 #
 #
-# Five scrape targets, all on the docker network. There is no service discovery
+# Seven scrape targets, all on the docker network. There is no service discovery
 # and no remote write: this is a single box and the TSDB on the logging volume
 # is the store.
 # =============================================================================
@@ -23,6 +23,15 @@ global:
   external_labels:
     stack: ${project}-${environment}
     host: ${hostname}
+
+# Alert rules (prometheus-rules.yml.tftpl) -> Alertmanager -> SNS alerts topic.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:${alertmanager_port}"]
 
 scrape_configs:
   - job_name: prometheus
@@ -54,3 +63,7 @@ scrape_configs:
   - job_name: grafana
     static_configs:
       - targets: ["grafana:${grafana_port}"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:${alertmanager_port}"]

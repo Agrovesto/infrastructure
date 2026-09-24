@@ -104,7 +104,7 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 10
+    condition     = length(aws_s3_object.host_config) == 12
     error_message = "Ten rendered files ship to the host: compose, nginx.conf, init-dbs.sql, then loki, alloy, prometheus, 2x grafana provisioning and 2x dashboards."
   }
 
@@ -172,7 +172,7 @@ run "compose_services" {
 
   assert {
     condition = alltrue([
-      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port] :
+      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port, var.logging.alertmanager_port] :
       strcontains(local.docker_compose, "127.0.0.1:${port}:")
     ])
     error_message = "No component of this stack publishes a non-loopback port; the security group stays as it was."
@@ -184,8 +184,38 @@ run "compose_services" {
   }
 
   assert {
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 6
-    error_message = "Each of the six containers carries a memory limit, so none of them can starve SQL Server."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7
+    error_message = "Each of the seven containers carries a memory limit, so none of them can starve SQL Server."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "prom/alertmanager") && strcontains(local.docker_compose, "/prometheus/rules:/etc/prometheus/rules:ro")
+    error_message = "Alertmanager runs next to Prometheus, which gets its rules directory mounted."
+  }
+
+  assert {
+    condition     = strcontains(local.prometheus_config, "rule_files:") && strcontains(local.prometheus_config, "alertmanager:9093")
+    error_message = "Prometheus loads the alert rules and sends firing alerts to Alertmanager."
+  }
+
+  assert {
+    condition     = strcontains(local.alertmanager_config, "sns_configs:") && strcontains(local.alertmanager_config, "sigv4:")
+    error_message = "Alertmanager publishes to the SNS alerts topic, signed with the instance role."
+  }
+
+  assert {
+    condition     = strcontains(local.prometheus_rules, "up == 0") && strcontains(local.prometheus_rules, "container_last_seen") && strcontains(local.prometheus_rules, "> 90")
+    error_message = "The host rules cover scrape targets, containers and the default thresholds."
+  }
+
+  assert {
+    condition     = aws_instance.app.metadata_options[0].http_put_response_hop_limit == 2 && aws_instance.app.metadata_options[0].http_tokens == "required"
+    error_message = "Containers reach the instance role over IMDSv2 only (hop limit 2)."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.ec2_alerts_sns.name == "${local.name}-ec2-alerts-sns"
+    error_message = "The EC2 role may publish to the alerts topic for Alertmanager."
   }
 
   assert {

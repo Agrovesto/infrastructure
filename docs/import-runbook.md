@@ -106,3 +106,9 @@ Apply, re-plan until "No changes", then delete `dev/imports.tf`.
 - `migration-prod` is unencrypted. Plan a window: snapshot → encrypted copy → restore → swap. Then set `mssql_storage_encrypted = true`.
 - The prod default SG `sg-05a2722a…` still has live rules. Move them to named SGs, then set `manage_default_security_group = true`.
 - Dev and prod both use `172.96.0.0/16`. Re-IP one of them before any peering.
+
+## Rekognition and dev Alertmanager (created fresh, nothing to import)
+
+- `rekognition.tf` in dev and prod creates: the `<stack>-customers` face collection, the media bucket `<stack>-rekognition-<account>` (`uploads/` expires after 90 days, `liveness/` after 30), a video job-status topic that feeds an SQS queue with a DLQ, the video role and a Cognito guest pool for Face Liveness. Apps read `terraform output rekognition`.
+- Start* video calls pass `NotificationChannel = { SNSTopicArn = video_sns_topic_arn, RoleArn = video_role_arn }`.
+- Dev Alertmanager publishes to the dev alerts topic. Config is synced from S3 at boot. After changing rules, run `aws s3 sync` on the host, or reboot it.
