@@ -1,4 +1,4 @@
-# monitoring  2026-09-23T21:40:23Z  terraform Terraform v1.8.5
+# monitoring  2026-09-24T00:35:50Z  terraform Terraform v1.8.5
 
 Initializing the backend...
 
@@ -6,53 +6,56 @@ Successfully configured the backend "s3"! Terraform will automatically
 use this backend unless the backend configuration changes.
 
 Initializing provider plugins...
+- Reusing previous version of hashicorp/null from the dependency lock file
 - Reusing previous version of hashicorp/random from the dependency lock file
 - Reusing previous version of hashicorp/aws from the dependency lock file
-- Reusing previous version of hashicorp/null from the dependency lock file
+- Using previously-installed hashicorp/null v3.3.2
 - Using previously-installed hashicorp/random v3.9.1
 - Using previously-installed hashicorp/aws v5.100.0
-- Using previously-installed hashicorp/null v3.3.2
 
 Terraform has been successfully initialized!
-aws_cloudwatch_log_group.legacy_ec2_syslog: Preparing import... [id=ec2-syslog]
-aws_cloudwatch_log_group.legacy_ec2_kernel: Preparing import... [id=ec2-kernel]
-aws_cloudwatch_log_group.legacy_ec2_cloud_init: Preparing import... [id=ec2-cloud-init]
-aws_route53_zone.agrovesto: Refreshing state... [id=Z00055662LTUSSMS5ZA84]
-data.aws_vpc.prod: Reading...
-data.aws_route53_zone.main: Reading...
-aws_cloudwatch_log_group.legacy_ec2_kernel: Refreshing state... [id=ec2-kernel]
-aws_cloudwatch_log_group.legacy_ec2_syslog: Refreshing state... [id=ec2-syslog]
-aws_cloudwatch_log_group.legacy_ec2_cloud_init: Refreshing state... [id=ec2-cloud-init]
-aws_route53_zone.this[0]: Refreshing state... [id=Z0208643NZ0W8WF5RQ9F]
-aws_cloudwatch_log_group.legacy_rdsosmetrics: Preparing import... [id=RDSOSMetrics]
+[0m[32mSwitched to workspace "monitoring".[0m
+# workspace: monitoring
 aws_cloudwatch_log_group.legacy_nginx_error: Preparing import... [id=nginx-error]
-aws_cloudwatch_log_group.legacy_rdsosmetrics: Refreshing state... [id=RDSOSMetrics]
+aws_ssm_association.legacy_assoc_ef34e30b: Preparing import... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
+data.aws_caller_identity.current: Reading...
+aws_ssm_association.legacy_assoc_ef34e30b: Refreshing state... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
 aws_cloudwatch_log_group.legacy_nginx_error: Refreshing state... [id=nginx-error]
-data.aws_db_instance.mssql[0]: Reading...
+data.aws_security_group.alb: Reading...
+data.aws_vpc.prod: Reading...
 data.aws_region.current: Reading...
 data.aws_region.current: Read complete after 0s [id=eu-west-1]
 aws_cloudwatch_log_group.legacy_nginx_access: Preparing import... [id=nginx-access]
+aws_cloudwatch_log_group.legacy_rdsosmetrics: Preparing import... [id=RDSOSMetrics]
+aws_cloudwatch_log_group.legacy_rdsosmetrics: Refreshing state... [id=RDSOSMetrics]
 aws_cloudwatch_log_group.legacy_nginx_access: Refreshing state... [id=nginx-access]
-data.aws_db_instance.mssql[0]: Read complete after 1s [id=migration-prod]
-aws_ssm_parameter.legacy_amazoncloudwatch_linux: Preparing import... [id=AmazonCloudWatch-linux]
-aws_ssm_parameter.legacy_amazoncloudwatch_linux: Refreshing state... [id=AmazonCloudWatch-linux]
-data.aws_caller_identity.current: Reading...
+aws_cloudwatch_log_group.legacy_ec2_kernel: Preparing import... [id=ec2-kernel]
+data.aws_db_instance.mssql[0]: Reading...
+aws_cloudwatch_log_group.legacy_ec2_kernel: Refreshing state... [id=ec2-kernel]
+data.aws_caller_identity.current: Read complete after 0s [id=221434544570]
 data.aws_lb.main: Reading...
-aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Preparing import... [id=ec2-cloud-init-output]
-aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Refreshing state... [id=ec2-cloud-init-output]
-data.aws_security_group.alb: Reading...
+data.aws_db_instance.mssql[0]: Read complete after 1s [id=migration-prod]
 aws_cloudwatch_log_group.legacy_ec2_auth: Preparing import... [id=ec2-auth]
 aws_cloudwatch_log_group.legacy_ec2_auth: Refreshing state... [id=ec2-auth]
-data.aws_caller_identity.current: Read complete after 1s [id=221434544570]
-aws_ssm_association.legacy_assoc_ef34e30b: Preparing import... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
-aws_ssm_association.legacy_assoc_ef34e30b: Refreshing state... [id=ef34e30b-8367-4e4e-96d6-573010af70ef]
-data.aws_route53_zone.main: Read complete after 3s [id=Z0208643NZ0W8WF5RQ9F]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init: Preparing import... [id=ec2-cloud-init]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init: Refreshing state... [id=ec2-cloud-init]
+aws_ssm_parameter.legacy_amazoncloudwatch_linux: Preparing import... [id=AmazonCloudWatch-linux]
+aws_ssm_parameter.legacy_amazoncloudwatch_linux: Refreshing state... [id=AmazonCloudWatch-linux]
+aws_cloudwatch_log_group.legacy_ec2_syslog: Preparing import... [id=ec2-syslog]
+aws_cloudwatch_log_group.legacy_ec2_syslog: Refreshing state... [id=ec2-syslog]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Preparing import... [id=ec2-cloud-init-output]
+aws_cloudwatch_log_group.legacy_ec2_cloud_init_output: Refreshing state... [id=ec2-cloud-init-output]
+data.aws_route53_zone.main: Reading...
+data.aws_security_group.alb: Still reading... [10s elapsed]
+data.aws_vpc.prod: Still reading... [10s elapsed]
+data.aws_lb.main: Still reading... [10s elapsed]
+data.aws_route53_zone.main: Still reading... [10s elapsed]
+data.aws_route53_zone.main: Read complete after 12s [id=Z0208643NZ0W8WF5RQ9F]
 
 Terraform used the selected providers to generate the following execution
 plan. Resource actions are indicated with the following symbols:
   + create
   ~ update in-place
-  - destroy
 
 Terraform planned the following actions, but then encountered a problem:
 
@@ -703,44 +706,6 @@ Terraform planned the following actions, but then encountered a problem:
           + "Project"     = "agrovesto"
           + "Stack"       = "monitoring"
         }
-    }
-
-  # aws_route53_zone.agrovesto will be destroyed
-  # (because aws_route53_zone.agrovesto is not in configuration)
-  - resource "aws_route53_zone" "agrovesto" {
-      - arn                 = "arn:aws:route53:::hostedzone/Z00055662LTUSSMS5ZA84" -> null
-      - id                  = "Z00055662LTUSSMS5ZA84" -> null
-      - name                = "agrovesto.com" -> null
-      - name_servers        = [
-          - "ns-1516.awsdns-61.org",
-          - "ns-1831.awsdns-36.co.uk",
-          - "ns-783.awsdns-33.net",
-          - "ns-85.awsdns-10.com",
-        ] -> null
-      - primary_name_server = "ns-85.awsdns-10.com" -> null
-      - tags                = {} -> null
-      - tags_all            = {} -> null
-      - zone_id             = "Z00055662LTUSSMS5ZA84" -> null
-        # (2 unchanged attributes hidden)
-    }
-
-  # aws_route53_zone.this[0] will be destroyed
-  # (because aws_route53_zone.this is not in configuration)
-  - resource "aws_route53_zone" "this" {
-      - arn                 = "arn:aws:route53:::hostedzone/Z0208643NZ0W8WF5RQ9F" -> null
-      - id                  = "Z0208643NZ0W8WF5RQ9F" -> null
-      - name                = "nomaos.com" -> null
-      - name_servers        = [
-          - "ns-1145.awsdns-15.org",
-          - "ns-152.awsdns-19.com",
-          - "ns-1959.awsdns-52.co.uk",
-          - "ns-707.awsdns-24.net",
-        ] -> null
-      - primary_name_server = "ns-707.awsdns-24.net" -> null
-      - tags                = {} -> null
-      - tags_all            = {} -> null
-      - zone_id             = "Z0208643NZ0W8WF5RQ9F" -> null
-        # (2 unchanged attributes hidden)
     }
 
   # aws_s3_bucket.config will be created
@@ -4328,16 +4293,9 @@ Terraform planned the following actions, but then encountered a problem:
       + upper       = true
     }
 
-Plan: 9 to import, 50 to add, 9 to change, 2 to destroy.
+Plan: 9 to import, 50 to add, 9 to change, 0 to destroy.
 
 Changes to Outputs:
-  - agrovesto_zone_id                = "Z00055662LTUSSMS5ZA84" -> null
-  - agrovesto_zone_name_servers      = [
-      - "ns-1516.awsdns-61.org",
-      - "ns-1831.awsdns-36.co.uk",
-      - "ns-783.awsdns-33.net",
-      - "ns-85.awsdns-10.com",
-    ] -> null
   + budget_task_name                 = "agrovesto-monitoring-budget"
   + config_parameter_prefix          = "/agrovesto-monitoring"
   + cur_bucket                       = "agrovesto-monitoring-cur-221434544570"
@@ -4360,30 +4318,6 @@ Changes to Outputs:
       + pushgateway      = "http://pushgateway.monitoring.internal:9091"
       + tempo_query      = "http://tempo.monitoring.internal:3200"
     }
-  - mssql_databases                  = [
-      - "wallet",
-      - "onboarding",
-      - "input",
-      - "moneval",
-      - "serviceprovider",
-    ] -> null
-  - mssql_db_init_sql                = "IF DB_ID(N'wallet') IS NULL CREATE DATABASE [wallet]; IF DB_ID(N'onboarding') IS NULL CREATE DATABASE [onboarding]; IF DB_ID(N'input') IS NULL CREATE DATABASE [input]; IF DB_ID(N'moneval') IS NULL CREATE DATABASE [moneval]; IF DB_ID(N'serviceprovider') IS NULL CREATE DATABASE [serviceprovider];" -> null
-  - route53_name_servers             = [
-      - "ns-1145.awsdns-15.org",
-      - "ns-152.awsdns-19.com",
-      - "ns-1959.awsdns-52.co.uk",
-      - "ns-707.awsdns-24.net",
-    ] -> null
-  - route53_zone_id                  = "Z0208643NZ0W8WF5RQ9F" -> null
-  - service_fqdns                    = {
-      - input           = "https://input-api.nomaos.com"
-      - moneval         = "https://moneval-api.nomaos.com"
-      - onboarding      = "https://onboarding-api.nomaos.com"
-      - serviceprovider = "https://serviceprovider-api.nomaos.com"
-      - vault           = "https://vault.nomaos.com"
-      - wallet          = "https://wallet-api.nomaos.com"
-    } -> null
-  - vault_url                        = "https://vault.nomaos.com" -> null
 
 Warning: Config generation is experimental
 
@@ -4435,5 +4369,21 @@ Error: Invalid combination of arguments
 
 "value_wo": one of `insecure_value,value,value_wo` must be specified
 
-# plan exit code: 1
+# plan exit code (generate pass): 1
+
+# running imports/fix_generated.py and re-planning
+  fixed   1 x aws_ssm_parameter
+done: generated_legacy.tf
+
+Error: Extra characters after interpolation expression
+
+  on generated_legacy.tf line 136, in resource "aws_ssm_parameter" "legacy_amazoncloudwatch_linux":
+ 136:   insecure_value = "{\n\t\"agent\": {\n\t\t\"metrics_collection_interval\": 60,\n\t\t\"run_as_user\": \"cwagent\"\n\t},\n\t\"logs\": {\n\t\t\"logs_collected\": {\n\t\t\t\"files\": {\n\t\t\t\t\"collect_list\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": 7\n\t\t\t\t\t},\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": -1\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t}\n\t},\n\t\"metrics\": {\n\t\t\"aggregation_dimensions\": [\n\t\t\t[\n\t\t\t\t\"InstanceId\"\n\t\t\t]\n\t\t],\n\t\t\"append_dimensions\": {\n\t\t\t\"AutoScalingGroupName\": \"${aws:AutoScalingGroupName}\",\n\t\t\t\"ImageId\": \"${aws:ImageId}\",\n\t\t\t\"InstanceId\": \"${aws:InstanceId}\",\n\t\t\t\"InstanceType\": \"${aws:InstanceType}\"\n\t\t},\n\t\t\"metrics_collected\": {\n\t\t\t\"collectd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60\n\t\t\t},\n\t\t\t\"cpu\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"cpu_usage_idle\",\n\t\t\t\t\t\"cpu_usage_iowait\",\n\t\t\t\t\t\"cpu_usage_user\",\n\t\t\t\t\t\"cpu_usage_system\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t],\n\t\t\t\t\"totalcpu\": false\n\t\t\t},\n\t\t\t\"disk\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"used_percent\",\n\t\t\t\t\t\"inodes_free\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"diskio\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"io_time\",\n\t\t\t\t\t\"write_bytes\",\n\t\t\t\t\t\"read_bytes\",\n\t\t\t\t\t\"writes\",\n\t\t\t\t\t\"reads\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"mem\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"mem_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"netstat\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"tcp_established\",\n\t\t\t\t\t\"tcp_time_wait\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"statsd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60,\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"service_address\": \":8125\"\n\t\t\t},\n\t\t\t\"swap\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"swap_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t}\n\t\t}\n\t},\n\t\"traces\": {\n\t\t\"buffer_size_mb\": 3,\n\t\t\"concurrency\": 8,\n\t\t\"insecure\": false,\n\t\t\"traces_collected\": {\n\t\t\t\"xray\": {\n\t\t\t\t\"bind_address\": \"127.0.0.1:2000\",\n\t\t\t\t\"tcp_proxy\": {\n\t\t\t\t\t\"bind_address\": \"127.0.0.1:2000\"\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}"
+
+Template interpolation doesn't expect a colon at this location. Did you
+intend this to be a literal sequence to be processed as part of another
+language? If so, you can escape it by starting with "$${" instead of just
+"${".
+
+# plan exit code (after fix): 1
 # generated config copied to imports/plans/monitoring.generated_legacy.tf

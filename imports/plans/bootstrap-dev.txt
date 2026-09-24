@@ -1,16 +1,17 @@
-# bootstrap-dev  2026-09-23T20:37:53Z  terraform Terraform v1.8.5
+# bootstrap-dev  2026-09-24T00:32:18Z  terraform Terraform v1.8.5
 
 Initializing the backend...
 
 Initializing provider plugins...
-- Reusing previous version of hashicorp/aws from the dependency lock file
 - Reusing previous version of hashicorp/tls from the dependency lock file
+- Reusing previous version of hashicorp/aws from the dependency lock file
 - Using previously-installed hashicorp/aws v5.100.0
 - Using previously-installed hashicorp/tls v4.4.1
 
 Terraform has been successfully initialized!
+# workspace: default
 data.tls_certificate.github_actions: Reading...
-data.tls_certificate.github_actions: Read complete after 0s [id=6bcf7b7f2005c947073a003ff3b596f7fcc8066f]
+data.tls_certificate.github_actions: Read complete after 1s [id=6bcf7b7f2005c947073a003ff3b596f7fcc8066f]
 aws_iam_openid_connect_provider.github[0]: Preparing import... [id=arn:aws:iam::353833416626:oidc-provider/token.actions.githubusercontent.com]
 data.aws_region.current: Reading...
 data.aws_caller_identity.current: Reading...
@@ -18,8 +19,8 @@ aws_iam_openid_connect_provider.github[0]: Refreshing state... [id=arn:aws:iam::
 data.aws_region.current: Read complete after 0s [id=eu-west-1]
 data.aws_caller_identity.current: Read complete after 1s [id=353833416626]
 aws_s3_bucket.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
-data.aws_iam_policy_document.state_bucket: Reading...
 aws_s3_bucket.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
+data.aws_iam_policy_document.state_bucket: Reading...
 data.aws_iam_policy_document.deploy_scoped: Reading...
 data.aws_iam_policy_document.state_bucket: Read complete after 0s [id=2464596498]
 data.aws_iam_policy_document.deploy_scoped: Read complete after 0s [id=2393251908]
@@ -27,14 +28,14 @@ data.aws_iam_policy_document.deploy_assume: Reading...
 data.aws_iam_policy_document.deploy_assume: Read complete after 0s [id=1125696251]
 aws_iam_role.deploy: Preparing import... [id=nomaos-dev-github-terraform]
 aws_iam_role.deploy: Refreshing state... [id=nomaos-dev-github-terraform]
-aws_s3_bucket_policy.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
+aws_s3_bucket_server_side_encryption_configuration.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_lifecycle_configuration.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_public_access_block.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
+aws_s3_bucket_policy.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_versioning.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
-aws_s3_bucket_server_side_encryption_configuration.state: Preparing import... [id=nomaos-tfstate-353833416626-eu-west-1]
+aws_s3_bucket_server_side_encryption_configuration.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_policy.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_public_access_block.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
-aws_s3_bucket_server_side_encryption_configuration.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_versioning.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
 aws_s3_bucket_lifecycle_configuration.state: Refreshing state... [id=nomaos-tfstate-353833416626-eu-west-1]
 
@@ -324,16 +325,15 @@ Terraform will perform the following actions:
         }
     }
 
-  # aws_s3_bucket_lifecycle_configuration.state will be updated in-place
-  # (imported from "nomaos-tfstate-353833416626-eu-west-1")
-  ~ resource "aws_s3_bucket_lifecycle_configuration" "state" {
+  # aws_s3_bucket_lifecycle_configuration.state will be imported
+    resource "aws_s3_bucket_lifecycle_configuration" "state" {
         bucket                                 = "nomaos-tfstate-353833416626-eu-west-1"
         expected_bucket_owner                  = null
         id                                     = "nomaos-tfstate-353833416626-eu-west-1"
         transition_default_minimum_object_size = "all_storage_classes_128K"
 
-      ~ rule {
-          ~ id     = "retention-and-incomplete-uploads" -> "expire-old-state-versions"
+        rule {
+            id     = "retention-and-incomplete-uploads"
             prefix = null
             status = "Enabled"
 
@@ -345,8 +345,8 @@ Terraform will perform the following actions:
                 prefix = null
             }
 
-          ~ noncurrent_version_expiration {
-              ~ noncurrent_days = 365 -> 30
+            noncurrent_version_expiration {
+                noncurrent_days = 365
             }
         }
     }
@@ -389,25 +389,18 @@ Terraform will perform the following actions:
         restrict_public_buckets = true
     }
 
-  # aws_s3_bucket_server_side_encryption_configuration.state will be updated in-place
-  # (imported from "nomaos-tfstate-353833416626-eu-west-1")
-  ~ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
+  # aws_s3_bucket_server_side_encryption_configuration.state will be imported
+    resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
         bucket                = "nomaos-tfstate-353833416626-eu-west-1"
         expected_bucket_owner = null
         id                    = "nomaos-tfstate-353833416626-eu-west-1"
 
-      - rule {
-          - bucket_key_enabled = true -> null
+        rule {
+            bucket_key_enabled = true
 
-          - apply_server_side_encryption_by_default {
-              - kms_master_key_id = "arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6" -> null
-              - sse_algorithm     = "aws:kms" -> null
-            }
-        }
-      + rule {
-          + apply_server_side_encryption_by_default {
-                kms_master_key_id = null
-              + sse_algorithm     = "AES256"
+            apply_server_side_encryption_by_default {
+                kms_master_key_id = "arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6"
+                sse_algorithm     = "aws:kms"
             }
         }
     }
@@ -424,7 +417,7 @@ Terraform will perform the following actions:
         }
     }
 
-Plan: 8 to import, 2 to add, 5 to change, 0 to destroy.
+Plan: 8 to import, 2 to add, 3 to change, 0 to destroy.
 
 Changes to Outputs:
   + deploy_role_arn   = "arn:aws:iam::353833416626:role/nomaos-dev-github-terraform"
@@ -454,4 +447,4 @@ Changes to Outputs:
   + oidc_provider_arn = "arn:aws:iam::353833416626:oidc-provider/token.actions.githubusercontent.com"
   + state_bucket_name = "nomaos-tfstate-353833416626-eu-west-1"
 
-# plan exit code: 0
+# plan exit code (generate pass): 0

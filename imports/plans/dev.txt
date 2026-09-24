@@ -1,4 +1,4 @@
-# dev  2026-09-23T21:41:04Z  terraform Terraform v1.8.5
+# dev  2026-09-24T00:37:14Z  terraform Terraform v1.8.5
 
 Initializing the backend...
 
@@ -6,24 +6,13 @@ Successfully configured the backend "s3"! Terraform will automatically
 use this backend unless the backend configuration changes.
 
 Initializing provider plugins...
-- Finding hashicorp/aws versions matching "~> 5.0"...
-- Installing hashicorp/aws v5.100.0...
-- Installed hashicorp/aws v5.100.0 (signed by HashiCorp)
+- Reusing previous version of hashicorp/aws from the dependency lock file
 
-Terraform has created a lock file .terraform.lock.hcl to record the provider
-selections it made above. Include this file in your version control repository
-so that Terraform can guarantee to make the same selections by default when
-you run "terraform init" in the future.
+Error: Failed to query available provider packages
 
-Terraform has been successfully initialized!
+Could not retrieve the list of available versions for provider hashicorp/aws:
+could not query provider registry for registry.terraform.io/hashicorp/aws:
+the request failed after 2 attempts, please try again later: Get
+"https://registry.terraform.io/v1/providers/hashicorp/aws/versions":
+net/http: request canceled (Client.Timeout exceeded while awaiting headers)
 
-Error: No value for required variable
-
-  on variables.tf line 159:
- 159: variable "mssql_sa_password" {
-
-The root module input variable "mssql_sa_password" is not set, and has no
-default value. Use a -var or -var-file command line argument to provide a
-value for this variable.
-
-# plan exit code: 1
