@@ -133,7 +133,7 @@ resource "aws_ecs_task_definition" "db_init" {
 
       command = [
         "sh", "-c",
-        "set -e; for db in $DB_LIST; do echo \"creating database $db (if missing)\"; sqlcmd -S $DB_HOST,$DB_PORT -U $DB_USER -P \"$DB_PASSWORD\" -l 30 -Q \"IF DB_ID(N'$db') IS NULL CREATE DATABASE [$db];\"; done; echo 'all databases present'"
+        "set -e; for db in $DB_LIST; do echo \"creating database $db (if missing)\"; /opt/mssql-tools/bin/sqlcmd -S $DB_HOST,$DB_PORT -U $DB_USER -P \"$DB_PASSWORD\" -l 30 -Q \"IF DB_ID(N'$db') IS NULL CREATE DATABASE [$db];\"; done; echo 'all databases present'"
       ]
 
       environment = [

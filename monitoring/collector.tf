@@ -51,11 +51,12 @@ resource "aws_ecs_task_definition" "collector" {
   }
 
   container_definitions = jsonencode([
-    local.init_container,
+    local.init_containers.collector,
     {
       name      = "collector"
       image     = local.images.collector
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
 
       command = ["sh", "-c", local.collector_command]
 

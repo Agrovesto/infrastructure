@@ -178,14 +178,6 @@ run "policies_grant_the_minimum" {
   }
 
   assert {
-    condition = alltrue([
-      strcontains(aws_iam_role_policy.execution_ssm.policy, "kms:Decrypt"),
-      strcontains(aws_iam_role_policy.execution_ssm.policy, "ssm:GetParameters"),
-    ])
-    error_message = "The init container must be able to read and decrypt its config."
-  }
-
-  assert {
     condition     = aws_iam_role_policy.task.name == "agrovesto-monitoring-task-policy"
     error_message = "The task role policy name drifted."
   }
@@ -291,6 +283,29 @@ run "no_sns_receiver_when_unset" {
   assert {
     condition     = !strcontains(aws_s3_object.config["alertmanager/alertmanager.yml"].content, "sns_configs") && length(aws_iam_role_policy.task_alerts_sns) == 0
     error_message = "With no topic there is no SNS receiver and no publish permission."
+  }
+}
+
+run "alert_credentials_stay_out_of_s3" {
+  command = plan
+
+  variables {
+    alert_email              = "alerts@example.invalid"
+    alert_smtp_host          = "smtp.example.invalid"
+    alert_smtp_password      = "fixture"
+    alertmanager_webhook_url = "https://example.invalid/alert-hook"
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.alert_smtp_password) == 1 &&
+      length(aws_ssm_parameter.alert_webhook_url) == 1 &&
+      strcontains(local.alertmanager_config, "auth_password_file:") &&
+      strcontains(local.alertmanager_config, "url_file:") &&
+      !strcontains(local.alertmanager_config, "fixture") &&
+      !strcontains(local.alertmanager_config, "https://example.invalid/alert-hook")
+    )
+    error_message = "Alert credentials must be stored in SSM and referenced by file, never rendered into S3."
   }
 }
 

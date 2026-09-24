@@ -75,7 +75,7 @@ GROUND TRUTH INVENTORY
   dev, prod, monitoring. No modules; each root is standalone.
 - State: prod and monitoring SHARE one state object
   s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate, separated
-  by Terraform workspaces `prod` and `monitoring`; dev uses
+  by Terraform workspaces `default` (prod) and `monitoring`; dev uses
   s3://nomaos-tfstate-353833416626-eu-west-1/dev/bootstrap.tfstate; bootstrap
   keeps LOCAL state and creates the buckets, the GitHub OIDC provider and the
   deploy roles.
@@ -208,7 +208,7 @@ Native (non-monitoring) alerts, currently OFF
   deploy roles that those pipelines assume.
 
 === PLANNED / DISABLED (draw dashed) ===
-- Dev observability: VPC peering to the prod VPC plus a cross-account scrape
+- Dev observability: Re-address one overlapping `172.96.0.0/16` VPC before peering dev and prod; add a cross-account scrape
   role so the monitoring stack can scrape dev (~$0.01/GB, no hourly charge).
 - Native RDS size alarm path in prod (metric filter + alarm + SNS) — disabled.
 - ECS autoscaling beyond 1 task, multi-AZ RDS and a NAT gateway per AZ — behind

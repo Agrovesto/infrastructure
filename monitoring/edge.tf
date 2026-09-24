@@ -24,10 +24,16 @@ locals {
       { name = "CONFIG_BUCKET", value = aws_s3_bucket.config.bucket },
     ]
     command = ["/bin/sh", "-c", join("\n", concat(
-      ["set -euo pipefail"],
+      ["set -euo pipefail", "umask 077"],
       [for component in local.edge_state_components :
-        "mkdir -p /config-${component}/config\naws s3 sync \"s3://$CONFIG_BUCKET/config\" /config-${component}/config --delete --region \"$AWS_REGION\""
+        "mkdir -p /config-${component}/config\naws s3 sync \"s3://$CONFIG_BUCKET/config/${component}\" /config-${component}/config --delete --region \"$AWS_REGION\""
       ],
+      length(aws_ssm_parameter.alert_smtp_password) > 0 ? [
+        "aws ssm get-parameter --with-decryption --name '${aws_ssm_parameter.alert_smtp_password[0].name}' --query Parameter.Value --output text --region \"$AWS_REGION\" | tr -d '\\n' > /config-alertmanager/config/smtp-password",
+      ] : [],
+      length(aws_ssm_parameter.alert_webhook_url) > 0 ? [
+        "aws ssm get-parameter --with-decryption --name '${aws_ssm_parameter.alert_webhook_url[0].name}' --query Parameter.Value --output text --region \"$AWS_REGION\" | tr -d '\\n' > /config-alertmanager/config/webhook-url",
+      ] : [],
     ))]
     mountPoints = [for component in local.edge_state_components : {
       sourceVolume  = "data-${component}"
@@ -82,6 +88,7 @@ resource "aws_ecs_task_definition" "edge" {
       name      = "alloy"
       image     = local.images.alloy
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
 
       command = [
         "run",
@@ -105,6 +112,7 @@ resource "aws_ecs_task_definition" "edge" {
       name      = "alertmanager"
       image     = local.images.alertmanager
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "65534"
 
       command = [
@@ -132,6 +140,7 @@ resource "aws_ecs_task_definition" "edge" {
       name      = "blackbox"
       image     = local.images.blackbox
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "65534"
 
       command = ["--config.file=/blackbox/config/blackbox.yml"]
@@ -154,6 +163,7 @@ resource "aws_ecs_task_definition" "edge" {
       name      = "pushgateway"
       image     = local.images.pushgateway
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "65534"
 
       command = ["--web.listen-address=:9091"]

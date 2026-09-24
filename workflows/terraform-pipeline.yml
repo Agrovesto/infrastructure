@@ -51,8 +51,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  pull-requests: write
 
 env:
   AWS_REGION: eu-west-1
@@ -189,6 +187,7 @@ jobs:
         working-directory: ${{ inputs.stack }}
         run: |
           terraform init -backend=false -no-color
+          set -o pipefail
           terraform test -no-color -json | tee test-results.json
 
       - name: Coverage gate (${{ inputs.coverage_fail_under }}%)
@@ -298,6 +297,10 @@ jobs:
   # ---------------------------------------------------------------------------
   terraform-plan:
     name: "fmt / validate / plan (${{ inputs.stack }})"
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     env:
       TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
     needs: [security-scan, terraform-test, sonarqube]
@@ -408,13 +411,6 @@ jobs:
             if (old) await github.rest.issues.updateComment({ owner, repo, comment_id: old.id, body });
             else await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
-      - uses: actions/upload-artifact@v4
-        if: inputs.deploy && github.event_name == 'push' && steps.plan.outcome == 'success'
-        with:
-          name: tfplan-${{ inputs.stack }}
-          path: ${{ inputs.stack }}/tfplan
-          retention-days: 3
-
     outputs:
       changes: ${{ steps.plan.outputs.exitcode == '2' }}
 
@@ -423,6 +419,9 @@ jobs:
   # ---------------------------------------------------------------------------
   terraform-apply:
     name: "Apply (${{ inputs.stack }})"
+    permissions:
+      contents: read
+      id-token: write
     env:
       TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
     needs: [terraform-plan, infracost, git-metadata]
@@ -442,10 +441,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ inputs.stack }}
-          path: ${{ inputs.stack }}
       - run: terraform init -no-color
+      - name: Plan with current state
+        run: terraform plan -no-color -input=false -lock-timeout=5m -out=tfplan
       - name: terraform apply
         run: terraform apply -no-color -input=false -lock-timeout=5m tfplan

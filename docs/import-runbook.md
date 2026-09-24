@@ -32,9 +32,10 @@ The dev trust policy is rewritten to the `github_sub_patterns` in `dev.tfvars`.
 ## 2. Dev (`dev` branch)
 
 ```bash
+export AWS_PROFILE=agrovesto-dev
 cd dev && terraform init
 export TF_VAR_mssql_sa_password='<SA password for the new dev host>'
-AWS_PROFILE=agrovesto-dev terraform plan -out=tfplan
+terraform plan -out=tfplan
 ```
 
 Apply, re-plan until "No changes", then delete `dev/imports.tf`.
@@ -42,8 +43,9 @@ Apply, re-plan until "No changes", then delete `dev/imports.tf`.
 ## 3. Prod (`main` branch)
 
 ```bash
+export AWS_PROFILE=agrovesto-prod
 cd prod && terraform init && terraform workspace select default
-AWS_PROFILE=agrovesto-prod terraform plan -out=tfplan
+terraform plan -out=tfplan
 ```
 
 Expect **18 to import**, the new design resources to add, and **0 to destroy**. The only changes to live resources:
@@ -69,8 +71,9 @@ Apply, re-plan until "No changes", then delete `prod/imports.tf`.
 ## 4. Monitoring (after prod is applied)
 
 ```bash
+export AWS_PROFILE=agrovesto-prod
 cd monitoring && terraform init && terraform workspace select -or-create monitoring
-AWS_PROFILE=agrovesto-prod terraform plan -out=tfplan
+terraform plan -out=tfplan
 ```
 
 The monitoring plan only adds resources. The lookups for the prod VPC, ALB and ALB security group succeed once prod has been applied.

@@ -30,11 +30,12 @@ resource "aws_ecs_task_definition" "tempo" {
   }
 
   container_definitions = jsonencode([
-    local.init_container,
+    local.init_containers.tempo,
     {
       name      = "tempo"
       image     = local.images.tempo
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "10001"
 
       command = [

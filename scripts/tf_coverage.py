@@ -172,6 +172,8 @@ def read_test_json(path: str) -> dict:
     result = {"passed": False, "files": 0, "runs": 0, "failed": 0, "error": "", "runs_list": []}
     runs_by_key = {}
     test_files_seen = set()
+    suite_failed = False
+    summary_status = ""
 
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -187,6 +189,8 @@ def read_test_json(path: str) -> dict:
                 tf_path = entry.get("test_file", {}).get("path", "")
                 if tf_path and tf_path not in test_files_seen:
                     test_files_seen.add(tf_path)
+                if entry.get("test_file", {}).get("status") in ("fail", "error"):
+                    suite_failed = True
             elif kind == "test_run":
                 tr = entry.get("test_run", {})
                 path_val = tr.get("path", "")
@@ -199,17 +203,16 @@ def read_test_json(path: str) -> dict:
                     if status:
                         runs_by_key[key]["status"] = status
             elif kind == "test_summary":
-                status = entry.get("status", "")
-                result["passed"] = status in ("pass", "skip")
-                if status in ("fail", "error"):
+                summary_status = entry.get("test_summary", {}).get("status", "")
+                if summary_status in ("fail", "error"):
+                    suite_failed = True
                     result["error"] = entry.get("diagnostic", {}).get("summary", "") or "Test suite failed"
 
     result["files"] = len(test_files_seen)
     result["runs_list"] = list(runs_by_key.values())
     result["runs"] = len(result["runs_list"])
     result["failed"] = sum(1 for r in result["runs_list"] if r["status"] in ("fail", "error"))
-    if result["runs"] > 0:
-        result["passed"] = (result["failed"] == 0)
+    result["passed"] = summary_status in ("pass", "skip") and not suite_failed and result["failed"] == 0
     return result
 
 

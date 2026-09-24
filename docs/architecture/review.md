@@ -130,16 +130,16 @@ shipping, no peering).
 buckets, the OIDC provider and the deploy roles without manual imports; dev
 failures are found by developers, not by monitoring, and dev hostnames are
 typed into the prod zone by hand, so they drift the moment an IP changes.
-**Smallest fix:** two small steps — commit the bootstrap state to a dedicated
-bucket (or document and test a `terraform import` recovery), and land the
-planned dev VPC peering with a cross-account scrape role so dev joins the same
+**Smallest fix:** two small steps — migrate bootstrap to a secured remote state
+bucket with locking (or document and test a `terraform import` recovery), then
+re-address one VPC before adding dev-to-prod peering with a cross-account scrape role so dev joins the same
 Cloud Map based scraping (≈ $0.01/GB, no hourly charge).
 
 ## Planned work
 
 Drawn dashed in the diagrams, listed here for completeness.
 
-- **Dev observability:** VPC peering between dev and prod plus a cross-account
+- **Dev observability:** Re-address an overlapping `172.96.0.0/16` VPC before peering dev and prod; add a cross-account
   scrape role; dev then appears in Prometheus like any other target.
 - **Native SQL Server size alarm:** the prod metric filter, alarm and SNS topic
   exist but stay disabled while the open-source path covers the same signal.

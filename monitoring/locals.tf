@@ -54,7 +54,7 @@ locals {
   config_fetch_command = [
     "set -euo pipefail",
     "mkdir -p /config/config",
-    "aws s3 sync \"s3://$CONFIG_BUCKET/config\" /config/config --delete --region \"$AWS_REGION\"",
+    "aws s3 sync \"s3://$CONFIG_BUCKET/config/$CONFIG_COMPONENT\" /config/config --delete --region \"$AWS_REGION\"",
   ]
 
   # One awslogs config per component, all in the stack's log group.
@@ -88,6 +88,13 @@ locals {
       }
     }
     mountPoints = [{ sourceVolume = "data", containerPath = "/config", readOnly = false }]
+  }
+
+  init_containers = {
+    for component in ["prometheus", "loki", "tempo", "grafana", "rds", "collector"] :
+    component => merge(local.init_container, {
+      environment = concat(local.init_container.environment, [{ name = "CONFIG_COMPONENT", value = component }])
+    })
   }
 
   # --- Prometheus ------------------------------------------------------------------
@@ -368,9 +375,9 @@ locals {
       "        subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'",
       "        send_resolved: true",
     ] : [],
-    var.alertmanager_webhook_url != "" ? [
+    nonsensitive(var.alertmanager_webhook_url != "") ? [
       "    webhook_configs:",
-      "      - url: ${var.alertmanager_webhook_url}",
+      "      - url_file: /alertmanager/config/webhook-url",
       "        send_resolved: true",
     ] : [],
     var.alert_email != "" && var.alert_smtp_host != "" ? [
@@ -379,7 +386,11 @@ locals {
       "        from: ${var.alert_smtp_from}",
       "        smarthost: ${var.alert_smtp_host}:${var.alert_smtp_port}",
       "        auth_username: ${var.alert_smtp_user}",
-      "        auth_password: ${var.alert_smtp_password}",
+    ] : [],
+    var.alert_email != "" && var.alert_smtp_host != "" && nonsensitive(var.alert_smtp_password != "") ? [
+      "        auth_password_file: /alertmanager/config/smtp-password",
+    ] : [],
+    var.alert_email != "" && var.alert_smtp_host != "" ? [
       "        send_resolved: true",
     ] : [],
   ))
@@ -567,7 +578,7 @@ locals {
 
       output {
         metrics = [otelcol.exporter.prometheus.default.input]
-        logs    = [otelcol.exporter.loki.default.receiver]
+        logs    = [otelcol.exporter.loki.default.input]
         traces  = [otelcol.exporter.otlp.tempo.input]
       }
     }

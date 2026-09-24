@@ -58,11 +58,12 @@ resource "aws_ecs_task_definition" "mssql_metrics" {
   }
 
   container_definitions = jsonencode([
-    local.init_container,
+    local.init_containers.rds,
     {
       name      = "mssql-metrics"
       image     = local.images.mssql
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
 
       command = ["sh", "-c", "pip install --quiet --no-cache-dir pytds boto3 && python /rds/config/mssql_metrics.py"]
 

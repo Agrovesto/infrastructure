@@ -37,7 +37,7 @@ PREV = PREV_END.replace(day=1)
 def month_files(s3, month):
     """Parquet objects delivered for the report period that starts at `month`."""
     prefix = f"{PREFIX}/{REPORT}/{REPORT}/"
-    folder = f"{month:%Y%m%d}-"
+    folder = f"year={month.year}/month={month.month}/"
     keys = []
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix, PaginationConfig={"PageSize": 1000}):

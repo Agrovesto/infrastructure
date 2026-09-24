@@ -172,7 +172,7 @@ resource "aws_sns_topic" "db_size_alarm" {
   count = var.db_size_alarm_enabled && var.db_size_alarm_email != "" ? 1 : 0
 
   name              = "${local.name}-db-size-alarm"
-  kms_master_key_id = "alias/aws/sns"
+  kms_master_key_id = aws_kms_key.sns.arn
 
   tags = local.tags
 }

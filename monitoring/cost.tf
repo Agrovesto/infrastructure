@@ -102,7 +102,9 @@ resource "aws_s3_bucket_policy" "cur" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:cur:us-east-1::definition/*"
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:cur:us-east-1:${data.aws_caller_identity.current.account_id}:definition/*"
           }
         }
       },
@@ -115,7 +117,9 @@ resource "aws_s3_bucket_policy" "cur" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "aws:SourceArn"     = "arn:aws:cur:us-east-1::definition/*"
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:cur:us-east-1:${data.aws_caller_identity.current.account_id}:definition/*"
           }
         }
       }

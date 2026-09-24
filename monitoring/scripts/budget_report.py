@@ -24,8 +24,7 @@ PUSHGATEWAY = os.environ["PUSHGATEWAY_URL"].rstrip("/")
 
 TODAY = dt.datetime.now(dt.timezone.utc).date()
 PERIOD_START = TODAY.replace(day=1)
-# The delivery folder is named <period-start>-<period-end>.
-FOLDER = f"{PREFIX}/{REPORT}/{PERIOD_START:%Y%m%d}-"
+FOLDER = f"year={PERIOD_START.year}/month={PERIOD_START.month}/"
 
 
 def month_to_date_files(s3):

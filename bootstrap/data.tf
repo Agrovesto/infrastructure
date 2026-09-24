@@ -86,6 +86,16 @@ data "aws_iam_policy_document" "deploy_scoped" {
       "logs:*",                 # service/flow/vault log groups
       "kms:*",                  # Vault unseal/EFS CMK
       "elasticfilesystem:*",    # Vault raft storage
+      "cloudwatch:*",
+      "sns:*",
+      "rekognition:*",
+      "sqs:*",
+      "application-autoscaling:*",
+      "events:*",
+      "servicediscovery:*",
+      "cur:*",
+      "ses:*",
+      "ssm:*",
       "sts:GetCallerIdentity"
     ]
     resources = ["*"]

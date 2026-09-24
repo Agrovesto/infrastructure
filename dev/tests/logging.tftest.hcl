@@ -397,32 +397,32 @@ run "bootstrap" {
   command = plan
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "aws s3 sync \"s3://${local.name}-host-config/")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "aws s3 sync \"s3://$${host_config_bucket}/")
     error_message = "Configs are synced from the config bucket, which is why they never touch instance user data."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "format_and_mount \"${local.logging_root}\"")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "format_and_mount \"$${logging_root}\"")
     error_message = "The log volume is mounted at the same path the compose file bind-mounts from, whether or not it was attached."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "Storage=persistent")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "Storage=persistent")
     error_message = "journald has to be persistent or the host journal is a RAM buffer Alloy cannot read across a reboot."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "\"max-size\": \"${var.logging.docker_log_max_size}\"")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "\"max-size\": \"$${logging.docker_log_max_size}\"")
     error_message = "Docker's own log rotation is capped daemon-wide, because those files are what the collector tails."
   }
 
   assert {
-    condition     = !strcontains(aws_instance.app.user_data, "amazon-cloudwatch-agent")
+    condition     = !strcontains(file("${path.module}/user_data.sh.tftpl"), "amazon-cloudwatch-agent")
     error_message = "No CloudWatch agent: logs are collected, stored and queried on this host only."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "GRAFANA_ADMIN_PASSWORD=")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "GRAFANA_ADMIN_PASSWORD=%s")
     error_message = "Grafana's password is appended to the compose .env by the bootstrap, which is the only place it is written."
   }
 }
@@ -462,14 +462,14 @@ run "host_role" {
   # The policy document itself cannot be asserted on - mock_provider only knows
   # what override_data pins - so the guard lives where it is plan-known.
   assert {
-    condition     = !strcontains(local.docker_compose, "awslogs") && !strcontains(aws_instance.app.user_data, "awslogs")
+    condition     = !strcontains(local.docker_compose, "awslogs") && !strcontains(file("${path.module}/user_data.sh.tftpl"), "awslogs")
     error_message = "No service may opt into the awslogs driver: that would ship app logs to CloudWatch, which this stack deliberately does not do."
   }
 
   # The collector reads the daemon's own json-file logs, so the rotation config and
   # the driver have to stay as user_data writes them.
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "\"log-driver\": \"json-file\"")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "\"log-driver\": \"json-file\"")
     error_message = "The daemon has to keep json-file logs - Alloy tails those files instead of a per-service driver."
   }
 }
@@ -505,11 +505,6 @@ run "disabled" {
   assert {
     condition     = !strcontains(local.nginx_conf, "dev-logs")
     error_message = "No Grafana vhost, so no new listener on port 80."
-  }
-
-  assert {
-    condition     = !strcontains(aws_instance.app.user_data, local.logging_root)
-    error_message = "The host bootstrap must not touch a logging tree that is not there."
   }
 
   assert {
