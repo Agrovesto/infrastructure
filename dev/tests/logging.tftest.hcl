@@ -201,7 +201,8 @@ run "compose_services" {
   }
 
   assert {
-    condition     = strcontains(local.alertmanager_config, "sns_configs:") && strcontains(local.alertmanager_config, "sigv4:")
+    # The rendered config holds the topic ARN (unknown in plan); check the template.
+    condition     = strcontains(file("alertmanager.yml.tftpl"), "sns_configs:") && strcontains(file("alertmanager.yml.tftpl"), "sigv4:")
     error_message = "Alertmanager publishes to the SNS alerts topic, signed with the instance role."
   }
 
