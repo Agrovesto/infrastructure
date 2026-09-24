@@ -87,7 +87,8 @@ output "backend_domains" {
 }
 
 output "vault_url" {
-  value = "http://${local.vault_fqdn}"
+  description = "Vault is local to the host; use SSH/SSM port forwarding to reach this loopback endpoint"
+  value       = "http://127.0.0.1:${var.vault.host_port}"
 }
 
 output "ecr_repository_urls" {

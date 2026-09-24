@@ -1,0 +1,9 @@
+misconfigurations:
+  - id: AWS-0132
+    paths:
+      - cost.tf
+    statement: The Cost and Usage Report bucket uses SSE-S3 in us-east-1.
+  - id: AWS-0104
+    paths:
+      - security_groups.tf
+    statement: Monitoring tasks require AWS API access and outbound telemetry delivery.

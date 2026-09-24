@@ -367,15 +367,15 @@ run "dns_managed_by_dev" {
     error_message = "manage_dns = true creates the zone for var.domain_name."
   }
 
-  # 5 APIs + vault + mssql
+  # 5 APIs + mssql; Vault is deliberately not exposed via public DNS.
   assert {
-    condition     = length(aws_route53_record.a) == 7
-    error_message = "Every API plus vault and mssql get an A record to the EC2 host."
+    condition     = length(aws_route53_record.a) == 6
+    error_message = "Only the APIs and mssql get A records to the EC2 host."
   }
 
   assert {
-    condition     = toset(keys(aws_route53_record.a)) == toset(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql", "vault"])
-    error_message = "A record keys are the API subdomains plus vault and mssql."
+    condition     = toset(keys(aws_route53_record.a)) == toset(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql"])
+    error_message = "A record keys are the API subdomains and mssql, excluding Vault."
   }
 
   assert {

@@ -132,7 +132,7 @@ describe are listed separately at the end.
 
 - Today there is none. The dev account is neither scraped nor peered; the only
   cross-account relationship is the human with credentials in both accounts.
-- Planned: VPC peering between the dev VPC and the prod VPC plus a cross-account
+- Planned: Re-address one of the overlapping `172.96.0.0/16` VPCs before peering dev and prod; add a cross-account
   scrape role, so the monitoring stack can reach dev endpoints from the prod
   side (~$0.01/GB, no hourly peering charge). Drawn dashed.
 
@@ -202,7 +202,7 @@ line).
 | --- | --- | --- | ---: |
 | dev.yml / prod.yml / monitoring.yml | CI | 1 pipeline per folder, fmt → security → tests → coverage 95 % → Sonar → Infracost → plan → apply | — |
 | GitHub OIDC provider | Identity | 1 provider in the prod account, roles assumed per pipeline | — |
-| prod state object | State | `s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate`, shared by prod (workspace `prod`) and monitoring (workspace `monitoring`) | — |
+| prod state object | State | `s3://nomaos-tfstate-221434544570-eu-west-1/prod/bootstrap.tfstate`, used by prod (workspace `default`); monitoring uses workspace `monitoring` under the same backend key | — |
 | dev state object | State | `s3://nomaos-tfstate-353833416626-eu-west-1/dev/bootstrap.tfstate` | — |
 | bootstrap root | State | local state file, creates both buckets, the OIDC provider and the roles | — |
 
@@ -233,8 +233,7 @@ monitoring groups; `rds` accepts TDS 1433 from `ecs` only; `efs` accepts NFS
 the VPC. Dev: one group on the host, plus a locked-down default group — the
 host is protected by nginx and the security group, not by a private subnet.
 
-**Trust boundaries crossed at runtime.** Internet → ALB (mutually authenticated
-by TLS, wildcard certificate). Tasks → AWS APIs over TLS with IAM roles, no
+**Trust boundaries crossed at runtime.** Internet → ALB (TLS authenticates the ALB to browsers using a wildcard certificate; client certificates are not required). Tasks → AWS APIs over TLS with IAM roles, no
 static keys anywhere: Secrets Manager, SSM, ECS, S3, SES, KMS. CI → AWS over
 OIDC, short-lived credentials. Report mail leaves the account through SES to an
 external mailbox.

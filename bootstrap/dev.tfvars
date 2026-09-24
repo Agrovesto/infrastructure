@@ -9,15 +9,13 @@ deploy_role_name = "nomaos-dev-github-terraform" # the role in the AWS_ROLE_ARN_
 # the list or dev CI loses AWS access. Compare with the role's current trust
 # policy first:
 #   aws iam get-role --role-name nomaos-dev-github-terraform --query Role.AssumeRolePolicyDocument
-# Matches the role's CURRENT trust policy (checked 2026-09-23) + arena/* for
-# this import branch. Remove the arena line after the import if you prefer.
+# Restrict the imported role to this repository before the next apply.
 github_sub_patterns = [
-  "repo:Agrovesto@101108012/*:ref:refs/heads/main",
-  "repo:Agrovesto@101108012/*:ref:refs/heads/dev",
-  "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
-  "repo:Agrovesto@101108012/*:pull_request",
+  "repo:Agrovesto@101108012/infrastructure@1360104538:ref:refs/heads/main",
+  "repo:Agrovesto@101108012/infrastructure@1360104538:ref:refs/heads/dev",
+  "repo:Agrovesto@101108012/infrastructure@1360104538:pull_request",
   # Apply jobs run in the "dev" GitHub Environment, which changes the sub claim
-  "repo:Agrovesto@101108012/*:environment:dev",
+  "repo:Agrovesto@101108012/infrastructure@1360104538:environment:dev",
 ]
 
 # The role was not created by this module, so its policy may not be named

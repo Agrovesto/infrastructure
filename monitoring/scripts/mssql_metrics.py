@@ -87,9 +87,10 @@ def query(cursor, sql):
 def collect():
     metrics = []
     user, password, host, port = read_secret()
-    with pytds.connect(host, user, password, database=DATABASE, port=port, timeout=TIMEOUT, as_dict=True) as conn:
+    with pytds.connect(dsn=host, user=user, password=password, database=DATABASE, port=port, timeout=TIMEOUT, as_dict=True) as conn:
         with conn.cursor() as cursor:
             databases = query(cursor, SIZE_BY_DATABASE)
+            seen_mounts = set()
             for row in databases:
                 if row["db"]:
                     metrics.append('mssql_database_size_bytes{db="%s"} %d' % (row["db"], int(row["bytes"])))
@@ -108,6 +109,9 @@ def collect():
                 volumes = query(cursor, VOLUME_STATS % row["db"].replace("'", "''"))
                 for volume in volumes:
                     mount = str(volume["mount"]).replace("\\", "\\\\")
+                    if mount in seen_mounts:
+                        continue
+                    seen_mounts.add(mount)
                     metrics.append('mssql_volume_total_bytes{mount="%s"} %d' % (mount, int(volume["total_bytes"])))
                     metrics.append('mssql_volume_available_bytes{mount="%s"} %d' % (mount, int(volume["available_bytes"])))
 

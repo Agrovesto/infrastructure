@@ -26,11 +26,12 @@ resource "aws_ecs_task_definition" "grafana" {
   }
 
   container_definitions = jsonencode([
-    local.init_container,
+    local.init_containers.grafana,
     {
       name      = "grafana"
       image     = local.images.grafana
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "472"
 
       portMappings = [{ name = "http", containerPort = 3000, protocol = "tcp" }]
@@ -148,13 +149,9 @@ resource "aws_lb_listener_rule" "grafana" {
 
   # Optional client-IP allowlist, enforced at the load balancer because the ALB
   # itself is internet-facing.
-  dynamic "condition" {
-    for_each = length(var.grafana_allowed_cidrs) > 0 ? [1] : []
-
-    content {
-      source_ip {
-        values = var.grafana_allowed_cidrs
-      }
+  condition {
+    source_ip {
+      values = length(var.grafana_allowed_cidrs) > 0 ? var.grafana_allowed_cidrs : [data.aws_vpc.prod.cidr_block]
     }
   }
 

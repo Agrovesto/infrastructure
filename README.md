@@ -65,7 +65,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 ## 📊 Observability (The Monitoring Stack)
 
-The project deliberately avoids AWS-native observability (CloudWatch Alarms, Container Insights, X-Ray) to minimize costs. Instead, it uses an open-source stack:
+The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while the monitoring stack uses open-source tooling for application metrics, logs, traces, and alert routing. Container Insights and X-Ray are not enabled:
 
 - **Metrics**: Prometheus scrapes targets and stores metrics on EFS.
 - **Logs**: Loki ingest logs from Docker (Dev) and CloudWatch Logs via a collector (Prod).
@@ -101,7 +101,7 @@ Workflows in `.github/workflows/` manage automated deployments:
 
 - **OIDC**: GitHub Actions assumes IAM roles via OIDC (no long-lived AWS keys).
 - **Encryption**: All S3 buckets, EFS volumes, and EBS disks are encrypted (AES256 or KMS).
-- **Scans**: Checkov and Trivy run on every PR. Suppressions are documented in `checkov.yml` and `trivy.yml`.
+- **Scans**: Checkov and Trivy run on every PR. Suppressions are documented in each stack's `checkov.yml` and `.trivyignore.yaml`.
 
 ---
 

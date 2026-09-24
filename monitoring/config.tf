@@ -148,3 +148,25 @@ resource "aws_ssm_parameter" "grafana_admin_password" {
 
   tags = local.tags
 }
+
+resource "aws_ssm_parameter" "alert_smtp_password" {
+  count = nonsensitive(var.alert_smtp_password != "") ? 1 : 0
+
+  name   = "${local.param}/alertmanager/smtp-password"
+  type   = "SecureString"
+  value  = var.alert_smtp_password
+  key_id = aws_kms_key.monitoring.arn
+
+  tags = local.tags
+}
+
+resource "aws_ssm_parameter" "alert_webhook_url" {
+  count = nonsensitive(var.alertmanager_webhook_url != "") ? 1 : 0
+
+  name   = "${local.param}/alertmanager/webhook-url"
+  type   = "SecureString"
+  value  = var.alertmanager_webhook_url
+  key_id = aws_kms_key.monitoring.arn
+
+  tags = local.tags
+}

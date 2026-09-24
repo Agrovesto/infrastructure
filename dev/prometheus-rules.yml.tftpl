@@ -43,14 +43,17 @@ groups:
           summary: "{{ $labels.mountpoint }} has less than ${disk_free_percent}% free"
           description: "{{ $labels.mountpoint }} is at {{ $value | printf \"%.1f\" }}% free."
 
+%{ for container in expected_containers ~}
       - alert: ContainerDown
-        expr: time() - container_last_seen{name=~"agrovesto-.+"} > 120
+        expr: absent(container_last_seen{name="agrovesto-${container}"})
         for: 2m
         labels:
           severity: critical
+          name: agrovesto-${container}
         annotations:
-          summary: "Container {{ $labels.name }} is not running"
-          description: "cAdvisor last saw {{ $labels.name }} more than 2 minutes ago."
+          summary: "Container agrovesto-${container} is not running"
+          description: "cAdvisor has not reported agrovesto-${container} for 2 minutes."
+%{ endfor ~}
 
       - alert: ContainerRestarting
         expr: changes(container_start_time_seconds{name=~"agrovesto-.+"}[15m]) > 2

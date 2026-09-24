@@ -79,6 +79,24 @@ data "aws_iam_policy_document" "ec2" {
     ]
   }
 
+  statement {
+    sid       = "ReadHostPasswords"
+    actions   = ["ssm:GetParameter"]
+    resources = [aws_ssm_parameter.mssql_sa_password.arn, "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password"]
+  }
+
+  statement {
+    sid       = "DecryptHostPasswords"
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.host_passwords.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.aws_region}.amazonaws.com"]
+    }
+  }
+
   # Docker login on the EC2 host (user_data) — GetAuthorizationToken has no
   # resource-level scoping by AWS design (covered by the document-level skips).
   statement {

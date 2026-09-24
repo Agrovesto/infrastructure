@@ -30,7 +30,7 @@
 resource "aws_ebs_volume" "logging" {
   count = var.logging.enabled ? 1 : 0
 
-  availability_zone = aws_instance.app.availability_zone
+  availability_zone = aws_subnet.public[0].availability_zone
   size              = var.logging.volume_size_gb
   type              = "gp3"
   encrypted         = true
