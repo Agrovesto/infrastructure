@@ -12,3 +12,8 @@ severity:
 misconfiguration:
   scanners:
     - terraform
+
+# Existing resources imported as-is (not the new design).
+scan:
+  skip-files:
+    - "**/legacy.tf"

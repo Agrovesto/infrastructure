@@ -2,7 +2,7 @@
 # RDS enhanced-monitoring agent: a scheduled Fargate task runs DMV queries over
 # TDS and pushes the results to Pushgateway, where Prometheus scrapes them.
 
-# Adopted instance (imports/RUNBOOK.md): credentials live in the RDS-managed
+# Adopted instance (docs/import-runbook.md): credentials live in the RDS-managed
 # secret, read by ARN at runtime - nothing sensitive is copied into this state.
 data "aws_db_instance" "mssql" {
   count = var.mssql_instance_identifier != "" ? 1 : 0

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-imports/fix_generated.py <path/to/generated_legacy.tf> [--profile P]
+scripts/fix_generated.py <path/to/generated_legacy.tf> [--profile P]
 
 Cleans the known `terraform plan -generate-config-out` defects so that
 `terraform validate` passes. Stdlib only (runs on stock macOS python3).

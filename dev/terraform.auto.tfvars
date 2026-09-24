@@ -109,7 +109,7 @@ logging = {
 }
 
 # =============================================================================
-# Adoption of existing resources (imports/RUNBOOK.md, discovery 2026-09-23)
+# Adoption of existing resources (docs/import-runbook.md, discovery 2026-09-23)
 # =============================================================================
 # vpc-0d9b566c353787d53. cidr_block is ForceNew, so it must be the real value.
 vpc_cidr = "172.96.0.0/16"

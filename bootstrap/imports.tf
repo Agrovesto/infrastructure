@@ -1,12 +1,7 @@
 # =============================================================================
-# BOOTSTRAP — import the state bucket + deploy role that already exist.
-#
-# bootstrap/ has no backend block (local state) and its defaults target PROD.
-# Run it once per account, each with its own local state file (RUNBOOK §2):
-#
-#   imports/stage.sh bootstrap && cd bootstrap && terraform init
-#   AWS_PROFILE=agrovesto-prod terraform plan -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars
-#   AWS_PROFILE=agrovesto-dev  terraform plan -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars
+# One-shot import blocks: adopt the existing AWS resources into this stack's
+# state (see docs/import-runbook.md). After the first clean apply they are
+# no-ops; delete this file once `terraform plan` shows "No changes".
 # =============================================================================
 
 variable "account_id" {
