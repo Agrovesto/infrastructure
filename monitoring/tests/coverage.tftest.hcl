@@ -295,7 +295,22 @@ run "no_sns_receiver_when_unset" {
 }
 
 run "config_bucket_is_private_and_tls_only" {
-  command = apply
+  # plan + pinned computed attributes: a full mocked apply of the monitoring
+  # module feeds random strings into ARNs and policies and is fragile.
+  command = plan
+
+  override_resource {
+    target = aws_s3_bucket.config
+    values = {
+      id  = "agrovesto-monitoring-config-221434544570"
+      arn = "arn:aws:s3:::agrovesto-monitoring-config-221434544570"
+    }
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.config.block_public_policy && aws_s3_bucket_public_access_block.config.restrict_public_buckets
+    error_message = "The config bucket blocks public access."
+  }
 
   assert {
     condition     = aws_s3_bucket.config.bucket == "agrovesto-monitoring-config-221434544570"
