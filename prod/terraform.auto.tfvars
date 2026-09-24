@@ -196,7 +196,7 @@ mssql_max_allocated_storage_gb     = 63
 mssql_storage_type                 = "gp2"
 mssql_master_username              = "agrovesto"
 mssql_subnet_group_name            = "agxdb2subnetgroup"
-mssql_performance_insights_enabled = false # Express: not supported
+mssql_performance_insights_enabled = true  # live instance has it on (import plan)
 
 # !! migration-prod is NOT encrypted. storage_encrypted is ForceNew, so it must
 # stay false until the planned encrypt-by-restore window (RUNBOOK §4.2).
@@ -206,3 +206,15 @@ mssql_storage_encrypted = false
 # RDS SG, so the EC2 -> DB paths in use today keep working. Remove them once
 # the apps connect through the ECS SG.
 mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"]
+
+# --- Match the live resources (from imports/plans/prod.txt) ------------------
+# Password stays as it is today; do NOT switch to an RDS-managed secret here,
+# that rotates the live password. CONFIRM this secret belongs to migration-prod
+# and has "username"/"password" keys before apply (see RUNBOOK).
+mssql_manage_master_user_password = false
+mssql_existing_master_secret_arn  = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:agxdb2DBcredentials-26LKpW"
+mssql_monitoring_role_arn         = "arn:aws:iam::221434544570:role/rds-monitoring-role"
+mssql_backup_window               = "04:13-04:43"
+mssql_maintenance_window          = "mon:22:43-mon:23:13"
+mssql_subnet_group_description    = "Subnet group for agxdb2 RDS instance"
+public_subnet_map_public_ip       = true

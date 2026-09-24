@@ -46,6 +46,9 @@ variables {
   mssql_master_username               = "agrovestoadmin"
   mssql_subnet_group_name             = ""
   mssql_additional_security_group_ids = []
+  mssql_manage_master_user_password   = true
+  mssql_existing_master_secret_arn    = ""
+  mssql_monitoring_role_arn           = ""
 
   services = {
     wallet = {
@@ -282,7 +285,10 @@ run "adopt_existing_instance" {
     mssql_max_allocated_storage_gb      = 63
     mssql_storage_type                  = "gp2"
     mssql_storage_encrypted             = false
-    mssql_performance_insights_enabled  = false
+    mssql_performance_insights_enabled  = true
+    mssql_manage_master_user_password   = false
+    mssql_existing_master_secret_arn    = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:agxdb2DBcredentials-26LKpW"
+    mssql_monitoring_role_arn           = "arn:aws:iam::123456789012:role/rds-monitoring-role"
     mssql_master_username               = "agrovesto"
     mssql_subnet_group_name             = "agxdb2subnetgroup"
     mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"]
@@ -294,13 +300,18 @@ run "adopt_existing_instance" {
   }
 
   assert {
-    condition     = aws_db_instance.mssql.storage_encrypted == false && aws_db_instance.mssql.performance_insights_enabled == false
-    error_message = "Adopting the unencrypted Express instance must not force a replacement or enable an unsupported feature."
+    condition     = aws_db_instance.mssql.storage_encrypted == false && aws_db_instance.mssql.performance_insights_enabled == true
+    error_message = "Adopting migration-prod must not force a replacement and keeps Performance Insights as it is live."
   }
 
   assert {
-    condition     = aws_db_subnet_group.mssql.name == "agxdb2subnetgroup" && aws_db_instance.mssql.manage_master_user_password == true
-    error_message = "The adopted instance keeps its subnet group and its RDS-managed secret."
+    condition     = aws_db_subnet_group.mssql.name == "agxdb2subnetgroup" && aws_db_instance.mssql.manage_master_user_password == null
+    error_message = "The adopted instance keeps its subnet group; its live password must not be rotated into an RDS-managed secret."
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.monitoring_role_arn == "arn:aws:iam::123456789012:role/rds-monitoring-role" && length(aws_iam_role.rds_monitoring) == 0
+    error_message = "The adopted instance reuses rds-monitoring-role instead of a duplicate role."
   }
 
   assert {

@@ -19,6 +19,8 @@ Fixes:
   * aws_lambda_function   no code source -> filename = placeholder zip,
                           lifecycle ignore_changes [filename, source_code_hash]
                           (AWS never returns the code; this keeps the live code)
+  * aws_ssm_parameter     value = null -> live value (String) or placeholder
+                          (SecureString) + ignore_changes [value, insecure_value]
   * aws_key_pair          public_key = null -> real key from
                           `aws ec2 describe-key-pairs --include-public-key`
                           (placeholder if the CLI call fails) + ignore_changes
@@ -54,6 +56,17 @@ def key_public(name):
         return json.loads(r.stdout)["KeyPairs"][0]["PublicKey"].strip()
     except Exception as e:  # noqa
         print(f"  ! could not fetch public key for {name}: {e}", file=sys.stderr)
+        return None
+
+def ssm_value(name):
+    cmd = ["aws", "ssm", "get-parameter", "--name", name, "--output", "json"]
+    if profile:
+        cmd += ["--profile", profile]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        return json.loads(r.stdout)["Parameter"]["Value"]
+    except Exception as e:  # noqa
+        print(f"  ! could not fetch SSM parameter {name}: {e}", file=sys.stderr)
         return None
 
 # split into top-level blocks
@@ -114,6 +127,20 @@ for b in blocks:
             extra_ignore = ["filename", "source_code_hash"]
         else:
             print(f"  ! {m.group(2)} is an Image lambda: set image_uri by hand", file=sys.stderr)
+    elif rtype == "aws_ssm_parameter":
+        # SSM values are never written by -generate-config-out. String params:
+        # fetch the live value into insecure_value; SecureString: placeholder.
+        # ignore_changes keeps Terraform from ever rewriting the live value.
+        ptype = next((kv(l)[1].strip('"') for l in body if kv(l)[0] == "type"), "String")
+        pname = next((kv(l)[1].strip('"') for l in body if kv(l)[0] == "name"), None)
+        body = [l for l in body if not (kv(l)[0] in ("value", "value_wo", "insecure_value")
+                                         and kv(l)[1].startswith("null"))]
+        if ptype == "SecureString":
+            body = body[:-1] + ['  value = "placeholder-real-value-kept-by-ignore_changes"'] + body[-1:]
+        else:
+            live = ssm_value(pname) if pname else None
+            body = body[:-1] + [f"  insecure_value = {json.dumps(live if live is not None else 'placeholder')}"] + body[-1:]
+        extra_ignore = ["value", "insecure_value"]
     elif rtype == "aws_key_pair":
         kname = next((kv(l)[1].strip('"') for l in body if kv(l)[0] == "key_name"), None)
         pub = key_public(kname) if kname else None

@@ -66,3 +66,15 @@ variable "state_bucket_kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "state_lifecycle_rule_id" {
+  description = "Lifecycle rule id (set to the existing id when importing a bucket)"
+  type        = string
+  default     = "expire-old-state-versions"
+}
+
+variable "state_noncurrent_days" {
+  description = "Days before noncurrent state versions expire"
+  type        = number
+  default     = 30
+}

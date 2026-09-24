@@ -123,6 +123,10 @@ override_data {
 }
 
 variables {
+  # Test the new-instance defaults, not the adoption values in terraform.auto.tfvars.
+  mssql_monitoring_role_arn   = ""
+  public_subnet_map_public_ip = false
+
   domain_name        = "nomaos.com"
   mssql_databases    = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   log_retention_days = 30
@@ -330,12 +334,12 @@ run "iam" {
   }
 
   assert {
-    condition     = aws_iam_role.rds_monitoring.name == "${var.project}-${var.environment}-rds-monitoring-role"
+    condition     = aws_iam_role.rds_monitoring[0].name == "${var.project}-${var.environment}-rds-monitoring-role"
     error_message = "RDS enhanced monitoring role keeps its convention name."
   }
 
   assert {
-    condition     = aws_iam_role_policy_attachment.rds_monitoring.policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+    condition     = aws_iam_role_policy_attachment.rds_monitoring[0].policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
     error_message = "The monitoring role needs the RDS enhanced monitoring managed policy."
   }
 }

@@ -115,6 +115,20 @@ Afterwards, upload the local state so it isn't lost:
 
 Monitoring reads the prod VPC/ALB by tag, so prod must be applied first.
 
+> **Easiest path:** `imports/plan.sh prod` (then `monitoring`, then `dev`). It
+> selects the right workspace, runs `imports/fix_generated.py` on the generated
+> config and re-plans. Output goes to `imports/plans/<stack>.txt`.
+>
+> * **Workspaces:** prod uses `default` and monitoring uses `monitoring`. They
+>   share one state key. If you plan monitoring in `default`, it reads prod's
+>   state and offers to **destroy prod's Route 53 zones**. Always run
+>   `terraform workspace select monitoring` in `monitoring/` first.
+> * **Monitoring errors before prod is applied:** `no matching EC2 VPC`,
+>   `couldn't find` ALB, and the ALB SG errors are expected. Those data sources
+>   look up tags and resources that the prod apply creates.
+> * **Dev:** first `export TF_VAR_mssql_sa_password=...` with the SA password the
+>   dev host already uses.
+
 ```bash
 imports/stage.sh prod
 cd prod && terraform init
@@ -173,6 +187,24 @@ The code hard-codes `storage_encrypted = true` (ForceNew). **If discover.sh show
 `StorageEncrypted=False`, stop and tell me.** An unencrypted instance can only
 become encrypted through snapshot → encrypted copy → restore. That's a planned
 maintenance window, not an import.
+
+**Credentials (import plan finding, 2026-09-23).** migration-prod does **not**
+use an RDS-managed secret. `manage_master_user_password = true` would rotate
+the live password. `terraform.auto.tfvars` therefore sets:
+* `mssql_manage_master_user_password = false`. Terraform never touches the password.
+* `mssql_existing_master_secret_arn` = `agxdb2DBcredentials`. The ECS tasks read
+  DB_USER and DB_PASSWORD from this secret.
+
+**Confirm before apply** that this secret belongs to migration-prod and has
+`username` and `password` keys:
+`aws secretsmanager get-secret-value --secret-id agxdb2DBcredentials --query SecretString --output text | jq 'keys, .host'`.
+If it's `nomaosDBcredentials`, change the ARN.
+
+Also matched to the live instance: the backup window `04:13-04:43`, the maintenance window
+`mon:22:43-mon:23:13`, Performance Insights on, and the existing
+`rds-monitoring-role`, so no duplicate role is created. The plan still makes three
+deliberate safety changes, all in place: backup retention 2 → 30 days,
+`deletion_protection = true`, and a final snapshot on delete.
 
 Also check:
 * **Backup and maintenance windows**: the code sets `03:00-04:00` and `sun:04:30-sun:05:30`. These change in place with `apply_immediately = false`, so they take effect in the next maintenance window.

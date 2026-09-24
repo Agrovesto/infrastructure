@@ -26,5 +26,8 @@ github_sub_patterns = [
 deploy_admin_access  = false
 import_deploy_policy = false
 
-# Uncomment only if `aws s3api get-bucket-encryption --bucket nomaos-tfstate-353833416626-eu-west-1` shows aws:kms
-# state_bucket_kms_key_arn = "arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6"
+# Match the live bucket (import plan 2026-09-23: SSE-KMS with bucket key,
+# rule "retention-and-incomplete-uploads", noncurrent 365 days).
+state_lifecycle_rule_id  = "retention-and-incomplete-uploads"
+state_noncurrent_days    = 365
+state_bucket_kms_key_arn = "arn:aws:kms:eu-west-1:353833416626:key/31f57b1f-cbde-4aa6-8c6e-18e129c80fb6"

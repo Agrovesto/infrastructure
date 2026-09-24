@@ -33,7 +33,15 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 # Enhanced monitoring for the RDS instance.
+# Reuses var.mssql_monitoring_role_arn when set (adopted instance already has
+# rds-monitoring-role) so no duplicate role is created.
+locals {
+  rds_monitoring_role_arn = var.mssql_monitoring_role_arn != "" ? var.mssql_monitoring_role_arn : aws_iam_role.rds_monitoring[0].arn
+}
+
 resource "aws_iam_role" "rds_monitoring" {
+  count = var.mssql_monitoring_role_arn == "" ? 1 : 0
+
   name               = "${local.name}-rds-monitoring-role"
   assume_role_policy = can(jsondecode(data.aws_iam_policy_document.rds_monitoring_assume.json)) ? data.aws_iam_policy_document.rds_monitoring_assume.json : "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
 
@@ -41,6 +49,8 @@ resource "aws_iam_role" "rds_monitoring" {
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {
-  role       = aws_iam_role.rds_monitoring.name
+  count = var.mssql_monitoring_role_arn == "" ? 1 : 0
+
+  role       = aws_iam_role.rds_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }

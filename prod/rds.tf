@@ -19,12 +19,16 @@
 # state - consumers read it at runtime via aws_db_instance.mssql
 # .master_user_secret[0].secret_arn (keys: username, password).
 #
-# Adopting the existing instance (imports/RUNBOOK.md): migration-prod already
-# uses a managed secret, so importing it is a no-op for credentials.
+# Adopting the existing instance (imports/RUNBOOK.md): migration-prod does NOT
+# use a managed secret (the import plan showed manage_master_user_password
+# null -> true, which would ROTATE the live password and break every current
+# client). So for the adopted instance var.mssql_manage_master_user_password =
+# false: Terraform never sets or reads the password, and consumers use the
+# existing Secrets Manager secret in var.mssql_existing_master_secret_arn.
 
 locals {
   mssql_identifier        = var.mssql_identifier != "" ? var.mssql_identifier : "${local.name}-mssql"
-  mssql_master_secret_arn = try(aws_db_instance.mssql.master_user_secret[0].secret_arn, "")
+  mssql_master_secret_arn = var.mssql_existing_master_secret_arn != "" ? var.mssql_existing_master_secret_arn : try(aws_db_instance.mssql.master_user_secret[0].secret_arn, "")
 }
 
 resource "aws_db_instance" "mssql" {
@@ -51,13 +55,13 @@ resource "aws_db_instance" "mssql" {
   port                   = var.mssql_port
 
   username                    = var.mssql_master_username
-  manage_master_user_password = true
+  manage_master_user_password = var.mssql_manage_master_user_password ? true : null
 
   multi_az = var.mssql_multi_az
 
   backup_retention_period = var.mssql_backup_retention_days
-  backup_window           = "03:00-04:00"         # UTC
-  maintenance_window      = "sun:04:30-sun:05:30" # UTC, outside the backup window
+  backup_window           = var.mssql_backup_window      # UTC
+  maintenance_window      = var.mssql_maintenance_window # UTC, outside the backup window
   copy_tags_to_snapshot   = true
 
   skip_final_snapshot       = var.mssql_skip_final_snapshot
@@ -68,7 +72,7 @@ resource "aws_db_instance" "mssql" {
   # (free 7-day retention tier). The log types are a variable because Express
   # has no SQL Server Agent, so there is no agent log to publish.
   monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
+  monitoring_role_arn             = local.rds_monitoring_role_arn
   enabled_cloudwatch_logs_exports = var.mssql_enabled_cloudwatch_logs_exports
   # SQL Server Express does not support Performance Insights.
   performance_insights_enabled          = var.mssql_performance_insights_enabled
@@ -78,6 +82,12 @@ resource "aws_db_instance" "mssql" {
   apply_immediately          = false
 
   tags = merge(local.tags, { Name = local.mssql_identifier })
+
+  lifecycle {
+    # Password is never managed here (RDS-managed secret, or the adopted
+    # instance's existing secret).
+    ignore_changes = [password]
+  }
 }
 
 # -----------------------------------------------------------------------------

@@ -11,8 +11,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/imports/plans"; mkdir -p "$OUT"
 export AWS_REGION=eu-west-1 AWS_PAGER="" TF_IN_AUTOMATION=1
 
-run() { # name dir profile extra-plan-args...
-  local name=$1 dir=$2 profile=$3; shift 3
+run() { # name dir profile workspace extra-plan-args...
+  local name=$1 dir=$2 profile=$3 ws=$4; shift 4
   local log="$OUT/$name.txt"
   echo "=== $name ($dir, $profile) -> imports/plans/$name.txt"
   (
@@ -21,9 +21,21 @@ run() { # name dir profile extra-plan-args...
     rm -f generated_legacy.tf
     echo "# $name  $(date -u +%FT%TZ)  terraform $(terraform version | head -1)"
     terraform init -input=false -no-color -reconfigure || exit 1
+    # prod = default workspace, monitoring = "monitoring" workspace (same as CI;
+    # both share one state key). Wrong workspace = wrong state = bogus destroys.
+    terraform workspace select -or-create "$ws" || exit 1
+    echo "# workspace: $(terraform workspace show)"
     terraform plan -input=false -no-color -lock=false -generate-config-out=generated_legacy.tf "$@"
     rc=$?
-    echo; echo "# plan exit code: $rc"
+    echo; echo "# plan exit code (generate pass): $rc"
+    if [ "$rc" != 0 ] && [ -f generated_legacy.tf ]; then
+      # Clean the generator's known defects, then plan again with the file in place.
+      echo; echo "# running imports/fix_generated.py and re-planning"
+      python3 "$ROOT/imports/fix_generated.py" generated_legacy.tf --profile "$profile"
+      terraform plan -input=false -no-color -lock=false "$@"
+      rc=$?
+      echo; echo "# plan exit code (after fix): $rc"
+    fi
     if [ -f generated_legacy.tf ]; then
       cp generated_legacy.tf "$OUT/$name.generated_legacy.tf"
       echo "# generated config copied to imports/plans/$name.generated_legacy.tf"
@@ -43,11 +55,18 @@ want() { [ "$TARGET" = all ] || [ "$TARGET" = "$1" ]; }
 
 # Plain if-blocks (not `;;&`) so this runs on macOS's bash 3.2 too.
 if want bootstrap-prod || want bootstrap-dev; then stage bootstrap; fi
-if want bootstrap-prod; then run bootstrap-prod bootstrap agrovesto-prod -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars; fi
-if want bootstrap-dev;  then run bootstrap-dev  bootstrap agrovesto-dev  -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars; fi
-if want prod;       then stage prod;       run prod prod agrovesto-prod; fi
-if want monitoring; then stage monitoring; run monitoring monitoring agrovesto-prod; fi
-if want dev;        then stage dev;        run dev dev agrovesto-dev; fi
+if want bootstrap-prod; then run bootstrap-prod bootstrap agrovesto-prod default -state=prod.tfstate -var-file=../imports/bootstrap/prod.tfvars; fi
+if want bootstrap-dev;  then run bootstrap-dev  bootstrap agrovesto-dev  default -state=dev.tfstate  -var-file=../imports/bootstrap/dev.tfvars; fi
+if want prod;       then stage prod;       run prod prod agrovesto-prod default; fi
+if want monitoring; then stage monitoring; run monitoring monitoring agrovesto-prod monitoring; fi
+if want dev; then
+  if [ -z "${TF_VAR_mssql_sa_password:-}" ]; then
+    echo "=== dev skipped: export TF_VAR_mssql_sa_password first (the SA password the dev host uses today;" >&2
+    echo "    it is only read, not printed; plan output masks it as sensitive)" >&2
+  else
+    stage dev; run dev dev agrovesto-dev default
+  fi
+fi
 
 echo
 echo "Before committing imports/plans/, check for secrets (see RUNBOOK):"

@@ -496,3 +496,46 @@ variable "manage_default_security_group" {
   type        = bool
   default     = true
 }
+
+# -----------------------------------------------------------------------------
+# Adoption of existing resources (values in terraform.auto.tfvars match AWS)
+# -----------------------------------------------------------------------------
+
+variable "mssql_manage_master_user_password" {
+  description = "Let RDS manage the master password. false for the adopted instance (true would rotate its live password)."
+  type        = bool
+  default     = true
+}
+
+variable "mssql_existing_master_secret_arn" {
+  description = "Existing Secrets Manager secret (keys: username, password) used when the password is not RDS-managed"
+  type        = string
+  default     = ""
+}
+
+variable "mssql_monitoring_role_arn" {
+  description = "Existing enhanced-monitoring role to reuse. Empty = create one."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_backup_window" {
+  type    = string
+  default = "03:00-04:00"
+}
+
+variable "mssql_maintenance_window" {
+  type    = string
+  default = "sun:04:30-sun:05:30"
+}
+
+variable "mssql_subnet_group_description" {
+  type    = string
+  default = "Managed by Terraform"
+}
+
+variable "public_subnet_map_public_ip" {
+  description = "Auto-assign public IPs in public subnets"
+  type        = bool
+  default     = false
+}
