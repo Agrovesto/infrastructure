@@ -1,13 +1,11 @@
-# Dev account (353833416626): PR into `dev` = checks + plan; push to `dev` = deploy.
+# Dev account (353833416626): any PR into `dev` = checks + plan; any merge/push to `dev` = deploy.
 name: "Terraform (dev)"
 
 on:
   pull_request:
     branches: [dev]
-    paths: ["dev/**", "scripts/**", "infracost-usage/dev.yml", "sonar-project-dev.properties", ".github/workflows/dev.yml", ".github/workflows/terraform-pipeline.yml"]
   push:
     branches: [dev]
-    paths: ["dev/**", "scripts/**", "infracost-usage/dev.yml", "sonar-project-dev.properties", ".github/workflows/dev.yml", ".github/workflows/terraform-pipeline.yml"]
   workflow_dispatch:
 
 concurrency:
