@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euxo pipefail
+set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
@@ -78,8 +78,7 @@ format_and_mount() {
   mount -a
 }
 
-format_and_mount /data/mssql "${mssql_device}" /dev/nvme1n1 /dev/xvdf /dev/sdf ||
-  echo "WARN: SQL Server data volume missing; /data/mssql stays on the root disk" >&2
+format_and_mount /data/mssql "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${mssql_volume_id}" /dev/xvdf
 chown -R 10001:0 /data/mssql || true
 %{ if logging.enabled ~}
 
@@ -98,9 +97,7 @@ journalctl --flush || true
 
 # Loki's chunks, the Prometheus TSDB and Grafana's sqlite live here, so a
 # replacement of the instance does not throw away the logs already in.
-if ! format_and_mount "${logging_root}" "${logging.volume_device}" /dev/nvme2n1 /dev/xvdg /dev/sdg; then
-  echo "WARN: logging volume missing; the stores stay on the root disk (retention still caps them)" >&2
-fi
+format_and_mount "${logging_root}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${logging_volume_id}" /dev/xvdg
 %{ endif ~}
 
 # -----------------------------------------------------------------------------
@@ -117,6 +114,24 @@ fi
 # -----------------------------------------------------------------------------
 mkdir -p /opt/agrovesto
 aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}" --only-show-errors
+
+cat >/etc/systemd/system/agrovesto-sync.service <<'UNIT'
+[Unit]
+Description=Refresh host configuration and start Agrovesto containers
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+ConditionPathExists=/opt/agrovesto/compose/docker-compose.yml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
+ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable agrovesto-sync.service
 test -s /opt/agrovesto/compose/docker-compose.yml || {
   echo "FATAL: host config did not sync from s3://${host_config_bucket}" >&2
   exit 1
@@ -136,18 +151,20 @@ chown -R 65534:65534 "${logging_root}/prometheus" "${logging_root}/alertmanager"
 chown -R 472:472 "${logging_root}/grafana"
 %{ endif ~}
 
-# Secrets are kept out of the rendered files: compose resolves $${MSSQL_SA_PASSWORD}
-# and $${GRAFANA_ADMIN_PASSWORD} from this .env at run time.
+# Passwords are fetched from SSM at boot, never embedded in instance user data.
 mkdir -p /opt/agrovesto/{compose,scripts}
-cat >/opt/agrovesto/compose/.env <<'ENVEOF'
-MSSQL_SA_PASSWORD=${sa_password}
-BACKUP_BUCKET=${backup_bucket}
-AWS_REGION=${aws_region}
+SA_PW=$(aws ssm get-parameter --with-decryption --name "${mssql_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+{
+printf 'MSSQL_SA_PASSWORD=%s\n' "$SA_PW"
+printf 'VAULT_DEV_ROOT_TOKEN=%s\n' "$(openssl rand -hex 32)"
+printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\n' "${backup_bucket}" "${aws_region}"
 %{ if logging.enabled ~}
-GRAFANA_ADMIN_PASSWORD=${grafana_admin_password}
+GRAFANA_PW=$(aws ssm get-parameter --with-decryption --name "${grafana_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_PW"
 %{ endif ~}
-ENVEOF
+} >/opt/agrovesto/compose/.env
 chmod 600 /opt/agrovesto/compose/.env
+unset SA_PW GRAFANA_PW
 
 # One-shot database bootstrap; compose has no init container of its own.
 cat >/opt/agrovesto/scripts/init-mssql.sh <<'INIT'
@@ -168,6 +185,7 @@ set -euo pipefail
 source /opt/agrovesto/compose/.env
 STAMP=$(date +%Y%m%d-%H%M)
 mkdir -p /data/mssql/backups
+mkdir -p /data/mssql/backup
 # Backup each DB via sqlcmd inside the mssql container
 for db in ${db_list}; do
   docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
@@ -189,4 +207,4 @@ docker compose up -d
 sleep 40
 docker exec agrovesto-mssql bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; do sleep 5; done'
 docker cp /opt/agrovesto/scripts/init-dbs.sql agrovesto-mssql:/tmp/init-dbs.sql
-docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${sa_password}" -C -i /tmp/init-dbs.sql || true
+docker exec agrovesto-mssql bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -i /tmp/init-dbs.sql' || true

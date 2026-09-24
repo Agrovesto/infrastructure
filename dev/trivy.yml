@@ -1,9 +1,12 @@
 # trivy.yml — filesystem scan of the dev/ folder:
 # vulnerabilities (package files, if any), IaC misconfig (Terraform), secrets.
-scanners:
-  - vuln
-  - misconfig
-  - secret
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret
+
+ignorefile: dev/.trivyignore.yaml
 
 severity:
   - HIGH

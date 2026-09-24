@@ -58,7 +58,7 @@ variable "public_subnet_cidrs" {
 variable "allowed_ssh_cidrs" {
   description = "CIDRs allowed to SSH to the EC2 instance"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 # -----------------------------------------------------------------------------

@@ -34,14 +34,13 @@ variable "deploy_role_name" {
 }
 
 variable "github_sub_patterns" {
-  description = "Allowed token.actions.githubusercontent.com:sub patterns for the deploy role (main + PRs; arena branches so pushes from working branches can assume the role during setup — tighten if you like)"
+  description = "Allowed token.actions.githubusercontent.com:sub patterns for this repository's deploy role"
   type        = list(string)
   default = [
-    "repo:Agrovesto@101108012/*:ref:refs/heads/main",
-    "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
-    "repo:Agrovesto@101108012/*:pull_request",
+    "repo:Agrovesto@101108012/infrastructure@1360104538:ref:refs/heads/main",
+    "repo:Agrovesto@101108012/infrastructure@1360104538:pull_request",
     # Apply jobs run in the "production" GitHub Environment, which changes the sub claim
-    "repo:Agrovesto@101108012/*:environment:production"
+    "repo:Agrovesto@101108012/infrastructure@1360104538:environment:production"
   ]
 }
 

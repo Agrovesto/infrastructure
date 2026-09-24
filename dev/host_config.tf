@@ -11,6 +11,42 @@
 #
 # The bucket is unconditional, unlike the logging volume: the compose project and
 # nginx.conf are delivered through it on every boot, logging stack or not.
+resource "aws_kms_key" "host_passwords" {
+  description         = "${local.name} host passwords in SSM"
+  enable_key_rotation = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AllowAccountIamPolicies"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_ssm_parameter" "mssql_sa_password" {
+  name   = "/${local.name}/mssql_sa_password"
+  type   = "SecureString"
+  value  = var.mssql_sa_password
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "grafana_admin_password" {
+  count = var.logging.enabled ? 1 : 0
+
+  name   = "/${local.name}/grafana_admin_password"
+  type   = "SecureString"
+  value  = var.logging.grafana_admin_password
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
 resource "aws_s3_bucket" "host_config" {
   # "dev-" prefix comes from local.name, so the prod stack can never write here.
   bucket = local.host_config_bucket

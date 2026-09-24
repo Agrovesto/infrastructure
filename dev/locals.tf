@@ -32,24 +32,20 @@ locals {
   ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
 
   mssql = {
-    sa_password = var.mssql_sa_password
-    databases   = var.mssql_databases
-    image       = var.mssql_image
-    pid         = var.mssql_pid
-    host_port   = var.mssql_host_port
-    subdomain   = var.mssql_subdomain
+    databases = var.mssql_databases
+    image     = var.mssql_image
+    pid       = var.mssql_pid
+    host_port = var.mssql_host_port
+    subdomain = var.mssql_subdomain
   }
 
-  # Every HTTP backend gets a nginx server block: the APIs + Vault.
-  nginx_upstreams = concat(
-    [
-      for k, api in var.apis : {
-        name      = k
-        subdomain = api.subdomain
-        port      = api.host_port
-      }
-    ],
-  )
+  nginx_upstreams = [
+    for k, api in var.apis : {
+      name      = k
+      subdomain = api.subdomain
+      port      = api.host_port
+    }
+  ]
 
   # ---------------------------------------------------------------------------
   # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
@@ -135,9 +131,10 @@ locals {
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
   # the dev SNS alerts topic (sns.tf), the same place the CloudWatch alarms go.
   prometheus_rules = templatefile("${path.module}/prometheus-rules.yml.tftpl", {
-    cpu_percent       = var.alert_rules.cpu_percent
-    memory_percent    = var.alert_rules.memory_percent
-    disk_free_percent = var.alert_rules.disk_free_percent
+    cpu_percent         = var.alert_rules.cpu_percent
+    memory_percent      = var.alert_rules.memory_percent
+    disk_free_percent   = var.alert_rules.disk_free_percent
+    expected_containers = concat(keys(var.apis), ["nginx", "mssql", "vault"])
   })
 
   # SNS receiver: signs with the instance role (IMDSv2, hop limit 2 in ec2.tf),
@@ -259,11 +256,10 @@ locals {
   # Empty when DNS is managed from the prod account (var.manage_dns = false).
   zone_id = var.manage_dns && var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : var.existing_zone_id
 
-  # All backend + vault names point at the public EC2 (nginx).
+  # Only HTTP backends are publicly routed through nginx.
   a_records = merge(
     { for k, api in var.apis : api.subdomain => local.ec2_public_ip },
     {
-      (var.vault.subdomain) = local.ec2_public_ip
       (var.mssql_subdomain) = local.ec2_public_ip
     },
     var.extra_a_records
@@ -274,7 +270,7 @@ locals {
   cname_records = merge(
     {
       for k, app in var.amplify_apps :
-      app.subdomain => "${app.branch}.${k}.amplifyapp.com"
+      app.subdomain => "${app.branch}.${aws_amplify_app.this[k].id}.amplifyapp.com"
     },
     var.extra_cname_records
   )

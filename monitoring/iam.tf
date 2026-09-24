@@ -87,6 +87,12 @@ resource "aws_iam_role_policy" "task" {
         Resource = ["${aws_s3_bucket.config.arn}/config/*"]
       },
       {
+        Sid      = "ReadAlertCredentials"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = ["${local.params_arn}/alertmanager/*"]
+      },
+      {
         Sid      = "DecryptConfigParameters"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]

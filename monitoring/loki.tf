@@ -31,11 +31,12 @@ resource "aws_ecs_task_definition" "loki" {
   }
 
   container_definitions = jsonencode([
-    local.init_container,
+    local.init_containers.loki,
     {
       name      = "loki"
       image     = local.images.loki
       essential = true
+      dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
       user      = "10001"
 
       command = [

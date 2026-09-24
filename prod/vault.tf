@@ -182,6 +182,7 @@ resource "aws_ecs_task_definition" "vault" {
       name      = "vault"
       image     = var.vault_image
       essential = true
+      command   = ["server"]
 
       portMappings = [
         {
@@ -201,6 +202,8 @@ resource "aws_ecs_task_definition" "vault" {
                 node_id = "${local.name}-vault-1"
               }
             }
+            disable_mlock = true
+            cluster_addr  = "https://127.0.0.1:8201"
             listener = {
               tcp = {
                 address     = "0.0.0.0:${var.vault_port}"
@@ -222,7 +225,7 @@ resource "aws_ecs_task_definition" "vault" {
       mountPoints = [
         {
           sourceVolume  = "vault-raft"
-          containerPath = "/vault"
+          containerPath = "/vault/raft"
           readOnly      = false
         }
       ]

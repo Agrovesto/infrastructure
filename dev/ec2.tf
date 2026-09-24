@@ -28,22 +28,23 @@ resource "aws_instance" "app" {
   # caps user data at 16 KB raw and none of that config belongs in metadata.
   # See dev/host_config.tf.
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    mssql_device       = var.mssql_volume_device
-    sa_password        = var.mssql_sa_password
+    mssql_volume_id    = replace(aws_ebs_volume.mssql.id, "-", "")
+    mssql_parameter    = aws_ssm_parameter.mssql_sa_password.name
     backup_bucket      = aws_s3_bucket.backup.bucket
     aws_region         = var.aws_region
     ecr_registry       = local.ecr_registry
     db_list            = join(" ", var.mssql_databases)
     host_config_bucket = local.host_config_bucket
 
-    logging                = var.logging
-    logging_root           = local.logging_root
-    grafana_admin_password = var.logging.grafana_admin_password
+    logging           = var.logging
+    logging_root      = local.logging_root
+    logging_volume_id = var.logging.enabled ? replace(aws_ebs_volume.logging[0].id, "-", "") : ""
+    grafana_parameter = var.logging.enabled ? aws_ssm_parameter.grafana_admin_password[0].name : ""
   })
 
   # user_data learns the bucket as a rendered string, which is no dependency at
   # all, so say it explicitly: the sync has to find the objects already there.
-  depends_on = [aws_s3_object.host_config]
+  depends_on = [aws_s3_object.host_config, aws_iam_role_policy.ec2]
 
   metadata_options {
     http_tokens = "required"
@@ -56,7 +57,7 @@ resource "aws_instance" "app" {
 }
 
 resource "aws_ebs_volume" "mssql" {
-  availability_zone = aws_instance.app.availability_zone
+  availability_zone = aws_subnet.public[0].availability_zone
   size              = var.mssql_volume_size_gb
   type              = "gp3"
   encrypted         = true

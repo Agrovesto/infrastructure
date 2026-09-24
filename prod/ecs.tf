@@ -130,7 +130,7 @@ resource "aws_ecs_service" "services" {
   }
 
   # The HTTPS listener must exist before the service registers targets.
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener_rule.services]
 
   # desired_count only seeds the service on first create. Afterwards
   # Application Auto Scaling owns it (see aws_appautoscaling_* below) — without

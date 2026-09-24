@@ -77,10 +77,19 @@ def ship(logs, group, state):
     cursor = state.get(group, {})
     last_ts = cursor.get("ts")
     seen = set(cursor.get("ids", []))
-    response = logs.filter_log_events(
-        logGroupName=group, startTime=start_time(state, group), limit=LIMIT, interleaved=True
+    events = sorted(
+        (
+            event
+            for page in logs.get_paginator("filter_log_events").paginate(
+                logGroupName=group,
+                startTime=start_time(state, group),
+                interleaved=True,
+                PaginationConfig={"PageSize": LIMIT},
+            )
+            for event in page.get("events", [])
+        ),
+        key=lambda event: event["timestamp"],
     )
-    events = sorted(response.get("events", []), key=lambda event: event["timestamp"])
 
     values, newest, ids = [], last_ts, list(seen)
     for event in events:
