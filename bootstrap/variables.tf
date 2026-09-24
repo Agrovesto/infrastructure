@@ -39,7 +39,9 @@ variable "github_sub_patterns" {
   default = [
     "repo:Agrovesto@101108012/*:ref:refs/heads/main",
     "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
-    "repo:Agrovesto@101108012/*:pull_request"
+    "repo:Agrovesto@101108012/*:pull_request",
+    # Apply jobs run in the "production" GitHub Environment, which changes the sub claim
+    "repo:Agrovesto@101108012/*:environment:production"
   ]
 }
 

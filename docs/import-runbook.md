@@ -2,7 +2,7 @@
 
 **Imported:** only the existing resources the new design uses. Terraform **creates** everything else. **Legacy** resources stay unmanaged and are deleted by hand after cut-over (§5).
 
-Order: **bootstrap → prod → monitoring → dev**. Region is `eu-west-1`. Prod and monitoring share one state key and are separated by workspace: prod uses `default`, monitoring uses `monitoring`.
+Order: **bootstrap → dev → prod → monitoring**. Region is `eu-west-1`. Prod and monitoring share one state key and are separated by workspace: prod uses `default`, monitoring uses `monitoring`.
 
 | Stack | Imported (`<stack>/imports.tf`) |
 |---|---|
@@ -29,7 +29,17 @@ Before the dev plan:
 
 The dev trust policy is rewritten to the `github_sub_patterns` in `dev.tfvars`.
 
-## 2. Prod
+## 2. Dev (`dev` branch)
+
+```bash
+cd dev && terraform init
+export TF_VAR_mssql_sa_password='<SA password for the new dev host>'
+AWS_PROFILE=agrovesto-dev terraform plan -out=tfplan
+```
+
+Apply, re-plan until "No changes", then delete `dev/imports.tf`.
+
+## 3. Prod (`main` branch)
 
 ```bash
 cd prod && terraform init && terraform workspace select default
@@ -56,7 +66,7 @@ aws secretsmanager get-secret-value --secret-id nomaosDBcredentials \
 
 Apply, re-plan until "No changes", then delete `prod/imports.tf`.
 
-## 3. Monitoring (after prod is applied)
+## 4. Monitoring (after prod is applied)
 
 ```bash
 cd monitoring && terraform init && terraform workspace select -or-create monitoring
@@ -66,16 +76,6 @@ AWS_PROFILE=agrovesto-prod terraform plan -out=tfplan
 The monitoring plan only adds resources. The lookups for the prod VPC, ALB and ALB security group succeed once prod has been applied.
 
 If the plan offers to **destroy Route 53 zones**, you are in the wrong workspace. Stop.
-
-## 4. Dev
-
-```bash
-cd dev && terraform init
-export TF_VAR_mssql_sa_password='<SA password for the new dev host>'
-AWS_PROFILE=agrovesto-dev terraform plan -out=tfplan
-```
-
-Apply, re-plan until "No changes", then delete `dev/imports.tf`.
 
 ## 5. After cut-over: legacy resources (unmanaged, delete by hand)
 
@@ -112,3 +112,15 @@ Apply, re-plan until "No changes", then delete `dev/imports.tf`.
 - `rekognition.tf` in dev and prod creates: the `<stack>-customers` face collection, the media bucket `<stack>-rekognition-<account>` (`uploads/` expires after 90 days, `liveness/` after 30), a video job-status topic that feeds an SQS queue with a DLQ, the video role and a Cognito guest pool for Face Liveness. Apps read `terraform output rekognition`.
 - Start* video calls pass `NotificationChannel = { SNSTopicArn = video_sns_topic_arn, RoleArn = video_role_arn }`.
 - Dev Alertmanager publishes to the dev alerts topic. Config is synced from S3 at boot. After changing rules, run `aws s3 sync` on the host, or reboot it.
+
+## CI/CD (`workflows/`: copy into `.github/workflows/`)
+
+| Branch | Workflow | PR | Push |
+| --- | --- | --- | --- |
+| `devops` | `devops.yml` | checks for all 3 stacks | same (no AWS, no deploy) |
+| `dev` | `dev.yml` | metadata, Checkov, Trivy, test + coverage ≥95%, SonarQube, Infracost, fmt, validate, plan + diff comment | same, then applies the saved plan |
+| `main` | `prod.yml` | same, for prod then monitoring | applies prod, then monitoring |
+
+- Replace the old workflows: `cp workflows/*.yml .github/workflows/ && git rm .github/workflows/monitoring.yml`. `prod.yml` now covers monitoring.
+- Secrets: `AWS_ROLE_ARN_DEV`, `AWS_ROLE_ARN_PROD`, `TF_VAR_MSSQL_SA_PASSWORD_DEV`, `SONAR_TOKEN`, `SONAR_HOST_URL` (optional), `INFRACOST_API_KEY`. Sonar and Infracost are skipped with a notice if their secret is missing.
+- Environments: create `dev` and `production` in Settings → Environments. Add required reviewers on `production` so the prod apply waits for approval.
