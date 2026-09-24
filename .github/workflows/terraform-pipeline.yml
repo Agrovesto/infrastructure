@@ -48,6 +48,18 @@ on:
         required: false
       INFRACOST_API_KEY:
         required: false
+      GRAFANA_GITHUB_CLIENT_ID:
+        required: false
+      GRAFANA_GITHUB_CLIENT_SECRET:
+        required: false
+      SONARQUBE_GITHUB_CLIENT_ID:
+        required: false
+      SONARQUBE_GITHUB_CLIENT_SECRET:
+        required: false
+      SONARQUBE_GITHUB_APP_ID:
+        required: false
+      SONARQUBE_GITHUB_PRIVATE_KEY:
+        required: false
 
 permissions:
   contents: read
@@ -343,6 +355,15 @@ jobs:
       - name: terraform plan
         id: plan
         if: inputs.deploy
+        # Keep identity-provider credentials off third-party scan and reporting
+        # actions; only Terraform needs them in order to write SSM SecureStrings.
+        env:
+          TF_VAR_grafana_github_client_id: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+          TF_VAR_grafana_github_client_secret: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_client_id: ${{ secrets.SONARQUBE_GITHUB_CLIENT_ID }}
+          TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
+          TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
         run: |
           set +e
           terraform plan -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan > plan.log 2>&1
@@ -447,6 +468,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - run: terraform init -no-color
       - name: Plan with current state
+        env:
+          TF_VAR_grafana_github_client_id: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+          TF_VAR_grafana_github_client_secret: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_client_id: ${{ secrets.SONARQUBE_GITHUB_CLIENT_ID }}
+          TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
+          TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
         run: terraform plan -no-color -input=false -lock-timeout=5m -out=tfplan
       - name: terraform apply
         run: terraform apply -no-color -input=false -lock-timeout=5m tfplan
