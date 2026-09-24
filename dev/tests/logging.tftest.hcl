@@ -202,7 +202,7 @@ run "compose_services" {
 
   assert {
     # The rendered config holds the topic ARN (unknown in plan); check the template.
-    condition     = strcontains(file("alertmanager.yml.tftpl"), "sns_configs:") && strcontains(file("alertmanager.yml.tftpl"), "sigv4:")
+    condition     = aws_s3_object.host_config["logging/alertmanager/alertmanager.yml"].key == "logging/alertmanager/alertmanager.yml" && strcontains(file("alertmanager.yml.tftpl"), "sns_configs:") && strcontains(file("alertmanager.yml.tftpl"), "sigv4:")
     error_message = "Alertmanager publishes to the SNS alerts topic, signed with the instance role."
   }
 
