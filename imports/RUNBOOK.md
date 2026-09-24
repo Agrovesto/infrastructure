@@ -54,9 +54,9 @@ after the apply.
   * The IAM policy is scoped to that one secret ARN.
 * **Tests** were updated for the new credential model (`prod/tests/rds.tftest.hcl`, `monitoring/tests/monitoring.tftest.hcl`). Static coverage: dev 84.3 %, prod 71.4 %, monitoring 97.8 %, all above the CI gates.
 
-> ⚠️ Anything outside this repo that read `agrovesto-prod-mssql-master` must switch to
-> the RDS-managed secret. The legacy `nomaosDBcredentials` / `agxDBcredentials`
-> secrets are imported as metadata only and stay as they are.
+> ⚠️ For the adopted `migration-prod`, the master login stays in the existing
+> `nomaosDBcredentials` secret (see §4.2). The password is not rotated, and the ECS tasks
+> read that secret. The secrets are imported as metadata only (no value in state).
 
 ---
 
@@ -231,7 +231,7 @@ will fail with "already exists":
 
 | Secret | Handling |
 |---|---|
-| Prod DB master (`migration-prod`) | RDS-managed (`manage_master_user_password`). Terraform only references the ARN; ECS reads the value at runtime. |
+| Prod DB master (`migration-prod`) | Existing `nomaosDBcredentials` (`mssql_existing_master_secret_arn`); `manage_master_user_password` stays off so the live password isn't rotated. Terraform only references the ARN; ECS reads the value at runtime. A new instance would use an RDS-managed secret. |
 | `nomaosDBcredentials`, `agxDBcredentials` (both accounts) | `aws_secretsmanager_secret` **metadata** only; there's deliberately no `_secret_version`, so no value in state. Rotation Lambdas are imported with `ignore_changes` on code. |
 | `rds!db-…` | Owned by RDS; not imported (SKIP). |
 | SSM SecureString params | Read with `data "aws_ssm_parameter"` or referenced by ARN in ECS `secrets`; never imported. |
