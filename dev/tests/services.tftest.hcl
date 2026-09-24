@@ -207,8 +207,8 @@ run "service_passwords" {
   }
 
   assert {
-    condition     = length(local.host_password_param_arns) == 4
-    error_message = "The instance role is scoped to exactly the four password parameters the host reads at boot: SA, Grafana, SonarQube and Redis."
+    condition     = length(local.host_password_param_arns) == 10
+    error_message = "The instance role is scoped to the host password and SSO parameters: SA, Grafana, SonarQube, Redis, plus GitHub credentials for SonarQube and Grafana."
   }
 
   assert {
@@ -397,9 +397,9 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.docker_compose, "GF_AUTH_GITHUB_ENABLED"),
       strcontains(local.docker_compose, "GF_AUTH_GITHUB_CLIENT_SECRET: \"$${GRAFANA_GITHUB_CLIENT_SECRET}\""),
       strcontains(local.docker_compose, "sonar-sso.properties:/opt/sonarqube/conf/sonar.properties:ro"),
-      strcontains(aws_instance.app.user_data, "sonar.auth.github.clientSecret.secured"),
-      strcontains(aws_instance.app.user_data, "sonar.auth.github.organizations"),
-      strcontains(aws_instance.app.user_data, "sonar.auth.github.groupsSync\": \"true"),
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "sonar.auth.github.clientSecret.secured"),
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "sonar.auth.github.organizations"),
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "sonar.auth.github.groupsSync"),
     ])
     error_message = "Grafana and SonarQube must receive their supported GitHub authentication and group-sync settings."
   }
@@ -422,8 +422,8 @@ run "github_sso_uses_https_and_ssm_credentials" {
     condition = alltrue([
       !strcontains(local.docker_compose, "not-a-real-grafana-secret"),
       !strcontains(local.docker_compose, "not-a-real-sonarqube-secret"),
-      !strcontains(aws_instance.app.user_data, "not-a-real-grafana-secret"),
-      !strcontains(aws_instance.app.user_data, "not-a-real-sonarqube-secret"),
+      !strcontains(file("${path.module}/user_data.sh.tftpl"), "not-a-real-grafana-secret"),
+      !strcontains(file("${path.module}/user_data.sh.tftpl"), "not-a-real-sonarqube-secret"),
       !strcontains(local.caddyfile, "not-a-real"),
     ])
     error_message = "OAuth secrets must never enter compose, Caddy config, S3 host config, or EC2 user_data."
@@ -454,7 +454,7 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.nginx_conf, "geo $realip_remote_addr $trusted_reverse_proxy"),
       strcontains(local.nginx_conf, "X-Forwarded-Proto $forwarded_proto"),
       aws_instance.app.user_data_replace_on_change,
-      strcontains(aws_instance.app.user_data, "SSO credential versions:"),
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "sso_credential_versions"),
     ])
     error_message = "nginx must trust forwarded client data only from Caddy, and SSM credential rotation must replace the host."
   }

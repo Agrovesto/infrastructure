@@ -212,7 +212,7 @@ run "dashboards_and_datasources_are_provisioned" {
 }
 
 run "production_grafana_github_sso_maps_team_roles_and_uses_ssm" {
-  command = plan
+  command = apply
 
   variables {
     grafana_github_client_id     = "test-grafana-client-id"
@@ -234,20 +234,23 @@ run "production_grafana_github_sso_maps_team_roles_and_uses_ssm" {
 
   assert {
     condition = alltrue([
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ENABLED"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_CLIENT_SECRET"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "Agrovesto"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "user:email,read:org"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "https://grafana.nomaos.com"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/infrastructure') && 'Admin'"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/team-leads') && 'Editor'"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/backend') && 'Viewer'"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/frontend') && 'Viewer'"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/mobile') && 'Viewer'"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT"),
-      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GITHUB_OAUTH_CONFIG_VERSION"),
-      !strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "not-a-real-secret"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "GF_AUTH_GITHUB_ENABLED"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "GF_AUTH_GITHUB_CLIENT_SECRET"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "Agrovesto"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "user:email,read:org"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "https://grafana.nomaos.com"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "@Agrovesto/infrastructure"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "@Agrovesto/team-leads"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "@Agrovesto/backend"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "@Agrovesto/frontend"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "@Agrovesto/mobile"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "'Admin'"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "'Editor'"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "'Viewer'"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT"),
+      strcontains(aws_ecs_task_definition.grafana.container_definitions, "GITHUB_OAUTH_CONFIG_VERSION"),
+      !strcontains(aws_ecs_task_definition.grafana.container_definitions, "not-a-real-secret"),
     ])
     error_message = "Production Grafana must enable GitHub OAuth, map Agrovesto teams to roles, and reference rather than embed the secret."
   }
