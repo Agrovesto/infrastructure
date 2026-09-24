@@ -32,12 +32,78 @@ locals {
   ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
 
   mssql = {
-    databases = var.mssql_databases
+    databases = local.mssql_all_databases
     image     = var.mssql_image
     pid       = var.mssql_pid
     host_port = var.mssql_host_port
     subdomain = var.mssql_subdomain
   }
+
+  # Password parameters the host reads at boot (dev/host_config.tf). Three of the
+  # four are conditional, so they are spelled as ARNs instead of indexed out of a
+  # count'd resource: referencing aws_ssm_parameter.x[0].arn here would make the
+  # instance policy depend on the very values that decide whether those
+  # parameters exist.
+  host_password_param_arns = [
+    aws_ssm_parameter.mssql_sa_password.arn,
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_db_password",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/redis_password",
+  ]
+
+  # ---------------------------------------------------------------------------
+  # SonarQube
+  #
+  # The server is a container (docker-compose.yml.tftpl) on this host and its
+  # database is the SQL Server container that is already here, so this section is
+  # connection strings and one nginx vhost — no AWS resource beyond the volume in
+  # dev/sonarqube.tf and the password parameter in dev/host_config.tf.
+  # ---------------------------------------------------------------------------
+
+  # The databases that actually get created and backed up: the caller's list plus
+  # SonarQube's, unioned here rather than requiring it to be listed in two places.
+  # Listing it twice is harmless — the union is deduplicated — but forgetting to
+  # add it to mssql_databases would otherwise mean a database that is created and
+  # never backed up, or the reverse.
+  mssql_all_databases = distinct(concat(
+    var.mssql_databases,
+    var.sonarqube.enabled ? [var.sonarqube.database_name] : [],
+  ))
+
+  # 1433 is the container port, not var.mssql_host_port: that one is the host
+  # publish (127.0.0.1:<host_port> -> 1433). SonarQube talks to SQL Server over
+  # the compose network, where SQL Server always listens on 1433.
+  #
+  # trustServerCertificate is on because the SQL Server container presents a
+  # self-signed certificate; without it the JDBC driver refuses the connection.
+  # Encryption stays on — it is loopback-adjacent, but there is no reason to send
+  # credentials in the clear.
+  sonar_jdbc_url = join(";", concat(
+    [
+      "jdbc:sqlserver://mssql:1433",
+      "databaseName=${var.sonarqube.database_name}",
+      "encrypt=${var.sonarqube.jdbc_encrypt}",
+    ],
+    var.sonarqube.jdbc_trust_server_cert ? ["trustServerCertificate=true"] : [],
+  ))
+
+  # The vhost + allow list nginx renders for SonarQube, same shape as
+  # local.logging_grafana: an empty allowed_cidrs is deliberately not "everyone",
+  # it becomes 127.0.0.1, i.e. SSH-tunnel-only.
+  sonarqube_nginx = {
+    enabled   = var.sonarqube.enabled && var.sonarqube.expose_via_nginx
+    subdomain = var.sonarqube.subdomain
+    port      = 9000
+    cidrs     = length(var.sonarqube.allowed_cidrs) > 0 ? var.sonarqube.allowed_cidrs : ["127.0.0.1"]
+  }
+
+  sonar_fqdn = "${var.sonarqube.subdomain}.${var.domain_name}"
+
+  # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
+  # container's own address: SonarQube builds absolute links from it and compares
+  # OAuth redirect origins against it. When nginx is not serving the vhost there
+  # is no public name, so the loopback publish is the only honest answer.
+  sonar_web_baseurl = var.sonarqube.expose_via_nginx ? "${var.sonarqube.scheme}://${local.sonar_fqdn}" : "http://127.0.0.1:${var.sonarqube.host_port}"
 
   nginx_upstreams = [
     for k, api in var.apis : {
@@ -134,7 +200,15 @@ locals {
     cpu_percent         = var.alert_rules.cpu_percent
     memory_percent      = var.alert_rules.memory_percent
     disk_free_percent   = var.alert_rules.disk_free_percent
-    expected_containers = concat(keys(var.apis), ["nginx", "mssql", "vault"])
+    # The containers that should always be up. Redis and SonarQube join the list
+    # only when they exist, otherwise ContainerDown fires for a service that was
+    # deliberately turned off.
+    expected_containers = concat(
+      keys(var.apis),
+      ["nginx", "mssql", "vault"],
+      var.redis.enabled ? ["redis"] : [],
+      var.sonarqube.enabled ? ["sonarqube"] : [],
+    )
   })
 
   # SNS receiver: signs with the instance role (IMDSv2, hop limit 2 in ec2.tf),
@@ -223,24 +297,66 @@ locals {
   )
 
   docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    apis          = var.apis
-    mssql         = local.mssql
-    vault         = var.vault
-    backup_bucket = aws_s3_bucket.backup.bucket
-    logging       = var.logging
-    logging_root  = local.logging_root
+    apis              = var.apis
+    mssql             = local.mssql
+    vault             = var.vault
+    redis             = var.redis
+    sonarqube         = var.sonarqube
+    sonar_jdbc_url    = local.sonar_jdbc_url
+    sonar_web_baseurl = local.sonar_web_baseurl
+    backup_bucket     = aws_s3_bucket.backup.bucket
+    logging           = var.logging
+    logging_root      = local.logging_root
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {
     domain    = var.domain_name
     upstreams = local.nginx_upstreams
     grafana   = local.logging_grafana
+    sonar     = local.sonarqube_nginx
   })
 
-  init_sql = join("\n", [
-    for db in var.mssql_databases :
-    "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
-  ])
+  # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
+  #
+  # Every database is a plain idempotent CREATE except SonarQube's, which cannot
+  # take the server's default collation. SonarSource requires the database to be
+  # case- AND accent-sensitive (CS_AS) — SQL Server's default here is
+  # case-insensitive — and requires READ_COMMITTED_SNAPSHOT, without which
+  # analyses deadlock under load. Both have to be set at create time: neither can
+  # be changed later without rebuilding the database.
+  #
+  # The login password arrives as a sqlcmd variable ($(sonar_db_password), passed
+  # with -v by user_data) and never as a literal here, because this string
+  # becomes an object in the config bucket and secrets do not belong in S3.
+  init_sql = join("\n", concat(
+    [
+      for db in local.mssql_all_databases :
+      (var.sonarqube.enabled && db == var.sonarqube.database_name) ? "" : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
+    ],
+    var.sonarqube.enabled ? [
+      "-- SonarQube: CS_AS collation is mandatory; the SQL Server default is not.",
+      "IF DB_ID(N'${var.sonarqube.database_name}') IS NULL CREATE DATABASE [${var.sonarqube.database_name}] COLLATE ${var.sonarqube.database_collation};",
+      "GO",
+      "-- Mandatory as well. Only touched while it is off, so re-running this",
+      "-- script cannot roll back the connections of a live SonarQube.",
+      "IF (SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = N'${var.sonarqube.database_name}') = 0",
+      "  ALTER DATABASE [${var.sonarqube.database_name}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;",
+      "GO",
+      "-- A login scoped to this one database instead of `sa`, which would be",
+      "-- sysadmin over the server and owner of the five application databases.",
+      "IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'${var.sonarqube.database_username}')",
+      "  CREATE LOGIN [${var.sonarqube.database_username}] WITH PASSWORD = N'$(sonar_db_password)', CHECK_POLICY = ON;",
+      "GO",
+      "USE [${var.sonarqube.database_name}];",
+      "GO",
+      "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'${var.sonarqube.database_username}')",
+      "BEGIN",
+      "  CREATE USER [${var.sonarqube.database_username}] FOR LOGIN [${var.sonarqube.database_username}];",
+      "  ALTER ROLE db_owner ADD MEMBER [${var.sonarqube.database_username}];",
+      "END",
+      "GO",
+    ] : [],
+  ))
 
   ec2_public_ip = var.associate_elastic_ip ? aws_eip.app[0].public_ip : aws_instance.app.public_ip
 
@@ -262,6 +378,12 @@ locals {
     {
       (var.mssql_subdomain) = local.ec2_public_ip
     },
+    # SonarQube gets a record only when it is actually served by nginx; with
+    # expose_via_nginx = false there is nothing listening on that name, and a
+    # record pointing at it would just be a dead hostname.
+    var.sonarqube_nginx.enabled ? {
+      (var.sonarqube.subdomain) = local.ec2_public_ip
+    } : {},
     var.extra_a_records
   )
 

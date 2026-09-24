@@ -82,7 +82,7 @@ data "aws_iam_policy_document" "ec2" {
   statement {
     sid       = "ReadHostPasswords"
     actions   = ["ssm:GetParameter"]
-    resources = [aws_ssm_parameter.mssql_sa_password.arn, "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password"]
+    resources = local.host_password_param_arns
   }
 
   statement {

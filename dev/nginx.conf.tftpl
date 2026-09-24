@@ -95,6 +95,49 @@ http {
   }
 
 %{ endif ~}
+%{ if sonar.enabled ~}
+  # ── SonarQube: the code-quality UI and the scanner endpoint ───────────────
+  # Same shape as the Grafana vhost above — one open port on the box, gated by
+  # source IP, with the application's own login behind it — with one difference
+  # that matters: this vhost is also where the CI scanner POSTs its reports, so
+  # `sonarqube.allowed_cidrs` has to admit the runners as well as the humans.
+  # GitHub-hosted runner addresses are not a fixed set, so the workable options
+  # are a self-hosted runner inside the allow list, an allowlisted NAT egress, or
+  # (not recommended) 0.0.0.0/0 with SonarQube's own auth as the only gate.
+  #
+  # Port 80 only, like every other vhost here: there is no certificate on this
+  # box, and the prod ACM wildcard cannot be attached to an EC2-hosted nginx.
+  # That is also why GitHub OAuth cannot complete against this URL yet — see
+  # dev/sonarqube.tf notes and the README.
+  server {
+    listen 80;
+    server_name ${sonar.subdomain}.${domain};
+
+%{ for cidr in sonar.cidrs ~}
+    allow ${cidr};
+%{ endfor ~}
+    deny all;
+
+    location / {
+      proxy_pass http://sonarqube:${sonar.port};  # the container port, not the published one
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+      # A report upload is a multi-megabyte POST and the compute engine then
+      # spends minutes processing it. The 60s/1m defaults cut both off mid-flight,
+      # which surfaces as a scanner timeout rather than an nginx error.
+      proxy_read_timeout 600s;
+      proxy_send_timeout 600s;
+      proxy_connect_timeout 60s;
+      client_max_body_size 100m;
+    }
+  }
+
+%{ endif ~}
   server {
     listen 80 default_server;
     server_name _;

@@ -186,8 +186,11 @@ run "compose_services" {
   }
 
   assert {
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7
-    error_message = "Each of the seven containers carries a memory limit, so none of them can starve SQL Server."
+    # 7 observability containers, plus Redis and SonarQube when they are on: the
+    # count has to follow what is enabled, or disabling either service turns this
+    # into a false failure.
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0)
+    error_message = "Every capped container carries a memory limit — the seven observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
   }
 
   assert {
@@ -375,7 +378,8 @@ run "nginx_allowlist" {
   command = plan
 
   variables {
-    logging = { allowed_cidrs = ["203.0.113.10/32", "197.0.0.0/16"] }
+    logging   = { allowed_cidrs = ["203.0.113.10/32", "197.0.0.0/16"] }
+    sonarqube = { allowed_cidrs = ["203.0.113.10/32", "197.0.0.0/16"] }
   }
 
   assert {
@@ -384,8 +388,17 @@ run "nginx_allowlist" {
   }
 
   assert {
+    # There are two IP-gated vhosts now — Grafana and SonarQube — and they take
+    # the same fallback rule, so an explicit list has to remove the loopback line
+    # from both. Asserting on the whole file is what catches one of them being
+    # left on the 127.0.0.1 default by mistake.
     condition     = !strcontains(local.nginx_conf, "allow 127.0.0.1;")
     error_message = "An explicit list replaces the loopback fallback instead of adding to it."
+  }
+
+  assert {
+    condition     = length(regexall("allow 203\\.0\\.113\\.10/32;", local.nginx_conf)) == 2
+    error_message = "Both gated vhosts (Grafana and SonarQube) receive the allow list, not just one of them."
   }
 }
 
