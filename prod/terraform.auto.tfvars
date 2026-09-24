@@ -99,7 +99,7 @@ single_nat_gateway = true
 # tasks. Tune requests-per-task once there is real traffic.
 ecs_autoscaling_enabled           = true
 ecs_autoscaling_min_capacity      = 1
-ecs_autoscaling_max_capacity      = 4
+ecs_autoscaling_max_capacity      = 5
 ecs_autoscaling_requests_per_task = 1000
 
 # --- RDS: SQL Server Express on db.t3.micro, 20 GB with a 50 GB ceiling -------

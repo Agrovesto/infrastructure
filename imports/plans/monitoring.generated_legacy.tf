@@ -1,23 +1,23 @@
 # __generated__ by Terraform
 # Please review these resources and move them into your main configuration files.
 
-# __generated__ by Terraform from "RDSOSMetrics"
-resource "aws_cloudwatch_log_group" "legacy_rdsosmetrics" {
+# __generated__ by Terraform from "ec2-cloud-init"
+resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
-  name              = "RDSOSMetrics"
+  name              = "ec2-cloud-init"
   name_prefix       = null
-  retention_in_days = 30
+  retention_in_days = 0
   skip_destroy      = false
   tags              = {}
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "nginx-access"
-resource "aws_cloudwatch_log_group" "legacy_nginx_access" {
+# __generated__ by Terraform from "ec2-cloud-init-output"
+resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init_output" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
-  name              = "nginx-access"
+  name              = "ec2-cloud-init-output"
   name_prefix       = null
   retention_in_days = 0
   skip_destroy      = false
@@ -37,11 +37,59 @@ resource "aws_cloudwatch_log_group" "legacy_ec2_auth" {
   tags_all          = {}
 }
 
+# __generated__ by Terraform from "RDSOSMetrics"
+resource "aws_cloudwatch_log_group" "legacy_rdsosmetrics" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "RDSOSMetrics"
+  name_prefix       = null
+  retention_in_days = 30
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
 # __generated__ by Terraform from "nginx-error"
 resource "aws_cloudwatch_log_group" "legacy_nginx_error" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
   name              = "nginx-error"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "ec2-syslog"
+resource "aws_cloudwatch_log_group" "legacy_ec2_syslog" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "ec2-syslog"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "ec2-kernel"
+resource "aws_cloudwatch_log_group" "legacy_ec2_kernel" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "ec2-kernel"
+  name_prefix       = null
+  retention_in_days = 0
+  skip_destroy      = false
+  tags              = {}
+  tags_all          = {}
+}
+
+# __generated__ by Terraform from "nginx-access"
+resource "aws_cloudwatch_log_group" "legacy_nginx_access" {
+  kms_key_id        = null
+  log_group_class   = "STANDARD"
+  name              = "nginx-access"
   name_prefix       = null
   retention_in_days = 0
   skip_destroy      = false
@@ -71,54 +119,6 @@ resource "aws_ssm_association" "legacy_assoc_ef34e30b" {
   }
 }
 
-# __generated__ by Terraform from "ec2-syslog"
-resource "aws_cloudwatch_log_group" "legacy_ec2_syslog" {
-  kms_key_id        = null
-  log_group_class   = "STANDARD"
-  name              = "ec2-syslog"
-  name_prefix       = null
-  retention_in_days = 0
-  skip_destroy      = false
-  tags              = {}
-  tags_all          = {}
-}
-
-# __generated__ by Terraform from "ec2-cloud-init"
-resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init" {
-  kms_key_id        = null
-  log_group_class   = "STANDARD"
-  name              = "ec2-cloud-init"
-  name_prefix       = null
-  retention_in_days = 0
-  skip_destroy      = false
-  tags              = {}
-  tags_all          = {}
-}
-
-# __generated__ by Terraform from "ec2-kernel"
-resource "aws_cloudwatch_log_group" "legacy_ec2_kernel" {
-  kms_key_id        = null
-  log_group_class   = "STANDARD"
-  name              = "ec2-kernel"
-  name_prefix       = null
-  retention_in_days = 0
-  skip_destroy      = false
-  tags              = {}
-  tags_all          = {}
-}
-
-# __generated__ by Terraform from "ec2-cloud-init-output"
-resource "aws_cloudwatch_log_group" "legacy_ec2_cloud_init_output" {
-  kms_key_id        = null
-  log_group_class   = "STANDARD"
-  name              = "ec2-cloud-init-output"
-  name_prefix       = null
-  retention_in_days = 0
-  skip_destroy      = false
-  tags              = {}
-  tags_all          = {}
-}
-
 # __generated__ by Terraform
 resource "aws_ssm_parameter" "legacy_amazoncloudwatch_linux" {
   allowed_pattern  = null
@@ -133,7 +133,7 @@ resource "aws_ssm_parameter" "legacy_amazoncloudwatch_linux" {
   tier             = "Standard"
   type             = "String"
   value_wo_version = null
-  insecure_value = "{\n\t\"agent\": {\n\t\t\"metrics_collection_interval\": 60,\n\t\t\"run_as_user\": \"cwagent\"\n\t},\n\t\"logs\": {\n\t\t\"logs_collected\": {\n\t\t\t\"files\": {\n\t\t\t\t\"collect_list\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": 7\n\t\t\t\t\t},\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": -1\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t}\n\t},\n\t\"metrics\": {\n\t\t\"aggregation_dimensions\": [\n\t\t\t[\n\t\t\t\t\"InstanceId\"\n\t\t\t]\n\t\t],\n\t\t\"append_dimensions\": {\n\t\t\t\"AutoScalingGroupName\": \"${aws:AutoScalingGroupName}\",\n\t\t\t\"ImageId\": \"${aws:ImageId}\",\n\t\t\t\"InstanceId\": \"${aws:InstanceId}\",\n\t\t\t\"InstanceType\": \"${aws:InstanceType}\"\n\t\t},\n\t\t\"metrics_collected\": {\n\t\t\t\"collectd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60\n\t\t\t},\n\t\t\t\"cpu\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"cpu_usage_idle\",\n\t\t\t\t\t\"cpu_usage_iowait\",\n\t\t\t\t\t\"cpu_usage_user\",\n\t\t\t\t\t\"cpu_usage_system\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t],\n\t\t\t\t\"totalcpu\": false\n\t\t\t},\n\t\t\t\"disk\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"used_percent\",\n\t\t\t\t\t\"inodes_free\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"diskio\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"io_time\",\n\t\t\t\t\t\"write_bytes\",\n\t\t\t\t\t\"read_bytes\",\n\t\t\t\t\t\"writes\",\n\t\t\t\t\t\"reads\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"mem\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"mem_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"netstat\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"tcp_established\",\n\t\t\t\t\t\"tcp_time_wait\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"statsd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60,\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"service_address\": \":8125\"\n\t\t\t},\n\t\t\t\"swap\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"swap_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t}\n\t\t}\n\t},\n\t\"traces\": {\n\t\t\"buffer_size_mb\": 3,\n\t\t\"concurrency\": 8,\n\t\t\"insecure\": false,\n\t\t\"traces_collected\": {\n\t\t\t\"xray\": {\n\t\t\t\t\"bind_address\": \"127.0.0.1:2000\",\n\t\t\t\t\"tcp_proxy\": {\n\t\t\t\t\t\"bind_address\": \"127.0.0.1:2000\"\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}"
+  insecure_value = "{\n\t\"agent\": {\n\t\t\"metrics_collection_interval\": 60,\n\t\t\"run_as_user\": \"cwagent\"\n\t},\n\t\"logs\": {\n\t\t\"logs_collected\": {\n\t\t\t\"files\": {\n\t\t\t\t\"collect_list\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": 7\n\t\t\t\t\t},\n\t\t\t\t\t{\n\t\t\t\t\t\t\"file_path\": \"\",\n\t\t\t\t\t\t\"log_group_class\": \"STANDARD\",\n\t\t\t\t\t\t\"log_group_name\": \".\",\n\t\t\t\t\t\t\"log_stream_name\": \"{instance_id}\",\n\t\t\t\t\t\t\"retention_in_days\": -1\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t}\n\t},\n\t\"metrics\": {\n\t\t\"aggregation_dimensions\": [\n\t\t\t[\n\t\t\t\t\"InstanceId\"\n\t\t\t]\n\t\t],\n\t\t\"append_dimensions\": {\n\t\t\t\"AutoScalingGroupName\": \"$${aws:AutoScalingGroupName}\",\n\t\t\t\"ImageId\": \"$${aws:ImageId}\",\n\t\t\t\"InstanceId\": \"$${aws:InstanceId}\",\n\t\t\t\"InstanceType\": \"$${aws:InstanceType}\"\n\t\t},\n\t\t\"metrics_collected\": {\n\t\t\t\"collectd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60\n\t\t\t},\n\t\t\t\"cpu\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"cpu_usage_idle\",\n\t\t\t\t\t\"cpu_usage_iowait\",\n\t\t\t\t\t\"cpu_usage_user\",\n\t\t\t\t\t\"cpu_usage_system\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t],\n\t\t\t\t\"totalcpu\": false\n\t\t\t},\n\t\t\t\"disk\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"used_percent\",\n\t\t\t\t\t\"inodes_free\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"diskio\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"io_time\",\n\t\t\t\t\t\"write_bytes\",\n\t\t\t\t\t\"read_bytes\",\n\t\t\t\t\t\"writes\",\n\t\t\t\t\t\"reads\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"resources\": [\n\t\t\t\t\t\"*\"\n\t\t\t\t]\n\t\t\t},\n\t\t\t\"mem\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"mem_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"netstat\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"tcp_established\",\n\t\t\t\t\t\"tcp_time_wait\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t},\n\t\t\t\"statsd\": {\n\t\t\t\t\"metrics_aggregation_interval\": 60,\n\t\t\t\t\"metrics_collection_interval\": 60,\n\t\t\t\t\"service_address\": \":8125\"\n\t\t\t},\n\t\t\t\"swap\": {\n\t\t\t\t\"measurement\": [\n\t\t\t\t\t\"swap_used_percent\"\n\t\t\t\t],\n\t\t\t\t\"metrics_collection_interval\": 60\n\t\t\t}\n\t\t}\n\t},\n\t\"traces\": {\n\t\t\"buffer_size_mb\": 3,\n\t\t\"concurrency\": 8,\n\t\t\"insecure\": false,\n\t\t\"traces_collected\": {\n\t\t\t\"xray\": {\n\t\t\t\t\"bind_address\": \"127.0.0.1:2000\",\n\t\t\t\t\"tcp_proxy\": {\n\t\t\t\t\t\"bind_address\": \"127.0.0.1:2000\"\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}"
   lifecycle {
     ignore_changes = [value, insecure_value]
   }
