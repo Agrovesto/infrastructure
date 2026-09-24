@@ -192,13 +192,13 @@ maintenance window, not an import.
 use an RDS-managed secret. `manage_master_user_password = true` would rotate
 the live password. `terraform.auto.tfvars` therefore sets:
 * `mssql_manage_master_user_password = false`. Terraform never touches the password.
-* `mssql_existing_master_secret_arn` = `agxdb2DBcredentials`. The ECS tasks read
+* `mssql_existing_master_secret_arn` = `nomaosDBcredentials` (agxdb2DBcredentials was deleted). The ECS tasks read
   DB_USER and DB_PASSWORD from this secret.
 
 **Confirm before apply** that this secret belongs to migration-prod and has
 `username` and `password` keys:
-`aws secretsmanager get-secret-value --secret-id agxdb2DBcredentials --query SecretString --output text | jq 'keys, .host'`.
-If it's `nomaosDBcredentials`, change the ARN.
+`aws secretsmanager get-secret-value --secret-id nomaosDBcredentials --query SecretString --output text | jq 'keys, .host'`.
+The ECS execution role is granted read access to exactly this ARN.
 
 Also matched to the live instance: the backup window `04:13-04:43`, the maintenance window
 `mon:22:43-mon:23:13`, Performance Insights on, and the existing

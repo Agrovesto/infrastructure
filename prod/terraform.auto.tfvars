@@ -209,10 +209,10 @@ mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d44
 
 # --- Match the live resources (from imports/plans/prod.txt) ------------------
 # Password stays as it is today; do NOT switch to an RDS-managed secret here,
-# that rotates the live password. CONFIRM this secret belongs to migration-prod
-# and has "username"/"password" keys before apply (see RUNBOOK).
+# that rotates the live password. nomaosDBcredentials holds the migration-prod
+# login (confirmed by owner 2026-09-24; agxdb2DBcredentials no longer exists).
 mssql_manage_master_user_password = false
-mssql_existing_master_secret_arn  = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:agxdb2DBcredentials-26LKpW"
+mssql_existing_master_secret_arn  = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-GIwHiK"
 mssql_monitoring_role_arn         = "arn:aws:iam::221434544570:role/rds-monitoring-role"
 mssql_backup_window               = "04:13-04:43"
 mssql_maintenance_window          = "mon:22:43-mon:23:13"
