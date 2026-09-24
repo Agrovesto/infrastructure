@@ -211,7 +211,7 @@ run "dashboards_and_datasources_are_provisioned" {
   }
 }
 
-run "grafana_github_sso_is_org_restricted_and_secret_backed" {
+run "production_grafana_github_sso_maps_team_roles_and_uses_ssm" {
   command = plan
 
   variables {
@@ -238,10 +238,18 @@ run "grafana_github_sso_is_org_restricted_and_secret_backed" {
       strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_CLIENT_SECRET"),
       strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "Agrovesto"),
       strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "user:email,read:org"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "https://grafana.nomaos.com"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/infrastructure') && 'Admin'"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/team-leads') && 'Editor'"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/backend') && 'Viewer'"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/frontend') && 'Viewer'"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "@Agrovesto/mobile') && 'Viewer'"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT"),
       strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GITHUB_OAUTH_CONFIG_VERSION"),
       !strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "not-a-real-secret"),
     ])
-    error_message = "Grafana must enable GitHub OAuth for Agrovesto while referring to, never embedding, the client secret."
+    error_message = "Production Grafana must enable GitHub OAuth, map Agrovesto teams to roles, and reference rather than embed the secret."
   }
 }
 
@@ -539,6 +547,20 @@ run "the_report_task_may_send_mail" {
     condition     = strcontains(jsonencode(aws_iam_role_policy.task.policy), "ses:SendRawEmail")
     error_message = "The report task must be allowed to send mail."
   }
+}
+
+run "rejects_team_mapping_outside_allowed_organizations" {
+  command = plan
+
+  variables {
+    grafana_github_client_id     = "test-grafana-client-id"
+    grafana_github_client_secret = "not-a-real-secret" # ggignore - test fixture
+    grafana_github_team_roles = [
+      { organization = "AnotherOrg", team_slug = "admins", role = "Admin" },
+    ]
+  }
+
+  expect_failures = [aws_ecs_task_definition.grafana]
 }
 
 run "rejects_partial_grafana_github_credentials" {

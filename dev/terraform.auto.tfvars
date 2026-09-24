@@ -151,7 +151,9 @@ logging = {
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
   # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
-  # docs/github-sso.md. The local admin remains available for break-glass use.
+  # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
+  # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
+  # admin remains available for break-glass use.
 
   # An API that logs one JSON object per line should be listed here: its level,
   # status and message fields then become queryable instead of grep fodder.
@@ -212,6 +214,8 @@ sonarqube = {
   # Local-login-only deployments retain HTTP. Supplying the four
   # SONARQUBE_GITHUB_* repository secrets adds a Caddy TLS edge, changes the
   # canonical URL to https://sonar.nomaos.com, and enables GitHub App login.
+  # GitHub team membership sync is enabled; run the shipped permission bootstrap
+  # once with a separate SonarQube admin token (docs/github-sso.md).
   # Caddy's certificate data survives on the SonarQube EBS volume.
   scheme = "http"
 }

@@ -29,14 +29,16 @@ Do not paste either password into an issue, PR, workflow log, or chat.
 
 ## What is implemented
 
-- **Grafana OSS:** native GitHub OAuth. Only members of the `Agrovesto`
-  organization may sign in. A first-time GitHub user is created as **Viewer**;
-  promote Editors/Admins deliberately in Grafana. Basic login stays enabled for
-  the configured local administrator break-glass account.
+- **Dev and production Grafana OSS:** native GitHub OAuth. Production Grafana is
+  implemented by the `monitoring/` stack (not `prod/`) and receives its own OAuth
+  App credentials through the monitoring job in `workflows/prod.yml`. Both
+  instances evaluate GitHub team membership on every login and reject members
+  of `Agrovesto` who are not in an explicitly mapped team. Basic login stays
+  enabled for the configured local administrator break-glass account.
 - **SonarQube Community Build:** native GitHub App authentication with
-  just-in-time user provisioning. Only members of `Agrovesto` may sign in.
-  Team-to-group synchronization is off by default. The local administrator stays
-  enabled.
+  just-in-time user provisioning. Only members of `Agrovesto` may sign in, and
+  GitHub team-to-SonarQube group synchronization is enabled. The local
+  administrator stays enabled.
 - **Dev HTTPS:** SonarSource does not permit an HTTP GitHub callback. When either
   dev identity provider is configured, a pinned Caddy container takes ownership
   of public ports 80/443, obtains and renews certificates, and forwards to the
@@ -107,10 +109,50 @@ Use separate OAuth Apps because prod and dev have different callback URLs.
   - `DEV_GRAFANA_GITHUB_CLIENT_SECRET`
 
 Grafana requests `user:email,read:org`; the latter is required to enforce the
-`Agrovesto` organization restriction. If the organization restricts third-party
-OAuth Apps, an organization owner must approve both apps.
+`Agrovesto` organization restriction and retrieve team membership. If the
+organization restricts third-party OAuth Apps, an organization owner must approve
+both apps.
 
-## 3. Network prerequisites
+## 3. Team roles
+
+The same team policy applies to dev Grafana, production Grafana, and SonarQube:
+
+| GitHub team | Grafana role | SonarQube role |
+| --- | --- | --- |
+| `Backend` (`backend`) | Viewer (read) | Browse and see source |
+| `Frontend` (`frontend`) | Viewer (read) | Browse and see source |
+| `Infrastructure` (`infrastructure`) | Organization Admin | System and project Admin |
+| `mobile` (`mobile`) | Viewer (read) | Browse and see source |
+| `team-leads` (`team-leads`) | Editor (read/write) | Browse, see source, administer issues, and administer security hotspots |
+
+Grafana's ordered JMESPath mapping checks `Infrastructure` first, then
+`team-leads`, then the reader teams, so a user in several teams receives the
+highest listed role. `Admin` is a Grafana **organization** role;
+`allow_assign_grafana_admin=false` prevents OAuth from granting unrestricted
+Grafana server-administrator access. Strict role mapping denies login to an
+`Agrovesto` member who is not in one of these five teams.
+
+SonarQube synchronizes memberships only into groups that already exist, and its
+authentication configuration cannot create or grant those groups. After the
+first SSO deployment, run the shipped idempotent bootstrap with a dedicated
+SonarQube global-administrator token (not the CI analysis `SONAR_TOKEN`):
+
+```bash
+ssh ubuntu@<DEV_EIP>
+read -rsp 'SonarQube admin token: ' SONAR_ADMIN_TOKEN
+export SONAR_ADMIN_TOKEN
+sudo --preserve-env=SONAR_ADMIN_TOKEN \
+  /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
+unset SONAR_ADMIN_TOKEN
+```
+
+The script creates the case-sensitive `Agrovesto/Team` groups, grants the matrix
+to every existing project without replacing unrelated grants, and makes the same
+matrix the default permission template for future projects. Treat membership in
+the GitHub `Infrastructure` team as privileged: it confers SonarQube system
+administrator access.
+
+## 4. Network prerequisites
 
 GitHub SSO does not bypass either service's network allowlist.
 
@@ -129,15 +171,18 @@ GitHub-hosted Actions runners also need network access to SonarQube for scanning
 SSO does not solve that separate scanner reachability requirement; use a
 self-hosted runner or fixed allowlisted NAT egress.
 
-## 4. Rollout and verification
+## 5. Rollout and verification
 
-1. Register/install the apps and configure all required GitHub secrets.
+1. Register/install the apps and configure all required GitHub secrets. Copy the
+   reviewed root workflow sources into `.github/workflows/` using an identity
+   with GitHub Workflows permission before running the deployment.
 2. Configure the source CIDRs and the two dev DNS records.
 3. Review the plans carefully. Enabling dev SSO changes immutable EC2 user data,
    so the dev instance is replaced. Its MSSQL, logging, and SonarQube EBS volumes
-   survive, but expect several minutes of downtime. Monitoring performs an ECS
-   rolling deployment.
-4. After apply, inspect the explicit outputs:
+   survive, but expect several minutes of downtime. Production Grafana in the
+   monitoring stack performs an ECS rolling deployment.
+4. After apply, run the SonarQube team-permission bootstrap above, then inspect
+   the explicit outputs:
 
    ```bash
    terraform -chdir=dev output sonarqube_authentication
@@ -146,9 +191,11 @@ self-hosted runner or fixed allowlisted NAT egress.
    ```
 
 5. Open each URL and select **Sign in with GitHub** / **Log in with GitHub**.
-   Confirm an `Agrovesto` member can sign in and a non-member cannot.
-6. Confirm new Grafana users are Viewer, then grant higher roles only where
-   required.
+   Confirm members of each mapped team receive the table's role, an unlisted
+   `Agrovesto` member is denied by Grafana, and a non-member cannot sign in.
+6. Confirm a `team-leads` user can update issues but cannot administer SonarQube,
+   and verify `Infrastructure` membership with a separate test account before
+   relying on its administrator mapping.
 7. Test the local admin accounts before treating SSO as operational. They are the
    recovery path for an OAuth outage or a bad organization policy.
 8. Keep `SONAR_TOKEN` in Actions and run a scan. A successful browser login does

@@ -94,6 +94,11 @@ resource "aws_instance" "app" {
     }
 
     precondition {
+      condition     = !alltrue(local.grafana_github_credentials_set) || local.grafana_github_team_organizations_valid
+      error_message = "Every dev Grafana GitHub team-role organization must also be present in grafana_github_organizations."
+    }
+
+    precondition {
       condition     = !alltrue(local.sonarqube_github_credentials_set) || (var.sonarqube.enabled && var.sonarqube.expose_via_nginx && length(var.sonarqube.allowed_cidrs) > 0)
       error_message = "SonarQube GitHub SSO needs SonarQube exposed through nginx and at least one explicit sonarqube.allowed_cidrs entry for browser callbacks."
     }

@@ -399,8 +399,23 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.docker_compose, "sonar-sso.properties:/opt/sonarqube/conf/sonar.properties:ro"),
       strcontains(aws_instance.app.user_data, "sonar.auth.github.clientSecret.secured"),
       strcontains(aws_instance.app.user_data, "sonar.auth.github.organizations"),
+      strcontains(aws_instance.app.user_data, "sonar.auth.github.groupsSync\": \"true"),
     ])
-    error_message = "Grafana and SonarQube must receive their supported GitHub authentication settings."
+    error_message = "Grafana and SonarQube must receive their supported GitHub authentication and group-sync settings."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.docker_compose, "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH"),
+      strcontains(local.docker_compose, "@Agrovesto/infrastructure') && 'Admin'"),
+      strcontains(local.docker_compose, "@Agrovesto/team-leads') && 'Editor'"),
+      strcontains(local.docker_compose, "@Agrovesto/backend') && 'Viewer'"),
+      strcontains(local.docker_compose, "@Agrovesto/frontend') && 'Viewer'"),
+      strcontains(local.docker_compose, "@Agrovesto/mobile') && 'Viewer'"),
+      strcontains(local.docker_compose, "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT: \"true\""),
+      strcontains(local.docker_compose, "GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN: \"false\""),
+    ])
+    error_message = "Dev Grafana must assign the requested team roles, reject unlisted teams, and keep Admin below server-admin scope."
   }
 
   assert {
@@ -416,10 +431,21 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 13 &&
-      aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile
+      length(aws_s3_object.host_config) == 14 &&
+      aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
+      aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "The non-secret Caddyfile must be the only extra host-config object."
+    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "Agrovesto/Infrastructure"),
+      strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "permission=admin"),
+      strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "issueadmin securityhotspotadmin"),
+      strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "user codeviewer"),
+    ])
+    error_message = "The SonarQube bootstrap must encode Admin, read/write, and reader permissions for the synchronized teams."
   }
 
   assert {

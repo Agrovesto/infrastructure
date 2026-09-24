@@ -186,6 +186,9 @@ test -s /opt/agrovesto/compose/docker-compose.yml || {
   echo "FATAL: host config did not sync from s3://${host_config_bucket}" >&2
   exit 1
 }
+%{ if sonarqube.github_sso_enabled ~}
+chmod 700 /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
+%{ endif ~}
 %{ if logging.enabled ~}
 
 # Every directory a compose bind mount points at, so docker never has to create

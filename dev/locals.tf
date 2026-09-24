@@ -57,7 +57,27 @@ locals {
     nonsensitive(var.grafana_github_client_secret != ""),
   ]
   grafana_github_configuration_valid = alltrue(local.grafana_github_credentials_set) || !anytrue(local.grafana_github_credentials_set)
-  grafana_github_sso_enabled         = alltrue(local.grafana_github_credentials_set) && var.logging.enabled && var.logging.expose_via_nginx
+  grafana_github_team_organizations_valid = alltrue([
+    for binding in var.grafana_github_team_roles :
+    contains([for org in var.grafana_github_organizations : lower(org)], lower(binding.organization))
+  ])
+  grafana_github_sso_enabled = alltrue(local.grafana_github_credentials_set) && var.logging.enabled && var.logging.expose_via_nginx
+  # Grafana evaluates this JMESPath expression against GitHub's /user/teams
+  # response at every login. An unlisted team yields no role and strict mode
+  # rejects the login. Sorting by role here guarantees highest-role-wins even if
+  # callers reorder the input list.
+  grafana_github_team_roles_by_priority = flatten([
+    for role in ["Admin", "Editor", "Viewer"] : [
+      for binding in var.grafana_github_team_roles : binding if binding.role == role
+    ]
+  ])
+  grafana_github_role_attribute_path = join(" || ", concat(
+    [
+      for binding in local.grafana_github_team_roles_by_priority :
+      "contains(groups[*], '@${binding.organization}/${binding.team_slug}') && '${binding.role}'"
+    ],
+    ["''"],
+  ))
 
   github_sso_proxy_enabled = local.sonarqube_github_sso_enabled || local.grafana_github_sso_enabled
 
@@ -219,6 +239,7 @@ locals {
     github_sso_enabled           = local.grafana_github_sso_enabled
     github_allowed_organizations = join(" ", var.grafana_github_organizations)
     github_allow_sign_up         = var.grafana_github_allow_sign_up
+    github_role_attribute_path   = local.grafana_github_role_attribute_path
   })
 
   # Caddy is a narrow TLS edge in front of the existing nginx router. It only
@@ -341,6 +362,12 @@ locals {
         content_type = "text/plain"
       }
     },
+    local.sonarqube_github_sso_enabled ? {
+      "scripts/configure-sonarqube-team-permissions.sh" = {
+        content      = file("${path.module}/configure-sonarqube-team-permissions.sh")
+        content_type = "text/x-shellscript"
+      }
+    } : {},
     var.logging.enabled ? {
       "logging/loki/config.yml" = {
         content      = local.loki_config

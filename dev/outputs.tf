@@ -153,6 +153,15 @@ output "sonarqube_authentication" {
     github_enabled        = local.sonarqube_github_sso_enabled
     github_callback_url   = "https://${local.sonar_fqdn}"
     allowed_organizations = var.sonarqube_github_organizations
+    github_team_roles = {
+      "Agrovesto/Backend"        = "Reader"
+      "Agrovesto/Frontend"       = "Reader"
+      "Agrovesto/Infrastructure" = "System and project Admin"
+      "Agrovesto/mobile"         = "Reader"
+      "Agrovesto/team-leads"     = "Read/write issues and security hotspots"
+    }
+    github_group_sync     = local.sonarqube_github_sso_enabled && var.sonarqube_github_synchronize_groups
+    role_bootstrap_script = local.sonarqube_github_sso_enabled ? "/opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh" : null
     local_admin_enabled   = true
     initial_local_login   = "admin / admin (first boot only; SonarQube forces a password change)"
     ci_authentication     = "SONAR_TOKEN (GitHub SSO is for people, not scanners)"
@@ -179,9 +188,14 @@ output "grafana_authentication" {
   description = "Configured dev Grafana login methods and GitHub OAuth callback"
   value = var.logging.enabled ? {
     github_enabled        = local.grafana_github_sso_enabled
+    github_login_url      = "https://${local.grafana_fqdn}/login/github"
     github_callback_url   = "https://${local.grafana_fqdn}/login/github"
     allowed_organizations = var.grafana_github_organizations
-    github_default_role   = "Viewer"
+    github_team_roles = {
+      for binding in var.grafana_github_team_roles :
+      "${binding.organization}/${binding.team_slug}" => binding.role
+    }
+    unlisted_teams_denied = local.grafana_github_sso_enabled
     local_admin_enabled   = true
     local_admin_user      = var.logging.grafana_admin_user
     local_password_ssm    = var.logging.enabled ? aws_ssm_parameter.grafana_admin_password[0].name : null

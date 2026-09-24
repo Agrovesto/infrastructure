@@ -108,6 +108,36 @@ variable "grafana_github_allow_sign_up" {
   default     = true
 }
 
+variable "grafana_github_team_roles" {
+  description = "GitHub team-to-Grafana role mappings; role evaluation always prioritizes Admin, then Editor, then Viewer"
+  type = list(object({
+    organization = optional(string, "Agrovesto")
+    team_slug    = string
+    role         = string
+  }))
+  default = [
+    { team_slug = "infrastructure", role = "Admin" },
+    { team_slug = "team-leads", role = "Editor" },
+    { team_slug = "backend", role = "Viewer" },
+    { team_slug = "frontend", role = "Viewer" },
+    { team_slug = "mobile", role = "Viewer" },
+  ]
+
+  validation {
+    condition = (
+      length(var.grafana_github_team_roles) > 0 &&
+      length(distinct([for binding in var.grafana_github_team_roles : lower("${binding.organization}/${binding.team_slug}")])) == length(var.grafana_github_team_roles) &&
+      alltrue([
+        for binding in var.grafana_github_team_roles :
+        can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", binding.organization)) &&
+        can(regex("^[a-z0-9]([a-z0-9-]{0,98}[a-z0-9])?$", binding.team_slug)) &&
+        contains(["Viewer", "Editor", "Admin"], binding.role)
+      ])
+    )
+    error_message = "grafana_github_team_roles must contain unique organization/team slugs and a Viewer, Editor, or Admin role."
+  }
+}
+
 # --- Images ----------------------------------------------------------------------
 # Public OSS images only, pinned. Everything runs on Graviton (arm64).
 

@@ -98,7 +98,10 @@ admin user (default `admin`) plus `/agrovesto-dev/grafana_admin_password`. A
 fresh SonarQube database starts as `admin` / `admin` and forces a first-login
 password change. GitHub login is enabled when the credential sets documented
 in [`docs/github-sso.md`](docs/github-sso.md) are supplied; local admin stays
-enabled as a break-glass path.
+enabled as a break-glass path. Both Grafana instances map `Infrastructure` to
+Admin, `team-leads` to Editor, and `Backend`, `Frontend`, and `mobile` to Viewer;
+SonarQube synchronizes the corresponding groups and applies the documented
+least-privilege permission matrix.
 
 ### Accessing SonarQube and Redis (Dev)
 Both publish loopback ports only and have no security-group ingress, so the

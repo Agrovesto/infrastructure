@@ -308,6 +308,11 @@ services:
       GF_AUTH_GITHUB_SCOPES: "user:email,read:org"
       GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS: "${logging.github_allowed_organizations}"
       GF_AUTH_GITHUB_ALLOW_SIGN_UP: "${logging.github_allow_sign_up}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH: "${logging.github_role_attribute_path}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT: "true"
+      GF_AUTH_GITHUB_SKIP_ORG_ROLE_SYNC: "false"
+      # Admin is an organization role, never unrestricted Grafana server admin.
+      GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN: "false"
       # Keep the login form as a break-glass path for the local admin account.
       GF_AUTH_GITHUB_AUTO_LOGIN: "false"
 %{ endif ~}

@@ -56,6 +56,11 @@ resource "aws_ecs_task_definition" "grafana" {
           { name = "GF_AUTH_GITHUB_SCOPES", value = "user:email,read:org" },
           { name = "GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS", value = join(" ", var.grafana_github_organizations) },
           { name = "GF_AUTH_GITHUB_ALLOW_SIGN_UP", value = tostring(var.grafana_github_allow_sign_up) },
+          { name = "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH", value = local.grafana_github_role_attribute_path },
+          { name = "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT", value = "true" },
+          { name = "GF_AUTH_GITHUB_SKIP_ORG_ROLE_SYNC", value = "false" },
+          # Admin is an organization role, never unrestricted server admin.
+          { name = "GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN", value = "false" },
           # Force a new task revision when either SecureString is rotated; ECS
           # resolves secret values only when a task starts.
           { name = "GITHUB_OAUTH_CONFIG_VERSION", value = join("-", [tostring(aws_ssm_parameter.grafana_github_client_id[0].version), tostring(aws_ssm_parameter.grafana_github_client_secret[0].version)]) },
@@ -97,6 +102,11 @@ resource "aws_ecs_task_definition" "grafana" {
     precondition {
       condition     = local.grafana_github_configuration_valid
       error_message = "Grafana GitHub SSO requires both the client ID and client secret, or both must be empty."
+    }
+
+    precondition {
+      condition     = !alltrue(local.grafana_github_credentials_set) || local.grafana_github_team_organizations_valid
+      error_message = "Every production Grafana GitHub team-role organization must also be present in grafana_github_organizations."
     }
   }
 
