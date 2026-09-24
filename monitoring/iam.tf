@@ -243,3 +243,33 @@ resource "aws_iam_role_policy" "events" {
     ]
   })
 }
+
+# Alertmanager publishes to the prod alerts topic. The topic is encrypted with
+# prod's SNS key; kms use is allowed only through SNS.
+resource "aws_iam_role_policy" "task_alerts_sns" {
+  count = local.alertmanager_sns_topic_arn != "" ? 1 : 0
+
+  name = "${local.name}-task-alerts-sns-policy"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "PublishAlerts"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = [local.alertmanager_sns_topic_arn]
+      },
+      {
+        Sid      = "EncryptForSns"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "sns.${var.aws_region}.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}

@@ -381,3 +381,76 @@ run "dns_managed_by_dev" {
     error_message = "One CNAME per Amplify app."
   }
 }
+
+# -----------------------------------------------------------------------------
+# Remaining network, storage and IAM wiring
+# -----------------------------------------------------------------------------
+
+run "network_edges" {
+  command = plan
+
+  assert {
+    condition     = aws_internet_gateway.main.tags["Name"] == "${var.project}-${var.environment}-igw"
+    error_message = "The IGW keeps its convention name (adopted igw-04e4d65d903b2b67d is renamed in place)."
+  }
+
+  assert {
+    condition     = aws_route_table.public.tags["Name"] == "${var.project}-${var.environment}-public-rt"
+    error_message = "The public route table keeps its convention name."
+  }
+}
+
+run "storage_buckets_and_volumes" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.backup.bucket == "${var.project}-${var.environment}-mssql-backups" && aws_s3_bucket.backup.tags["Purpose"] == "mssql-backup"
+    error_message = "The backup bucket follows <project>-<env>-mssql-backups."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.host_config.bucket == "${var.project}-${var.environment}-host-config" && aws_s3_bucket.host_config.force_destroy
+    error_message = "Host config is reproducible from the repo, so its bucket may be force-destroyed."
+  }
+
+  assert {
+    condition     = aws_volume_attachment.mssql.device_name == "/dev/sdf"
+    error_message = "The MSSQL data volume attaches at var.mssql_volume_device (/dev/sdf), which user_data mounts."
+  }
+}
+
+run "scheduler_iam" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role.scheduler.name == "${var.project}-${var.environment}-ec2-scheduler-role"
+    error_message = "The scheduler role keeps its convention name."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.scheduler.name == "${var.project}-${var.environment}-scheduler-policy" && can(jsondecode(aws_iam_role_policy.scheduler.policy))
+    error_message = "The scheduler policy is attached and is valid JSON."
+  }
+}
+
+run "extra_alias_records" {
+  command = plan
+
+  variables {
+    manage_dns = true
+    extra_alias_records = {
+      "@" = { name = "d111111abcdef8.cloudfront.net", zone_id = "Z2FDTNDATAQYW2" }
+      www = { name = "d111111abcdef8.cloudfront.net", zone_id = "Z2FDTNDATAQYW2", evaluate_target_health = true }
+    }
+  }
+
+  assert {
+    condition     = aws_route53_record.alias["@"].name == "nomaos.com" && aws_route53_record.alias["www"].name == "www.nomaos.com"
+    error_message = "\"@\" maps to the apex; other keys become subdomains."
+  }
+
+  assert {
+    condition     = one(aws_route53_record.alias["www"].alias).evaluate_target_health && !one(aws_route53_record.alias["@"].alias).evaluate_target_health
+    error_message = "evaluate_target_health defaults to false and can be turned on per record."
+  }
+}

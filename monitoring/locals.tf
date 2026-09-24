@@ -352,10 +352,22 @@ locals {
 
   # Receivers are rendered only for the channels that are configured, so a
   # stack with no secrets still applies and simply records alerts in its UI.
+  # SNS: publishes to the prod alerts topic (prod/sns.tf), signing with the ECS
+  # task role (sigv4 default credential chain), so no keys are configured.
+  alertmanager_sns_topic_arn = var.alertmanager_sns_topic != "" ? "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${var.alertmanager_sns_topic}" : ""
+
   alertmanager_receivers = join("\n", concat(
     [
       "  - name: default",
     ],
+    local.alertmanager_sns_topic_arn != "" ? [
+      "    sns_configs:",
+      "      - topic_arn: ${local.alertmanager_sns_topic_arn}",
+      "        sigv4:",
+      "          region: ${var.aws_region}",
+      "        subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'",
+      "        send_resolved: true",
+    ] : [],
     var.alertmanager_webhook_url != "" ? [
       "    webhook_configs:",
       "      - url: ${var.alertmanager_webhook_url}",

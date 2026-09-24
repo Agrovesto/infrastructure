@@ -19,6 +19,9 @@ alert_email              = ""
 alert_smtp_host          = ""
 alert_smtp_user          = ""
 alertmanager_webhook_url = ""
+# Alertmanager -> the prod alerts topic (prod/sns.tf); its email subscribers get
+# Prometheus alerts too. Needs the prod stack applied first.
+alertmanager_sns_topic = "agrovesto-prod-alerts"
 
 # Cost monitoring: a Cost and Usage Report lands in S3 and a daily task turns it
 # into budget metrics in Prometheus. The first data point needs one CUR delivery.

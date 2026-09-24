@@ -254,3 +254,56 @@ run "storage_and_schedule_settings" {
     error_message = "The metrics schedule name drifted."
   }
 }
+
+run "alertmanager_publishes_to_sns" {
+  command = plan
+
+  variables {
+    alertmanager_sns_topic = "agrovesto-prod-alerts"
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.config["alertmanager/alertmanager.yml"].content, "sns_configs:"),
+      strcontains(aws_s3_object.config["alertmanager/alertmanager.yml"].content, "topic_arn: arn:aws:sns:eu-west-1:221434544570:agrovesto-prod-alerts"),
+      strcontains(aws_s3_object.config["alertmanager/alertmanager.yml"].content, "send_resolved: true"),
+    ])
+    error_message = "Alertmanager must publish (and resolve) to the prod alerts topic."
+  }
+
+  assert {
+    condition = alltrue([
+      one(aws_iam_role_policy.task_alerts_sns[*].name) == "agrovesto-monitoring-task-alerts-sns-policy",
+      strcontains(one(aws_iam_role_policy.task_alerts_sns[*].policy), "arn:aws:sns:eu-west-1:221434544570:agrovesto-prod-alerts"),
+      strcontains(one(aws_iam_role_policy.task_alerts_sns[*].policy), "sns.eu-west-1.amazonaws.com"),
+    ])
+    error_message = "The task role may publish only to that topic, and use KMS only through SNS."
+  }
+}
+
+run "no_sns_receiver_when_unset" {
+  command = plan
+
+  variables {
+    alertmanager_sns_topic = ""
+  }
+
+  assert {
+    condition     = !strcontains(aws_s3_object.config["alertmanager/alertmanager.yml"].content, "sns_configs") && length(aws_iam_role_policy.task_alerts_sns) == 0
+    error_message = "With no topic there is no SNS receiver and no publish permission."
+  }
+}
+
+run "config_bucket_is_private_and_tls_only" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket.config.bucket == "agrovesto-monitoring-config-221434544570"
+    error_message = "The config bucket is <name>-config-<account> so it is globally unique."
+  }
+
+  assert {
+    condition     = jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Sid == "DenyNonTls" && jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Condition.Bool["aws:SecureTransport"] == "false"
+    error_message = "The config bucket denies every non-TLS request."
+  }
+}

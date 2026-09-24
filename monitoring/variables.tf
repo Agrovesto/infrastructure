@@ -215,6 +215,12 @@ variable "alert_smtp_password" {
   default     = ""
 }
 
+variable "alertmanager_sns_topic" {
+  description = "SNS topic name (same account) Alertmanager publishes to, e.g. the prod alerts topic. Empty = no SNS receiver"
+  type        = string
+  default     = ""
+}
+
 variable "alertmanager_webhook_url" {
   description = "Slack/Mattermost-compatible webhook for alerts. Empty = no webhook receiver"
   type        = string

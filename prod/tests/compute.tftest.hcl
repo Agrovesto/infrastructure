@@ -605,3 +605,160 @@ run "sns_and_alarms" {
     error_message = "ECS alarms use the default 85% threshold; any unhealthy target alarms."
   }
 }
+
+# -----------------------------------------------------------------------------
+# IAM policy documents, network edges and optional features. apply (mocked) so
+# the documents that depend on ARNs are resolved.
+# -----------------------------------------------------------------------------
+
+run "iam_documents_and_wiring" {
+  command = apply
+
+  variables {
+    db_size_alarm_enabled         = true
+    db_size_alarm_email           = "ops@example.com"
+    manage_default_security_group = true
+  }
+
+  # --- ECS execution ---------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.ecs_execution_assume.statement).principals).identifiers == toset(["ecs-tasks.amazonaws.com"])
+    error_message = "Only ECS tasks may assume the execution/task roles."
+  }
+
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.ecs_execution_secrets.statement : s.sid] == ["ReadMssqlMasterSecret", "DecryptMssqlMasterSecret"]
+    error_message = "Execution role reads only the master secret and decrypts it."
+  }
+
+  assert {
+    condition     = toset(one(data.aws_iam_policy_document.ecs_execution_secrets.statement[1].condition).values) == toset(["secretsmanager.eu-west-1.amazonaws.com"])
+    error_message = "kms:Decrypt is limited to Secrets Manager (kms:ViaService)."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.ecs_execution_secrets.name == "${var.project}-${var.environment}-ecs-execution-secrets"
+    error_message = "The secrets policy is attached to the execution role."
+  }
+
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.rds_monitoring_assume.statement).principals).identifiers == toset(["monitoring.rds.amazonaws.com"])
+    error_message = "Only RDS enhanced monitoring may assume the monitoring role."
+  }
+
+  # --- Flow logs ---------------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.flow_logs_assume.statement).principals).identifiers == toset(["vpc-flow-logs.amazonaws.com"])
+    error_message = "Only VPC flow logs may assume the flow-logs role."
+  }
+
+  assert {
+    condition     = contains(one(data.aws_iam_policy_document.flow_logs.statement).actions, "logs:PutLogEvents") && length(one(data.aws_iam_policy_document.flow_logs.statement).resources) == 2
+    error_message = "Flow logs may write only to their own log group (and its streams)."
+  }
+
+  assert {
+    condition     = aws_iam_role.flow_logs.name == "${var.project}-${var.environment}-flow-logs-role" && aws_iam_role_policy.flow_logs.name == "${var.project}-${var.environment}-flow-logs-policy"
+    error_message = "Flow-logs role and policy keep their convention names."
+  }
+
+  # --- ALB access logs -----------------------------------------------------------
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.alb_logs.statement : s.sid] == ["AllowELBLogDelivery", "AllowELBServiceAccount"]
+    error_message = "ALB log bucket allows both the log-delivery principal and the regional ELB account."
+  }
+
+  assert {
+    condition     = one(data.aws_iam_policy_document.alb_logs.statement[1].principals).identifiers == toset(["arn:aws:iam::156460612806:root"])
+    error_message = "The legacy statement names the regional ELB account."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_policy.alb_logs.bucket == aws_s3_bucket.alb_logs.id
+    error_message = "The log-delivery policy is on the ALB logs bucket."
+  }
+
+  # --- DB size check (db_size_alarm_enabled) --------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.events_assume[0].statement).principals).identifiers == toset(["events.amazonaws.com"])
+    error_message = "Only EventBridge may assume the events role."
+  }
+
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.events_run_task[0].statement : s.sid] == ["RunDatabaseSizeCheck", "PassTaskRoles"]
+    error_message = "EventBridge may only run the size-check task and pass its two roles."
+  }
+
+  assert {
+    condition     = aws_iam_role.events[0].name == "${var.project}-${var.environment}-events-role" && aws_iam_role_policy.events_run_task[0].name == "${var.project}-${var.environment}-events-run-task"
+    error_message = "Events role and policy keep their convention names."
+  }
+
+  assert {
+    condition = alltrue([
+      one(aws_cloudwatch_event_target.db_size_check[0].ecs_target).launch_type == "FARGATE",
+      one(one(aws_cloudwatch_event_target.db_size_check[0].ecs_target).network_configuration).assign_public_ip == false,
+    ])
+    error_message = "The size check runs on Fargate in a private subnet without a public IP."
+  }
+
+  assert {
+    condition     = aws_sns_topic_subscription.db_size_alarm[0].endpoint == "ops@example.com" && aws_sns_topic_subscription.db_size_alarm[0].protocol == "email"
+    error_message = "db_size_alarm_email is subscribed to the size alarm topic."
+  }
+
+  # --- Vault -----------------------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.vault_kms.statement).principals).identifiers == toset(["arn:aws:iam::123456789012:root"])
+    error_message = "The Vault key policy delegates to the account root only."
+  }
+
+  assert {
+    condition     = one(data.aws_iam_policy_document.vault_task.statement).actions == toset(["kms:Encrypt", "kms:Decrypt", "kms:DescribeKey"])
+    error_message = "Vault gets only the KMS actions auto-unseal needs."
+  }
+
+  assert {
+    condition     = aws_iam_role.vault_task[0].name == "${var.project}-${var.environment}-vault-task-role" && aws_iam_role_policy.vault_task[0].name == "${var.project}-${var.environment}-vault-task-policy"
+    error_message = "Vault task role and policy keep their convention names."
+  }
+
+  # --- ACM + network edges -------------------------------------------------------------
+  assert {
+    condition     = aws_acm_certificate_validation.wildcard.certificate_arn == aws_acm_certificate.wildcard.arn
+    error_message = "The HTTPS listener waits for the wildcard certificate to validate."
+  }
+
+  assert {
+    condition     = length(aws_default_security_group.default) == 1 && aws_default_security_group.default[0].tags["Name"] == "${var.project}-${var.environment}-default-sg"
+    error_message = "manage_default_security_group = true takes over (and empties) the default SG."
+  }
+
+  assert {
+    condition     = aws_internet_gateway.main.tags["Name"] == "${var.project}-${var.environment}-igw" && aws_route_table.public.tags["Name"] == "${var.project}-${var.environment}-public-rt"
+    error_message = "IGW and public route table keep their convention names."
+  }
+
+  assert {
+    condition     = length(aws_route_table_association.public) == 2 && alltrue([for a in aws_route_table_association.public : a.route_table_id == aws_route_table.public.id])
+    error_message = "Both public subnets use the shared public route table."
+  }
+
+  assert {
+    condition     = [for rt in aws_route_table.private : rt.tags["Name"]] == ["${var.project}-${var.environment}-private-rt-1", "${var.project}-${var.environment}-private-rt-2"]
+    error_message = "One private route table per private subnet."
+  }
+}
+
+run "db_init_bootstrap" {
+  command = plan
+
+  variables {
+    run_db_init = true
+  }
+
+  assert {
+    condition     = null_resource.db_init[0].triggers.sql == join(" ", [for db in var.mssql_databases : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"])
+    error_message = "db-init re-runs when the database list changes and only creates missing databases."
+  }
+}
