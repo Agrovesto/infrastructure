@@ -218,3 +218,8 @@ mssql_backup_window               = "04:13-04:43"
 mssql_maintenance_window          = "mon:22:43-mon:23:13"
 mssql_subnet_group_description    = "Subnet group for agxdb2 RDS instance"
 public_subnet_map_public_ip       = true
+
+# --- SNS (sns.tf, alarms.tf) ---------------------------------------------------
+# Each address gets an AWS confirmation email; alerts start once it is clicked.
+alert_emails   = [] # e.g. ["devops@agrovesto.com"]
+app_sns_topics = ["notifications"]

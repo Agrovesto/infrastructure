@@ -468,3 +468,30 @@ variable "manage_default_security_group" {
   type        = bool
   default     = true
 }
+
+# -----------------------------------------------------------------------------
+# SNS + alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+variable "alert_emails" {
+  description = "Emails subscribed to the alerts topic (each must confirm the AWS email)"
+  type        = list(string)
+  default     = []
+}
+
+variable "app_sns_topics" {
+  description = "Application topics (<project>-<env>-<name>) the APIs on the host may publish to"
+  type        = list(string)
+  default     = ["notifications"]
+}
+
+variable "app_topic_emails" {
+  description = "Emails subscribed to every app topic (optional)"
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_cpu_percent" {
+  type    = number
+  default = 85
+}

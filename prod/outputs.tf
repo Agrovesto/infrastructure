@@ -121,3 +121,13 @@ output "mssql_db_init_sql" {
   description = "Runbook SQL (also executed by the db-init task when var.run_db_init = true)"
   value       = local.db_init_sql
 }
+
+output "sns_alerts_topic_arn" {
+  description = "CloudWatch alarms publish here"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "sns_app_topic_arns" {
+  description = "Application topics, by name"
+  value       = { for k, t in aws_sns_topic.app : k => t.arn }
+}

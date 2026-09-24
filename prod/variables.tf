@@ -539,3 +539,52 @@ variable "public_subnet_map_public_ip" {
   type        = bool
   default     = false
 }
+
+# -----------------------------------------------------------------------------
+# SNS + alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+variable "alert_emails" {
+  description = "Emails subscribed to the alerts topic (each must confirm the AWS email)"
+  type        = list(string)
+  default     = []
+}
+
+variable "app_sns_topics" {
+  description = "Application topics (<project>-<env>-<name>) the ECS services may publish to"
+  type        = list(string)
+  default     = ["notifications"]
+}
+
+variable "app_topic_emails" {
+  description = "Emails subscribed to every app topic (optional)"
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_rds_cpu_percent" {
+  type    = number
+  default = 80
+}
+
+variable "alarm_rds_free_storage_gb" {
+  type    = number
+  default = 5
+}
+
+variable "alarm_rds_free_memory_mb" {
+  type    = number
+  default = 128
+}
+
+variable "alarm_5xx_count" {
+  description = "5xx responses in 5 minutes that trigger an alarm"
+  type        = number
+  default     = 10
+}
+
+variable "alarm_ecs_percent" {
+  description = "ECS service CPU / memory utilisation alarm threshold"
+  type        = number
+  default     = 85
+}

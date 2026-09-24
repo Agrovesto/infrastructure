@@ -137,3 +137,13 @@ output "logging_summary" {
     self_scrape_dropped  = local.logging_own_services
   } : null
 }
+
+output "sns_alerts_topic_arn" {
+  description = "CloudWatch alarms publish here"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "sns_app_topic_arns" {
+  description = "Application topics, by name"
+  value       = { for k, t in aws_sns_topic.app : k => t.arn }
+}

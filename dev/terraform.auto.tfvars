@@ -115,3 +115,8 @@ logging = {
 vpc_cidr = "172.96.0.0/16"
 # subnet-0739cfd4c412deb3f (eu-west-1a, IGW-routed, hosts new-noma-api)
 public_subnet_cidrs = ["172.96.0.0/24"]
+
+# --- SNS (sns.tf, alarms.tf) ---------------------------------------------------
+# Each address gets an AWS confirmation email; alerts start once it is clicked.
+alert_emails   = [] # e.g. ["devops@agrovesto.com"]
+app_sns_topics = ["notifications"]

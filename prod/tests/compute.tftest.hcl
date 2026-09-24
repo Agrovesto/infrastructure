@@ -536,3 +536,72 @@ run "x86_fallback" {
     error_message = "ecs_cpu_architecture = X86_64 must put tasks back on x86 (escape hatch for amd64-only images)."
   }
 }
+
+# -----------------------------------------------------------------------------
+# SNS topics + baseline alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+run "sns_and_alarms" {
+  command = plan
+
+  variables {
+    alert_emails     = ["ops@example.com"]
+    app_sns_topics   = ["notifications", "orders"]
+    app_topic_emails = ["dev@example.com"]
+  }
+
+  assert {
+    condition     = aws_kms_key.sns.enable_key_rotation && aws_kms_alias.sns.name == "alias/${var.project}-${var.environment}-sns"
+    error_message = "SNS topics use a rotating customer-managed key (alarms cannot publish to aws/sns)."
+  }
+
+  assert {
+    condition     = aws_sns_topic.alerts.name == "${var.project}-${var.environment}-alerts"
+    error_message = "Alerts topic follows the naming convention."
+  }
+
+  assert {
+    condition     = aws_sns_topic_policy.alerts != null
+    error_message = "The alerts topic has a policy letting CloudWatch publish."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic_subscription.alerts_email) == 1 && aws_sns_topic_subscription.alerts_email["ops@example.com"].protocol == "email"
+    error_message = "Every alert email gets an email subscription."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic.app) == 2 && length(aws_sns_topic_subscription.app_email) == 2
+    error_message = "One topic per app_sns_topics entry, each subscribed by every app_topic_emails address."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.ecs_task_sns) == 1
+    error_message = "The ECS task role may publish to the app topics."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.rds_cpu.namespace == "AWS/RDS" && aws_cloudwatch_metric_alarm.rds_storage.threshold == 5 * 1024 * 1024 * 1024 && aws_cloudwatch_metric_alarm.rds_memory.metric_name == "FreeableMemory"
+    error_message = "RDS CPU, free storage (5 GB) and memory alarms exist."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.alb_5xx.metric_name == "HTTPCode_ELB_5XX_Count"
+    error_message = "ALB 5xx alarm exists."
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_cloudwatch_metric_alarm.target_5xx) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.unhealthy_targets) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.ecs_cpu) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.ecs_memory) == length(var.services),
+    ])
+    error_message = "Every service gets 5xx, unhealthy-target, CPU and memory alarms."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.ecs_cpu["wallet"].threshold == 85 && aws_cloudwatch_metric_alarm.unhealthy_targets["wallet"].comparison_operator == "GreaterThanThreshold"
+    error_message = "ECS alarms use the default 85% threshold; any unhealthy target alarms."
+  }
+}
