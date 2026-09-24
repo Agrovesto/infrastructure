@@ -196,7 +196,7 @@ mssql_max_allocated_storage_gb     = 63
 mssql_storage_type                 = "gp2"
 mssql_master_username              = "agrovesto"
 mssql_subnet_group_name            = "agxdb2subnetgroup"
-mssql_performance_insights_enabled = true  # live instance has it on (import plan)
+mssql_performance_insights_enabled = true # live instance has it on (import plan)
 
 # !! migration-prod is NOT encrypted. storage_encrypted is ForceNew, so it must
 # stay false until the planned encrypt-by-restore window (docs/import-runbook.md §5).

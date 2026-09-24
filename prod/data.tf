@@ -4,8 +4,14 @@
 
 data "aws_availability_zones" "available" {
   state = "available"
-}
 
+  # Allowlist the zones so the set (and subnet placement by index) never
+  # shifts when AWS adds an AZ to the region (CKV_AWS_394).
+  filter {
+    name   = "zone-name"
+    values = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
+  }
+}
 data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}

@@ -51,6 +51,12 @@ resource "aws_s3_bucket_ownership_controls" "rekognition" {
   }
 }
 
+resource "aws_s3_bucket_versioning" "rekognition" {
+  bucket = aws_s3_bucket.rekognition.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
 resource "aws_s3_bucket_server_side_encryption_configuration" "rekognition" {
   bucket = aws_s3_bucket.rekognition.id
   rule {
@@ -86,13 +92,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "rekognition" {
   }
 
   rule {
-    id     = "abort-incomplete-multipart"
+    id     = "abort-incomplete-multipart-and-old-versions"
     status = "Enabled"
     filter {}
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
+    # Versioning protects against accidental overwrite/delete; old versions
+    # are only kept long enough to recover, so expiry still frees the data.
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
   }
+
+  depends_on = [aws_s3_bucket_versioning.rekognition]
 }
 
 resource "aws_s3_bucket_policy" "rekognition" {
@@ -189,6 +202,7 @@ resource "aws_iam_role_policy" "rekognition_video" {
 
 # --- Face Liveness: guest credentials for the client SDK ----------------------
 resource "aws_cognito_identity_pool" "liveness" {
+  #checkov:skip=CKV_AWS_366: Face Liveness clients stream before sign-in (AWS reference design); the guest role may only call rekognition:StartFaceLivenessSession, and the session id is created server-side
   count                            = var.rekognition.liveness_identity_pool ? 1 : 0
   identity_pool_name               = replace("${local.name}_liveness", "-", "_")
   allow_unauthenticated_identities = true
@@ -238,6 +252,7 @@ resource "aws_cognito_identity_pool_roles_attachment" "liveness" {
 
 # --- What the application may do ---------------------------------------------
 resource "aws_iam_role_policy" "app_rekognition" {
+  #checkov:skip=CKV_AWS_355: only the "Analysis" statement uses "*": Detect*/CompareFaces/celebrity/liveness/video Start*/Get* have no resource-level permissions in Rekognition; collections, S3, SQS and PassRole are all scoped to ARNs
   name = "${local.name}-app-rekognition"
   role = aws_iam_role.ec2.id
   policy = jsonencode({
@@ -306,10 +321,10 @@ resource "aws_iam_role_policy" "app_rekognition" {
         Resource = aws_s3_bucket.rekognition.arn
       },
       {
-        Sid      = "PassVideoRole"
-        Effect   = "Allow"
-        Action   = "iam:PassRole"
-        Resource = aws_iam_role.rekognition_video.arn
+        Sid       = "PassVideoRole"
+        Effect    = "Allow"
+        Action    = "iam:PassRole"
+        Resource  = aws_iam_role.rekognition_video.arn
         Condition = { StringEquals = { "iam:PassedToService" = "rekognition.amazonaws.com" } }
       },
       {

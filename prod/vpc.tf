@@ -40,10 +40,11 @@ resource "aws_internet_gateway" "main" {
 
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidrs)
+  #checkov:skip=CKV_AWS_130: public tier (ALB, NAT) of an adopted VPC; the live subnets auto-assign public IPs and legacy EC2s launched there rely on it (var.public_subnet_map_public_ip). No app workloads run here.
 
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = local.azs[count.index]
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_cidrs[count.index]
+  availability_zone = local.azs[count.index]
   # Adopted public subnets have this on; legacy EC2s launched there rely on it.
   map_public_ip_on_launch = var.public_subnet_map_public_ip
 

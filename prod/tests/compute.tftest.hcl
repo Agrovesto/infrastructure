@@ -770,6 +770,10 @@ run "rekognition" {
   command = apply
 
   assert {
+    condition     = aws_s3_bucket_versioning.rekognition.versioning_configuration[0].status == "Enabled"
+    error_message = "The media bucket is versioned (old versions expire after 7 days)."
+  }
+  assert {
     condition     = [for c in aws_rekognition_collection.this : c.collection_id] == ["${local.name}-customers"]
     error_message = "One KYC face collection by default, named after the stack."
   }
