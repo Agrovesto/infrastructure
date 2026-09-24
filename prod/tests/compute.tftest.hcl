@@ -251,27 +251,29 @@ run "task_definitions" {
 # -----------------------------------------------------------------------------
 
 run "otel_environment" {
-  command = plan
-
-  locals {
-    wallet_env = {
-      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
-      e.name => e.value
-    }
-  }
+  command = apply
 
   assert {
-    condition     = local.wallet_env["OTEL_SERVICE_NAME"] == "wallet"
+    condition = {
+      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
+      e.name => e.value
+    }["OTEL_SERVICE_NAME"] == "wallet"
     error_message = "Each task names itself with its own service key, so a span is attributable to exactly one service."
   }
 
   assert {
-    condition     = local.wallet_env["OTEL_EXPORTER_OTLP_ENDPOINT"] == var.otel.endpoint
+    condition = {
+      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
+      e.name => e.value
+    }["OTEL_EXPORTER_OTLP_ENDPOINT"] == var.otel.endpoint
     error_message = "Telemetry goes to the configured OTLP endpoint."
   }
 
   assert {
-    condition     = local.wallet_env["OTEL_EXPORTER_OTLP_PROTOCOL"] == "grpc" && can(regex(":4317$", local.wallet_env["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    condition = (
+      { for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.name => e.value }["OTEL_EXPORTER_OTLP_PROTOCOL"] == "grpc" &&
+      can(regex(":4317$", { for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.name => e.value }["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    )
     error_message = "Protocol and port agree: gRPC is 4317, http/protobuf is 4318."
   }
 
@@ -286,21 +288,24 @@ run "otel_environment" {
   }
 
   assert {
-    condition     = local.wallet_env["OTEL_LOGS_EXPORTER"] == "none"
+    condition = {
+      for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
+      e.name => e.value
+    }["OTEL_LOGS_EXPORTER"] == "none"
     error_message = "Logs stay on the awslogs driver; exporting them over OTLP as well would store every line twice."
   }
 
   assert {
     condition = (
-      strcontains(local.wallet_env["OTEL_RESOURCE_ATTRIBUTES"], "deployment.environment=prod") &&
-      strcontains(local.wallet_env["OTEL_RESOURCE_ATTRIBUTES"], "service.namespace=agrovesto")
+      strcontains({ for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.name => e.value }["OTEL_RESOURCE_ATTRIBUTES"], "deployment.environment=prod") &&
+      strcontains({ for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.name => e.value }["OTEL_RESOURCE_ATTRIBUTES"], "service.namespace=agrovesto")
     )
     error_message = "Spans carry environment and namespace, so a trace cannot be mistaken for another stack's."
   }
 }
 
 run "otel_disabled" {
-  command = plan
+  command = apply
 
   variables {
     otel = { enabled = false }
