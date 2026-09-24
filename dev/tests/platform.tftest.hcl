@@ -57,6 +57,8 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
@@ -114,8 +116,8 @@ run "vpc" {
   command = plan
 
   assert {
-    condition     = aws_vpc.main.cidr_block == "10.20.0.0/16"
-    error_message = "Dev VPC uses 10.20.0.0/16 (prod uses 10.30.0.0/16)."
+    condition     = aws_vpc.main.cidr_block == "172.96.0.0/16"
+    error_message = "Dev VPC is the adopted vpc-0d9b566c353787d53 (172.96.0.0/16); cidr_block is ForceNew."
   }
 
   assert {
@@ -379,5 +381,160 @@ run "dns_managed_by_dev" {
   assert {
     condition     = length(aws_route53_record.cname) == 2
     error_message = "One CNAME per Amplify app."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Remaining network, storage and IAM wiring
+# -----------------------------------------------------------------------------
+
+run "network_edges" {
+  command = plan
+
+  assert {
+    condition     = aws_internet_gateway.main.tags["Name"] == "${var.project}-${var.environment}-igw"
+    error_message = "The IGW keeps its convention name (adopted igw-04e4d65d903b2b67d is renamed in place)."
+  }
+
+  assert {
+    condition     = aws_route_table.public.tags["Name"] == "${var.project}-${var.environment}-public-rt"
+    error_message = "The public route table keeps its convention name."
+  }
+}
+
+run "storage_buckets_and_volumes" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.backup.bucket == "${var.project}-${var.environment}-mssql-backups" && aws_s3_bucket.backup.tags["Purpose"] == "mssql-backup"
+    error_message = "The backup bucket follows <project>-<env>-mssql-backups."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.host_config.bucket == "${var.project}-${var.environment}-host-config" && aws_s3_bucket.host_config.force_destroy
+    error_message = "Host config is reproducible from the repo, so its bucket may be force-destroyed."
+  }
+
+  assert {
+    condition     = aws_volume_attachment.mssql.device_name == "/dev/sdf"
+    error_message = "The MSSQL data volume attaches at var.mssql_volume_device (/dev/sdf), which user_data mounts."
+  }
+}
+
+run "scheduler_iam" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role.scheduler.name == "${var.project}-${var.environment}-ec2-scheduler-role"
+    error_message = "The scheduler role keeps its convention name."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.scheduler.name == "${var.project}-${var.environment}-scheduler-policy"
+    error_message = "The scheduler policy is attached and is valid JSON."
+  }
+}
+
+run "extra_alias_records" {
+  command = plan
+
+  variables {
+    manage_dns = true
+    extra_alias_records = {
+      "@" = { name = "d111111abcdef8.cloudfront.net", zone_id = "Z2FDTNDATAQYW2" }
+      www = { name = "d111111abcdef8.cloudfront.net", zone_id = "Z2FDTNDATAQYW2", evaluate_target_health = true }
+    }
+  }
+
+  assert {
+    condition     = aws_route53_record.alias["@"].name == "nomaos.com" && aws_route53_record.alias["www"].name == "www.nomaos.com"
+    error_message = "\"@\" maps to the apex; other keys become subdomains."
+  }
+
+  assert {
+    condition     = one(aws_route53_record.alias["www"].alias).evaluate_target_health && !one(aws_route53_record.alias["@"].alias).evaluate_target_health
+    error_message = "evaluate_target_health defaults to false and can be turned on per record."
+  }
+}
+
+# --- Rekognition --------------------------------------------------------------
+run "rekognition" {
+  # plan: a full mocked apply of the dev stack feeds random strings into ARN
+  # fields (alarms, scheduler, SNS), which the provider rejects.
+  command = plan
+
+  assert {
+    condition     = [for c in aws_rekognition_collection.this : c.collection_id] == ["${local.name}-customers"]
+    error_message = "One KYC face collection by default, named after the stack."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.rekognition.block_public_acls &&
+      aws_s3_bucket_public_access_block.rekognition.restrict_public_buckets &&
+      aws_s3_bucket_ownership_controls.rekognition.rule[0].object_ownership == "BucketOwnerEnforced" &&
+      one(aws_s3_bucket_server_side_encryption_configuration.rekognition.rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    )
+    error_message = "The media bucket is private and encrypted."
+  }
+
+  assert {
+    condition     = startswith(aws_s3_bucket.rekognition.bucket, "${local.name}-rekognition-") && aws_s3_bucket_policy.rekognition != null
+    error_message = "The media bucket is account-scoped and TLS-only."
+  }
+
+  assert {
+    condition = contains([
+      for r in aws_s3_bucket_lifecycle_configuration.rekognition.rule : r.expiration[0].days if r.id == "expire-liveness-audit-images"
+    ], 30)
+    error_message = "Liveness audit images expire after 30 days by default."
+  }
+
+  assert {
+    condition = (
+      aws_sns_topic.rekognition_video.name == "${local.name}-rekognition-video" &&
+      aws_sns_topic_subscription.rekognition_video.protocol == "sqs" &&
+      aws_sns_topic_subscription.rekognition_video.raw_message_delivery &&
+      aws_sqs_queue.rekognition_video.sqs_managed_sse_enabled &&
+      aws_sqs_queue.rekognition_video_dlq.message_retention_seconds == 1209600 &&
+      aws_sqs_queue_policy.rekognition_video != null
+    )
+    error_message = "Video job status flows SNS -> encrypted SQS with a DLQ."
+  }
+
+  assert {
+    condition     = aws_iam_role.rekognition_video.name == "${local.name}-rekognition-video" && aws_iam_role_policy.rekognition_video.name == "publish-job-status"
+    error_message = "Rekognition publishes video job status through its own role."
+  }
+
+  assert {
+    condition = (
+      length(aws_cognito_identity_pool.liveness) == 1 &&
+      aws_cognito_identity_pool.liveness[0].allow_unauthenticated_identities &&
+      !aws_cognito_identity_pool.liveness[0].allow_classic_flow &&
+      length(aws_cognito_identity_pool_roles_attachment.liveness) == 1 &&
+      strcontains(aws_iam_role_policy.liveness_guest[0].policy, "rekognition:StartFaceLivenessSession") &&
+      !strcontains(aws_iam_role_policy.liveness_guest[0].policy, "Detect") &&
+      aws_iam_role.liveness_guest[0].name == "${local.name}-rekognition-liveness-guest"
+    )
+    error_message = "Liveness guests can only stream a liveness session."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.app_rekognition.name == "${local.name}-app-rekognition"
+    error_message = "The application role gets the Rekognition policy."
+  }
+}
+
+run "rekognition_minimal" {
+  command = plan
+
+  variables {
+    rekognition = { collections = [], liveness_identity_pool = false }
+  }
+
+  assert {
+    condition     = length(aws_rekognition_collection.this) == 0 && length(aws_cognito_identity_pool.liveness) == 0 && length(aws_iam_role.liveness_guest) == 0
+    error_message = "Collections and the liveness guest pool are optional."
   }
 }

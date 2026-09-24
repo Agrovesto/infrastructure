@@ -57,6 +57,8 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
@@ -232,5 +234,49 @@ run "mssql_edition_overridable" {
   assert {
     condition     = strcontains(local.docker_compose, "MSSQL_PID: \"Express\"")
     error_message = "var.mssql_pid must reach the compose file (set it to Express when dev must mirror prod's 10 GB cap)."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# SNS topics + host alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+run "sns_and_alarms" {
+  command = plan
+
+  variables {
+    alert_emails     = ["ops@example.com"]
+    app_sns_topics   = ["notifications"]
+    app_topic_emails = ["dev@example.com"]
+  }
+
+  assert {
+    condition     = aws_kms_key.sns.enable_key_rotation && aws_kms_alias.sns.name == "alias/${var.project}-${var.environment}-sns"
+    error_message = "SNS topics use a rotating customer-managed key (alarms cannot publish to aws/sns)."
+  }
+
+  assert {
+    condition     = aws_sns_topic.alerts.name == "${var.project}-${var.environment}-alerts"
+    error_message = "Alerts topic follows the naming convention."
+  }
+
+  assert {
+    condition     = aws_sns_topic_policy.alerts != null
+    error_message = "The alerts topic has a policy letting CloudWatch publish."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic_subscription.alerts_email) == 1 && length(aws_sns_topic.app) == 1 && length(aws_sns_topic_subscription.app_email) == 1
+    error_message = "Email subscriptions and app topics follow the variables."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.ec2_sns) == 1
+    error_message = "The host role may publish to the app topics."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.ec2_status_check.treat_missing_data == "notBreaching" && aws_cloudwatch_metric_alarm.ec2_cpu.metric_name == "CPUUtilization"
+    error_message = "Host alarms don't fire while the scheduler has the host stopped."
   }
 }

@@ -5,9 +5,9 @@
 resource "aws_amplify_app" "this" {
   for_each = var.amplify_apps
 
-  name       = each.key
+  name       = coalesce(each.value.name, each.key)
   repository = each.value.repository
-  platform   = "WEB"
+  platform   = each.value.platform
 
   access_token = var.github_access_token != "" ? var.github_access_token : null
 
@@ -36,6 +36,12 @@ resource "aws_amplify_app" "this" {
   EOT
 
   tags = merge(local.tags, { App = each.key })
+
+  lifecycle {
+    # Adopted apps keep their existing build spec and environment. New apps
+    # still get the build_spec above at creation. Tokens are write-only.
+    ignore_changes = [build_spec, environment_variables, access_token, oauth_token]
+  }
 }
 
 resource "aws_amplify_branch" "this" {

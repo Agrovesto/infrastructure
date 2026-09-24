@@ -124,6 +124,9 @@ def collect_blocks(module_dir: str) -> dict[str, list[dict]]:
         for name in sorted(files):
             if not name.endswith(".tf"):
                 continue
+            # imports.tf: one-shot import blocks, not the design under test.
+            if name == "imports.tf":
+                continue
             path = os.path.join(root, name)
             rel = os.path.relpath(path, module_dir)
             text = strip_comments(_read(path))

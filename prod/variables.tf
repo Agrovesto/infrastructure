@@ -269,6 +269,42 @@ variable "mssql_multi_az" {
   default     = false
 }
 
+variable "mssql_identifier" {
+  description = "RDS instance identifier. Empty = <project>-<environment>-mssql. Set to an existing identifier to adopt that instance (docs/import-runbook.md)."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_subnet_group_name" {
+  description = "DB subnet group name. Empty = <project>-<environment>-mssql. Set to the adopted instance's existing group name."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_storage_encrypted" {
+  description = "Encrypt RDS storage (ForceNew). Keep true; false only to adopt an existing unencrypted instance without replacing it."
+  type        = bool
+  default     = true
+}
+
+variable "mssql_performance_insights_enabled" {
+  description = "Performance Insights (not supported on SQL Server Express)"
+  type        = bool
+  default     = true
+}
+
+variable "mssql_additional_security_group_ids" {
+  description = "Extra security groups kept on the RDS instance (e.g. the adopted instance's existing SGs)"
+  type        = list(string)
+  default     = []
+}
+
+variable "mssql_storage_type" {
+  description = "gp3 for new instances; set to the adopted instance's type (gp2/gp3/io1) so the import is not an in-place storage migration"
+  type        = string
+  default     = "gp3"
+}
+
 variable "mssql_master_username" {
   description = "RDS master user ('sa' is reserved on RDS)"
   type        = string
@@ -453,4 +489,119 @@ variable "db_size_check_image" {
   description = "Image providing sqlcmd. Must be amd64: this task runs on x86_64."
   type        = string
   default     = "mcr.microsoft.com/mssql-tools:latest"
+}
+
+variable "manage_default_security_group" {
+  description = "Strip the VPC default security group to deny-all. false when the adopted VPC's default SG still carries live traffic."
+  type        = bool
+  default     = true
+}
+
+# -----------------------------------------------------------------------------
+# Adoption of existing resources (values in terraform.auto.tfvars match AWS)
+# -----------------------------------------------------------------------------
+
+variable "mssql_manage_master_user_password" {
+  description = "Let RDS manage the master password. false for the adopted instance (true would rotate its live password)."
+  type        = bool
+  default     = true
+}
+
+variable "mssql_existing_master_secret_arn" {
+  description = "Existing Secrets Manager secret (keys: username, password) used when the password is not RDS-managed"
+  type        = string
+  default     = ""
+}
+
+variable "mssql_monitoring_role_arn" {
+  description = "Existing enhanced-monitoring role to reuse. Empty = create one."
+  type        = string
+  default     = ""
+}
+
+variable "mssql_backup_window" {
+  type    = string
+  default = "03:00-04:00"
+}
+
+variable "mssql_maintenance_window" {
+  type    = string
+  default = "sun:04:30-sun:05:30"
+}
+
+variable "mssql_subnet_group_description" {
+  type    = string
+  default = "Managed by Terraform"
+}
+
+variable "public_subnet_map_public_ip" {
+  description = "Auto-assign public IPs in public subnets"
+  type        = bool
+  default     = false
+}
+
+# -----------------------------------------------------------------------------
+# SNS + alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+variable "alert_emails" {
+  description = "Emails subscribed to the alerts topic (each must confirm the AWS email)"
+  type        = list(string)
+  default     = []
+}
+
+variable "app_sns_topics" {
+  description = "Application topics (<project>-<env>-<name>) the ECS services may publish to"
+  type        = list(string)
+  default     = ["notifications"]
+}
+
+variable "app_topic_emails" {
+  description = "Emails subscribed to every app topic (optional)"
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_rds_cpu_percent" {
+  type    = number
+  default = 80
+}
+
+variable "alarm_rds_free_storage_gb" {
+  type    = number
+  default = 5
+}
+
+variable "alarm_rds_free_memory_mb" {
+  type    = number
+  default = 128
+}
+
+variable "alarm_5xx_count" {
+  description = "5xx responses in 5 minutes that trigger an alarm"
+  type        = number
+  default     = 10
+}
+
+variable "alarm_ecs_percent" {
+  description = "ECS service CPU / memory utilisation alarm threshold"
+  type        = number
+  default     = 85
+}
+
+variable "rekognition" {
+  description = "Amazon Rekognition: face collections (KYC), liveness guest pool and media retention"
+  type = object({
+    collections             = optional(list(string), ["customers"])
+    liveness_identity_pool  = optional(bool, true)
+    liveness_retention_days = optional(number, 30)
+    upload_retention_days   = optional(number, 90)
+  })
+  default = {}
+}
+
+variable "import_existing" {
+  description = "Enable the one-shot import blocks in imports.tf. terraform test sets false (mock providers cannot import)."
+  type        = bool
+  default     = true
 }

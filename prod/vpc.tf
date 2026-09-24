@@ -18,6 +18,11 @@ resource "aws_vpc" "main" {
 # Deny-all default security group: nothing uses it, so strip its default
 # allow-all-self rules (CKV2_AWS_12).
 resource "aws_default_security_group" "default" {
+  # Declaring this resource takes over the VPC's default SG and REMOVES all
+  # of its rules. Turn it off when adopting a VPC whose default SG is in use
+  # (it is then imported with its real rules as a legacy resource instead).
+  count = var.manage_default_security_group ? 1 : 0
+
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.tags, { Name = "${local.name}-default-sg" })
@@ -39,7 +44,8 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
-  map_public_ip_on_launch = false
+  # Adopted public subnets have this on; legacy EC2s launched there rely on it.
+  map_public_ip_on_launch = var.public_subnet_map_public_ip
 
   tags = merge(local.tags, {
     Name = "${local.name}-public-${count.index + 1}"
@@ -166,8 +172,11 @@ resource "aws_route_table_association" "database" {
 }
 
 resource "aws_db_subnet_group" "mssql" {
-  name       = "${local.name}-mssql"
-  subnet_ids = aws_subnet.database[*].id
+  # var.mssql_subnet_group_name adopts the existing instance's group (the
+  # instance's subnet group is ForceNew, so it must keep the same one).
+  name        = var.mssql_subnet_group_name != "" ? var.mssql_subnet_group_name : "${local.name}-mssql"
+  subnet_ids  = aws_subnet.database[*].id
+  description = var.mssql_subnet_group_description
 
   tags = merge(local.tags, { Name = "${local.name}-mssql-subnets" })
 }

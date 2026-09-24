@@ -26,3 +26,7 @@ __pycache__/
 
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
+
+
+# bootstrap local state (per account) never goes to git
+bootstrap/*.tfstate*

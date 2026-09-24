@@ -124,12 +124,12 @@ test -s /opt/agrovesto/compose/docker-compose.yml || {
 # one as root:config.yml lands in loki/, the WAL and TSDB next to it; alloy/ holds
 # config.alloy plus its positions/state; the grafana/ tree is what the container
 # mounts read-only except for its sqlite data dir.
-mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
 
 # The images run as their own users, and a bind mount keeps host ownership, so
 # each store has to be handed to the uid its image drops to.
 chown -R 10001:10001 "${logging_root}/loki"
-chown -R 65534:65534 "${logging_root}/prometheus"
+chown -R 65534:65534 "${logging_root}/prometheus" "${logging_root}/alertmanager"
 chown -R 472:472 "${logging_root}/grafana"
 %{ endif ~}
 

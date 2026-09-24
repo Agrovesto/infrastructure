@@ -30,9 +30,27 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
   domain_name     = "nomaos.com"
   mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   mssql_multi_az  = false
+
+  # This suite pins the NEW-instance design defaults. The adoption values from
+  # terraform.auto.tfvars are covered by run "adopt_existing_instance".
+  mssql_identifier                    = ""
+  mssql_engine_version                = null
+  mssql_allocated_storage_gb          = 20
+  mssql_max_allocated_storage_gb      = 50
+  mssql_storage_type                  = "gp3"
+  mssql_storage_encrypted             = true
+  mssql_performance_insights_enabled  = true
+  mssql_master_username               = "agrovestoadmin"
+  mssql_subnet_group_name             = ""
+  mssql_additional_security_group_ids = []
+  mssql_manage_master_user_password   = true
+  mssql_existing_master_secret_arn    = ""
+  mssql_monitoring_role_arn           = ""
 
   services = {
     wallet = {
@@ -243,18 +261,65 @@ run "credentials" {
   command = plan
 
   assert {
-    condition     = aws_secretsmanager_secret.mssql_master.name == "${var.project}-${var.environment}-mssql-master"
-    error_message = "Master credentials live in a conventionally named secret."
+    condition     = aws_db_instance.mssql.manage_master_user_password == true
+    error_message = "The master password must be RDS-managed so it never enters Terraform state."
   }
 
   assert {
-    condition     = aws_secretsmanager_secret.mssql_master.recovery_window_in_days == 7
-    error_message = "Keep a 7-day recovery window on the prod secret."
+    condition     = aws_db_instance.mssql.password == null
+    error_message = "No master password may be set from Terraform."
   }
 
   assert {
-    condition     = random_password.mssql_master.length == 32
-    error_message = "The generated master password is 32 characters."
+    condition     = aws_db_instance.mssql.identifier == "${var.project}-${var.environment}-mssql"
+    error_message = "Default identifier follows the <project>-<environment>-mssql convention."
+  }
+}
+
+run "adopt_existing_instance" {
+  command = plan
+
+  # Mirrors the Adoption section of prod/terraform.auto.tfvars.
+  variables {
+    mssql_identifier                    = "migration-prod"
+    mssql_engine_version                = "15.00.4445.1.v1"
+    mssql_allocated_storage_gb          = 50
+    mssql_max_allocated_storage_gb      = 63
+    mssql_storage_type                  = "gp2"
+    mssql_storage_encrypted             = false
+    mssql_performance_insights_enabled  = true
+    mssql_manage_master_user_password   = false
+    mssql_existing_master_secret_arn    = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:nomaosDBcredentials-GIwHiK"
+    mssql_monitoring_role_arn           = "arn:aws:iam::123456789012:role/rds-monitoring-role"
+    mssql_master_username               = "agrovesto"
+    mssql_subnet_group_name             = "agxdb2subnetgroup"
+    mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"]
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.identifier == "migration-prod" && aws_db_instance.mssql.storage_type == "gp2" && aws_db_instance.mssql.allocated_storage == 50
+    error_message = "The adoption variables must drive the adopted instance."
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.storage_encrypted == false && aws_db_instance.mssql.performance_insights_enabled == true
+    error_message = "Adopting migration-prod must not force a replacement and keeps Performance Insights as it is live."
+  }
+
+  assert {
+    condition     = aws_db_subnet_group.mssql.name == "agxdb2subnetgroup" && aws_db_instance.mssql.manage_master_user_password == null
+    error_message = "The adopted instance keeps its subnet group; its live password must not be rotated into an RDS-managed secret."
+  }
+
+  assert {
+    condition     = aws_db_instance.mssql.monitoring_role_arn == "arn:aws:iam::123456789012:role/rds-monitoring-role" && length(aws_iam_role.rds_monitoring) == 0
+    error_message = "The adopted instance reuses rds-monitoring-role instead of a duplicate role."
+  }
+
+  assert {
+    # The set holds the (unknown until apply) design SG id, so check the inputs.
+    condition     = toset(var.mssql_additional_security_group_ids) == toset(["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"])
+    error_message = "The design SG plus the two SGs migration-prod uses today."
   }
 }
 

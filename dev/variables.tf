@@ -252,6 +252,8 @@ variable "enable_ec2_scheduler" {
 variable "amplify_apps" {
   description = "Amplify frontends. Add another map key to create a new app."
   type = map(object({
+    name                  = optional(string) # defaults to the map key; set to an adopted app's real name
+    platform              = optional(string, "WEB")
     repository            = string
     branch                = optional(string, "main")
     subdomain             = string
@@ -352,6 +354,7 @@ variable "logging" {
     prometheus_image    = optional(string, "prom/prometheus:v3.1.0")
     cadvisor_image      = optional(string, "ghcr.io/google/cadvisor:v0.57.0")
     node_exporter_image = optional(string, "prom/node-exporter:v1.9.1")
+    alertmanager_image  = optional(string, "prom/alertmanager:v0.28.1")
 
     # Published on 127.0.0.1 on the host only, and the security group has no
     # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
@@ -362,6 +365,7 @@ variable "logging" {
     prometheus_port    = optional(number, 9090)
     cadvisor_port      = optional(number, 8080)
     node_exporter_port = optional(number, 9100)
+    alertmanager_port  = optional(number, 9093)
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
@@ -414,6 +418,7 @@ variable "logging" {
       prometheus    = "0.50"
       cadvisor      = "0.25"
       node-exporter = "0.10"
+      alertmanager  = "0.10"
     })
     memory_limits_mb = optional(map(number), {
       loki          = 384
@@ -422,6 +427,7 @@ variable "logging" {
       prometheus    = 384
       cadvisor      = 128
       node-exporter = 48
+      alertmanager  = 64
     })
 
     # --- the containers' own logs ---------------------------------------------
@@ -459,4 +465,64 @@ variable "logging" {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.logging.grafana_subdomain))
     error_message = "grafana_subdomain must be a single DNS label (lowercase letters, digits and dashes)."
   }
+}
+
+variable "manage_default_security_group" {
+  description = "Strip the VPC default security group to deny-all. false when the adopted VPC's default SG still carries live traffic."
+  type        = bool
+  default     = true
+}
+
+# -----------------------------------------------------------------------------
+# SNS + alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+variable "alert_emails" {
+  description = "Emails subscribed to the alerts topic (each must confirm the AWS email)"
+  type        = list(string)
+  default     = []
+}
+
+variable "app_sns_topics" {
+  description = "Application topics (<project>-<env>-<name>) the APIs on the host may publish to"
+  type        = list(string)
+  default     = ["notifications"]
+}
+
+variable "app_topic_emails" {
+  description = "Emails subscribed to every app topic (optional)"
+  type        = list(string)
+  default     = []
+}
+
+variable "alarm_cpu_percent" {
+  type    = number
+  default = 85
+}
+
+variable "alert_rules" {
+  description = "Thresholds for the dev host's Prometheus alert rules (Alertmanager -> SNS alerts topic)"
+  type = object({
+    cpu_percent       = optional(number, 90)
+    memory_percent    = optional(number, 90)
+    disk_free_percent = optional(number, 10)
+  })
+  default = {}
+}
+
+variable "rekognition" {
+  description = "Amazon Rekognition: face collections (KYC), liveness guest pool and media retention"
+  type = object({
+    collections             = optional(list(string), ["customers"])
+    liveness_identity_pool  = optional(bool, true)
+    liveness_retention_days = optional(number, 30)
+    upload_retention_days   = optional(number, 90)
+  })
+  default = {}
+}
+
+variable "import_existing" {
+  description = "Enable the one-shot import blocks in imports.tf. terraform test sets false (mock providers cannot import)."
+  type        = bool
+  default     = true
 }

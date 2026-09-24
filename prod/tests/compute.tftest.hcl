@@ -123,6 +123,12 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
+  # Test the new-instance defaults, not the adoption values in terraform.auto.tfvars.
+  mssql_monitoring_role_arn   = ""
+  public_subnet_map_public_ip = false
+
   domain_name        = "nomaos.com"
   mssql_databases    = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   log_retention_days = 30
@@ -330,12 +336,12 @@ run "iam" {
   }
 
   assert {
-    condition     = aws_iam_role.rds_monitoring.name == "${var.project}-${var.environment}-rds-monitoring-role"
+    condition     = aws_iam_role.rds_monitoring[0].name == "${var.project}-${var.environment}-rds-monitoring-role"
     error_message = "RDS enhanced monitoring role keeps its convention name."
   }
 
   assert {
-    condition     = aws_iam_role_policy_attachment.rds_monitoring.policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+    condition     = aws_iam_role_policy_attachment.rds_monitoring[0].policy_arn == "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
     error_message = "The monitoring role needs the RDS enhanced monitoring managed policy."
   }
 }
@@ -530,5 +536,311 @@ run "x86_fallback" {
   assert {
     condition     = [for p in aws_ecs_task_definition.services["wallet"].runtime_platform : p.cpu_architecture] == ["X86_64"]
     error_message = "ecs_cpu_architecture = X86_64 must put tasks back on x86 (escape hatch for amd64-only images)."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# SNS topics + baseline alarms (sns.tf, alarms.tf)
+# -----------------------------------------------------------------------------
+
+run "sns_and_alarms" {
+  command = plan
+
+  variables {
+    alert_emails     = ["ops@example.com"]
+    app_sns_topics   = ["notifications", "orders"]
+    app_topic_emails = ["dev@example.com"]
+  }
+
+  assert {
+    condition     = aws_kms_key.sns.enable_key_rotation && aws_kms_alias.sns.name == "alias/${var.project}-${var.environment}-sns"
+    error_message = "SNS topics use a rotating customer-managed key (alarms cannot publish to aws/sns)."
+  }
+
+  assert {
+    condition     = aws_sns_topic.alerts.name == "${var.project}-${var.environment}-alerts"
+    error_message = "Alerts topic follows the naming convention."
+  }
+
+  assert {
+    condition     = aws_sns_topic_policy.alerts != null
+    error_message = "The alerts topic has a policy letting CloudWatch publish."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic_subscription.alerts_email) == 1 && aws_sns_topic_subscription.alerts_email["ops@example.com"].protocol == "email"
+    error_message = "Every alert email gets an email subscription."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic.app) == 2 && length(aws_sns_topic_subscription.app_email) == 2
+    error_message = "One topic per app_sns_topics entry, each subscribed by every app_topic_emails address."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.ecs_task_sns) == 1
+    error_message = "The ECS task role may publish to the app topics."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.rds_cpu.namespace == "AWS/RDS" && aws_cloudwatch_metric_alarm.rds_storage.threshold == 5 * 1024 * 1024 * 1024 && aws_cloudwatch_metric_alarm.rds_memory.metric_name == "FreeableMemory"
+    error_message = "RDS CPU, free storage (5 GB) and memory alarms exist."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.alb_5xx.metric_name == "HTTPCode_ELB_5XX_Count"
+    error_message = "ALB 5xx alarm exists."
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_cloudwatch_metric_alarm.target_5xx) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.unhealthy_targets) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.ecs_cpu) == length(var.services),
+      length(aws_cloudwatch_metric_alarm.ecs_memory) == length(var.services),
+    ])
+    error_message = "Every service gets 5xx, unhealthy-target, CPU and memory alarms."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.ecs_cpu["wallet"].threshold == 85 && aws_cloudwatch_metric_alarm.unhealthy_targets["wallet"].comparison_operator == "GreaterThanThreshold"
+    error_message = "ECS alarms use the default 85% threshold; any unhealthy target alarms."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# IAM policy documents, network edges and optional features. apply (mocked) so
+# the documents that depend on ARNs are resolved.
+# -----------------------------------------------------------------------------
+
+run "iam_documents_and_wiring" {
+  command = apply
+
+  variables {
+    db_size_alarm_enabled         = true
+    db_size_alarm_email           = "ops@example.com"
+    manage_default_security_group = true
+  }
+
+  # --- ECS execution ---------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.ecs_execution_assume.statement).principals).identifiers == toset(["ecs-tasks.amazonaws.com"])
+    error_message = "Only ECS tasks may assume the execution/task roles."
+  }
+
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.ecs_execution_secrets.statement : s.sid] == ["ReadMssqlMasterSecret", "DecryptMssqlMasterSecret"]
+    error_message = "Execution role reads only the master secret and decrypts it."
+  }
+
+  assert {
+    condition     = toset(one(data.aws_iam_policy_document.ecs_execution_secrets.statement[1].condition).values) == toset(["secretsmanager.eu-west-1.amazonaws.com"])
+    error_message = "kms:Decrypt is limited to Secrets Manager (kms:ViaService)."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.ecs_execution_secrets.name == "${var.project}-${var.environment}-ecs-execution-secrets"
+    error_message = "The secrets policy is attached to the execution role."
+  }
+
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.rds_monitoring_assume.statement).principals).identifiers == toset(["monitoring.rds.amazonaws.com"])
+    error_message = "Only RDS enhanced monitoring may assume the monitoring role."
+  }
+
+  # --- Flow logs ---------------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.flow_logs_assume.statement).principals).identifiers == toset(["vpc-flow-logs.amazonaws.com"])
+    error_message = "Only VPC flow logs may assume the flow-logs role."
+  }
+
+  assert {
+    condition     = contains(one(data.aws_iam_policy_document.flow_logs.statement).actions, "logs:PutLogEvents") && length(one(data.aws_iam_policy_document.flow_logs.statement).resources) == 2
+    error_message = "Flow logs may write only to their own log group (and its streams)."
+  }
+
+  assert {
+    condition     = aws_iam_role.flow_logs.name == "${var.project}-${var.environment}-flow-logs-role" && aws_iam_role_policy.flow_logs.name == "${var.project}-${var.environment}-flow-logs-policy"
+    error_message = "Flow-logs role and policy keep their convention names."
+  }
+
+  # --- ALB access logs -----------------------------------------------------------
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.alb_logs.statement : s.sid] == ["AllowELBLogDelivery", "AllowELBServiceAccount"]
+    error_message = "ALB log bucket allows both the log-delivery principal and the regional ELB account."
+  }
+
+  assert {
+    condition     = one(data.aws_iam_policy_document.alb_logs.statement[1].principals).identifiers == toset(["arn:aws:iam::156460612806:root"])
+    error_message = "The legacy statement names the regional ELB account."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_policy.alb_logs.bucket == aws_s3_bucket.alb_logs.id
+    error_message = "The log-delivery policy is on the ALB logs bucket."
+  }
+
+  # --- DB size check (db_size_alarm_enabled) --------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.events_assume[0].statement).principals).identifiers == toset(["events.amazonaws.com"])
+    error_message = "Only EventBridge may assume the events role."
+  }
+
+  assert {
+    condition     = [for s in data.aws_iam_policy_document.events_run_task[0].statement : s.sid] == ["RunDatabaseSizeCheck", "PassTaskRoles"]
+    error_message = "EventBridge may only run the size-check task and pass its two roles."
+  }
+
+  assert {
+    condition     = aws_iam_role.events[0].name == "${var.project}-${var.environment}-events-role" && aws_iam_role_policy.events_run_task[0].name == "${var.project}-${var.environment}-events-run-task"
+    error_message = "Events role and policy keep their convention names."
+  }
+
+  assert {
+    condition = alltrue([
+      one(aws_cloudwatch_event_target.db_size_check[0].ecs_target).launch_type == "FARGATE",
+      one(one(aws_cloudwatch_event_target.db_size_check[0].ecs_target).network_configuration).assign_public_ip == false,
+    ])
+    error_message = "The size check runs on Fargate in a private subnet without a public IP."
+  }
+
+  assert {
+    condition     = aws_sns_topic_subscription.db_size_alarm[0].endpoint == "ops@example.com" && aws_sns_topic_subscription.db_size_alarm[0].protocol == "email"
+    error_message = "db_size_alarm_email is subscribed to the size alarm topic."
+  }
+
+  # --- Vault -----------------------------------------------------------------------
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.vault_kms.statement).principals).identifiers == toset(["arn:aws:iam::123456789012:root"])
+    error_message = "The Vault key policy delegates to the account root only."
+  }
+
+  assert {
+    condition     = one(data.aws_iam_policy_document.vault_task.statement).actions == toset(["kms:Encrypt", "kms:Decrypt", "kms:DescribeKey"])
+    error_message = "Vault gets only the KMS actions auto-unseal needs."
+  }
+
+  assert {
+    condition     = aws_iam_role.vault_task[0].name == "${var.project}-${var.environment}-vault-task-role" && aws_iam_role_policy.vault_task[0].name == "${var.project}-${var.environment}-vault-task-policy"
+    error_message = "Vault task role and policy keep their convention names."
+  }
+
+  # --- ACM + network edges -------------------------------------------------------------
+  assert {
+    condition     = aws_acm_certificate_validation.wildcard.certificate_arn == aws_acm_certificate.wildcard.arn
+    error_message = "The HTTPS listener waits for the wildcard certificate to validate."
+  }
+
+  assert {
+    condition     = length(aws_default_security_group.default) == 1 && aws_default_security_group.default[0].tags["Name"] == "${var.project}-${var.environment}-default-sg"
+    error_message = "manage_default_security_group = true takes over (and empties) the default SG."
+  }
+
+  assert {
+    condition     = aws_internet_gateway.main.tags["Name"] == "${var.project}-${var.environment}-igw" && aws_route_table.public.tags["Name"] == "${var.project}-${var.environment}-public-rt"
+    error_message = "IGW and public route table keep their convention names."
+  }
+
+  assert {
+    condition     = length(aws_route_table_association.public) == 2 && alltrue([for a in aws_route_table_association.public : a.route_table_id == aws_route_table.public.id])
+    error_message = "Both public subnets use the shared public route table."
+  }
+
+  assert {
+    condition     = [for rt in aws_route_table.private : rt.tags["Name"]] == ["${var.project}-${var.environment}-private-rt-1", "${var.project}-${var.environment}-private-rt-2"]
+    error_message = "One private route table per private subnet."
+  }
+}
+
+run "db_init_bootstrap" {
+  command = plan
+
+  variables {
+    run_db_init = true
+  }
+
+  assert {
+    condition     = null_resource.db_init[0].triggers.sql == join(" ", [for db in var.mssql_databases : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"])
+    error_message = "db-init re-runs when the database list changes and only creates missing databases."
+  }
+}
+
+# --- Rekognition --------------------------------------------------------------
+run "rekognition" {
+  command = apply
+
+  assert {
+    condition     = [for c in aws_rekognition_collection.this : c.collection_id] == ["${local.name}-customers"]
+    error_message = "One KYC face collection by default, named after the stack."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.rekognition.block_public_acls &&
+      aws_s3_bucket_public_access_block.rekognition.restrict_public_buckets &&
+      aws_s3_bucket_ownership_controls.rekognition.rule[0].object_ownership == "BucketOwnerEnforced" &&
+      one(aws_s3_bucket_server_side_encryption_configuration.rekognition.rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    )
+    error_message = "The media bucket is private and encrypted."
+  }
+
+  assert {
+    condition     = startswith(aws_s3_bucket.rekognition.bucket, "${local.name}-rekognition-") && strcontains(aws_s3_bucket_policy.rekognition.policy, "aws:SecureTransport")
+    error_message = "The media bucket is account-scoped and TLS-only."
+  }
+
+  assert {
+    condition = contains([
+      for r in aws_s3_bucket_lifecycle_configuration.rekognition.rule : r.expiration[0].days if r.id == "expire-liveness-audit-images"
+    ], 30)
+    error_message = "Liveness audit images expire after 30 days by default."
+  }
+
+  assert {
+    condition = (
+      aws_sns_topic.rekognition_video.name == "${local.name}-rekognition-video" &&
+      aws_sns_topic_subscription.rekognition_video.protocol == "sqs" &&
+      aws_sns_topic_subscription.rekognition_video.raw_message_delivery &&
+      aws_sqs_queue.rekognition_video.sqs_managed_sse_enabled &&
+      aws_sqs_queue.rekognition_video_dlq.message_retention_seconds == 1209600 &&
+      aws_sqs_queue_policy.rekognition_video.queue_url != null
+    )
+    error_message = "Video job status flows SNS -> encrypted SQS with a DLQ."
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role.rekognition_video.assume_role_policy, "rekognition.amazonaws.com") && aws_iam_role_policy.rekognition_video.name == "publish-job-status"
+    error_message = "Rekognition publishes video job status through its own role."
+  }
+
+  assert {
+    condition = (
+      length(aws_cognito_identity_pool.liveness) == 1 &&
+      aws_cognito_identity_pool.liveness[0].allow_unauthenticated_identities &&
+      !aws_cognito_identity_pool.liveness[0].allow_classic_flow &&
+      length(aws_cognito_identity_pool_roles_attachment.liveness) == 1 &&
+      strcontains(aws_iam_role_policy.liveness_guest[0].policy, "rekognition:StartFaceLivenessSession") &&
+      !strcontains(aws_iam_role_policy.liveness_guest[0].policy, "Detect") &&
+      aws_iam_role.liveness_guest[0].name == "${local.name}-rekognition-liveness-guest"
+    )
+    error_message = "Liveness guests can only stream a liveness session."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy.app_rekognition.name == "${local.name}-app-rekognition"
+    error_message = "The application role gets the Rekognition policy."
+  }
+}
+
+run "rekognition_minimal" {
+  command = plan
+
+  variables {
+    rekognition = { collections = [], liveness_identity_pool = false }
+  }
+
+  assert {
+    condition     = length(aws_rekognition_collection.this) == 0 && length(aws_cognito_identity_pool.liveness) == 0 && length(aws_iam_role.liveness_guest) == 0
+    error_message = "Collections and the liveness guest pool are optional."
   }
 }

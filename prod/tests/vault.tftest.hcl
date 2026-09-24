@@ -30,6 +30,8 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
   domain_name        = "nomaos.com"
   mssql_databases    = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   log_retention_days = 30

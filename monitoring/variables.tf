@@ -215,6 +215,12 @@ variable "alert_smtp_password" {
   default     = ""
 }
 
+variable "alertmanager_sns_topic" {
+  description = "SNS topic name (same account) Alertmanager publishes to, e.g. the prod alerts topic. Empty = no SNS receiver"
+  type        = string
+  default     = ""
+}
+
 variable "alertmanager_webhook_url" {
   description = "Slack/Mattermost-compatible webhook for alerts. Empty = no webhook receiver"
   type        = string
@@ -331,6 +337,12 @@ variable "mssql_secret_name" {
   description = "Name of the prod Secrets Manager secret holding the SQL Server credentials"
   type        = string
   default     = "agrovesto-prod-mssql-master"
+}
+
+variable "mssql_instance_identifier" {
+  description = "Prod RDS instance identifier. When set, the metrics task reads the host and the RDS-managed master secret from the instance (data source) instead of var.mssql_secret_name."
+  type        = string
+  default     = ""
 }
 
 variable "mssql_database" {

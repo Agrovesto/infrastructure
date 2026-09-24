@@ -39,7 +39,9 @@ variable "github_sub_patterns" {
   default = [
     "repo:Agrovesto@101108012/*:ref:refs/heads/main",
     "repo:Agrovesto@101108012/*:ref:refs/heads/arena/*",
-    "repo:Agrovesto@101108012/*:pull_request"
+    "repo:Agrovesto@101108012/*:pull_request",
+    # Apply jobs run in the "production" GitHub Environment, which changes the sub claim
+    "repo:Agrovesto@101108012/*:environment:production"
   ]
 }
 
@@ -59,4 +61,22 @@ variable "tags" {
   description = "Extra tags merged into every bootstrap resource"
   type        = map(string)
   default     = {}
+}
+
+variable "state_bucket_kms_key_arn" {
+  description = "KMS key for the state bucket's default encryption. Empty = SSE-S3 (AES256). Set when importing a bucket that already uses SSE-KMS."
+  type        = string
+  default     = ""
+}
+
+variable "state_lifecycle_rule_id" {
+  description = "Lifecycle rule id (set to the existing id when importing a bucket)"
+  type        = string
+  default     = "expire-old-state-versions"
+}
+
+variable "state_noncurrent_days" {
+  description = "Days before noncurrent state versions expire"
+  type        = number
+  default     = 30
 }

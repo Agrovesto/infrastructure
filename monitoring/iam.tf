@@ -185,7 +185,7 @@ resource "aws_iam_role_policy" "task_database_secret" {
         Sid      = "ReadDatabaseSecret"
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.mssql_secret_name}*"]
+        Resource = [local.mssql_secret_id != "" && startswith(local.mssql_secret_id, "arn:") ? local.mssql_secret_id : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.mssql_secret_id != "" ? local.mssql_secret_id : "rds!db-"}*"]
       },
       {
         Sid      = "DecryptDatabaseSecret"
@@ -238,6 +238,36 @@ resource "aws_iam_role_policy" "events" {
         Resource = [aws_iam_role.execution.arn, aws_iam_role.task.arn]
         Condition = {
           StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}
+
+# Alertmanager publishes to the prod alerts topic. The topic is encrypted with
+# prod's SNS key; kms use is allowed only through SNS.
+resource "aws_iam_role_policy" "task_alerts_sns" {
+  count = local.alertmanager_sns_topic_arn != "" ? 1 : 0
+
+  name = "${local.name}-task-alerts-sns-policy"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "PublishAlerts"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = [local.alertmanager_sns_topic_arn]
+      },
+      {
+        Sid      = "EncryptForSns"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "sns.${var.aws_region}.amazonaws.com" }
         }
       }
     ]

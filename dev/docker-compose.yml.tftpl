@@ -181,6 +181,7 @@ services:
       - "127.0.0.1:${logging.prometheus_port}:9090"
     volumes:
       - ${logging_root}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${logging_root}/prometheus/rules:/etc/prometheus/rules:ro
       - ${logging_root}/prometheus/data:/prometheus
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy > /dev/null || exit 1"]
@@ -191,6 +192,32 @@ services:
     restart: unless-stopped
     cpus: "${logging.cpu_limits["prometheus"]}"
     mem_limit: ${logging.memory_limits_mb["prometheus"]}M
+    depends_on:
+      - alertmanager
+
+  # Routes Prometheus alerts to the dev SNS alerts topic. AWS credentials come
+  # from the instance role through IMDSv2 (hop limit 2, dev/ec2.tf).
+  alertmanager:
+    image: ${logging.alertmanager_image}
+    container_name: agrovesto-alertmanager
+    user: "65534"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:${logging.alertmanager_port}:9093"
+    volumes:
+      - ${logging_root}/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${logging_root}/alertmanager/data:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9093/-/healthy > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "alertmanager", "0.10")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "alertmanager", 64)}M
 
   # Per-container CPU / memory / network, read from the cgroups.
   cadvisor:

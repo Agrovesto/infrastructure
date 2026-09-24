@@ -38,17 +38,21 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      # AES256 by default; set var.state_bucket_kms_key_arn to keep an existing
+      # bucket's SSE-KMS key when importing it.
+      sse_algorithm     = var.state_bucket_kms_key_arn != "" ? "aws:kms" : "AES256"
+      kms_master_key_id = var.state_bucket_kms_key_arn != "" ? var.state_bucket_kms_key_arn : null
     }
+    bucket_key_enabled = var.state_bucket_kms_key_arn != "" ? true : null
   }
 }
 
-# Keep state history short: old noncurrent versions expire after 30 days.
+# Old noncurrent state versions expire after var.state_noncurrent_days (default 30).
 resource "aws_s3_bucket_lifecycle_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 
   rule {
-    id     = "expire-old-state-versions"
+    id     = var.state_lifecycle_rule_id
     status = "Enabled"
 
     filter {}
@@ -58,7 +62,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days = var.state_noncurrent_days
     }
   }
 }

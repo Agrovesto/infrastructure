@@ -76,7 +76,7 @@ locals {
   # The collector's own containers are dropped from its own inputs — Loki tailing
   # the logs of the thing that writes its logs is an unbounded loop that ends with
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
-  logging_own_services = ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter"]
+  logging_own_services = ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"]
 
   # nginx is always parsed as JSON (its access log format is), plus whatever the
   # caller lists. Rendered as a LogQL/Prometheus regex alternation.
@@ -136,6 +136,23 @@ locals {
     cadvisor_port      = var.logging.cadvisor_port
     grafana_port       = var.logging.grafana_port
     metrics_port       = var.logging.alloy_port
+    alertmanager_port  = var.logging.alertmanager_port
+  })
+
+  # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
+  # the dev SNS alerts topic (sns.tf), the same place the CloudWatch alarms go.
+  prometheus_rules = templatefile("${path.module}/prometheus-rules.yml.tftpl", {
+    cpu_percent       = var.alert_rules.cpu_percent
+    memory_percent    = var.alert_rules.memory_percent
+    disk_free_percent = var.alert_rules.disk_free_percent
+  })
+
+  # SNS receiver: signs with the instance role (IMDSv2, hop limit 2 in ec2.tf),
+  # so no keys are configured.
+  alertmanager_config = templatefile("${path.module}/alertmanager.yml.tftpl", {
+    topic_arn = aws_sns_topic.alerts.arn
+    region    = var.aws_region
+    stack     = local.name
   })
 
   # Provisioning is file-based (the compose mounts are read-only bind mounts on
@@ -186,6 +203,14 @@ locals {
       }
       "logging/prometheus/prometheus.yml" = {
         content      = local.prometheus_config
+        content_type = "text/yaml"
+      }
+      "logging/prometheus/rules/host.yml" = {
+        content      = local.prometheus_rules
+        content_type = "text/yaml"
+      }
+      "logging/alertmanager/alertmanager.yml" = {
+        content      = local.alertmanager_config
         content_type = "text/yaml"
       }
       "logging/grafana/provisioning/datasources/datasources.yml" = {

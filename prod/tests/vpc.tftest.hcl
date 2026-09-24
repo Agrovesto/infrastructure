@@ -34,6 +34,12 @@ override_data {
 }
 
 variables {
+  import_existing = false
+
+  # Test the new-instance defaults, not the adoption values in terraform.auto.tfvars.
+  mssql_monitoring_role_arn   = ""
+  public_subnet_map_public_ip = false
+
   domain_name        = "nomaos.com"
   mssql_databases    = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   log_retention_days = 30
