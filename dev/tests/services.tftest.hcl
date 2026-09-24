@@ -9,7 +9,13 @@
 # Run with:  terraform -chdir=dev init && terraform -chdir=dev test
 # =============================================================================
 
-mock_provider "aws" {}
+mock_provider "aws" {
+  mock_resource "aws_ssm_parameter" {
+    defaults = {
+      version = 1
+    }
+  }
+}
 
 override_data {
   target = data.aws_availability_zones.available
@@ -343,6 +349,91 @@ run "nginx_vhost" {
   }
 }
 
+run "github_sso_uses_https_and_ssm_credentials" {
+  command = plan
+
+  variables {
+    sonarqube = {
+      allowed_cidrs = ["203.0.113.10/32"]
+    }
+    logging = {
+      allowed_cidrs = ["203.0.113.10/32"]
+    }
+    sonarqube_github_client_id     = "test-sonarqube-client-id"
+    sonarqube_github_client_secret = "not-a-real-sonarqube-secret" # ggignore - test fixture
+    sonarqube_github_app_id        = "123456"
+    sonarqube_github_private_key   = "test-private-key-material" # ggignore - test fixture
+    grafana_github_client_id       = "test-grafana-client-id"
+    grafana_github_client_secret   = "not-a-real-grafana-secret" # ggignore - test fixture
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_ssm_parameter.sonarqube_github_client_id) == 1,
+      length(aws_ssm_parameter.sonarqube_github_client_secret) == 1,
+      length(aws_ssm_parameter.sonarqube_github_app_id) == 1,
+      length(aws_ssm_parameter.sonarqube_github_private_key) == 1,
+      length(aws_ssm_parameter.grafana_github_client_id) == 1,
+      length(aws_ssm_parameter.grafana_github_client_secret) == 1,
+    ])
+    error_message = "Both identity providers must put every credential in an SSM SecureString."
+  }
+
+  assert {
+    condition = alltrue([
+      local.sonar_web_baseurl == "https://sonar.nomaos.com",
+      local.logging_runtime.grafana_root_url == "https://dev-logs.nomaos.com",
+      strcontains(local.caddyfile, "sonar.nomaos.com"),
+      strcontains(local.caddyfile, "dev-logs.nomaos.com"),
+      strcontains(local.docker_compose, "container_name: agrovesto-edge"),
+      strcontains(local.docker_compose, "80:80"),
+      strcontains(local.docker_compose, "443:443"),
+    ])
+    error_message = "GitHub callbacks must use the Caddy-managed HTTPS edge for both dev UIs."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.docker_compose, "GF_AUTH_GITHUB_ENABLED"),
+      strcontains(local.docker_compose, "GF_AUTH_GITHUB_CLIENT_SECRET: \"$${GRAFANA_GITHUB_CLIENT_SECRET}\""),
+      strcontains(local.docker_compose, "sonar-sso.properties:/opt/sonarqube/conf/sonar.properties:ro"),
+      strcontains(aws_instance.app.user_data, "sonar.auth.github.clientSecret.secured"),
+      strcontains(aws_instance.app.user_data, "sonar.auth.github.organizations"),
+    ])
+    error_message = "Grafana and SonarQube must receive their supported GitHub authentication settings."
+  }
+
+  assert {
+    condition = alltrue([
+      !strcontains(local.docker_compose, "not-a-real-grafana-secret"),
+      !strcontains(local.docker_compose, "not-a-real-sonarqube-secret"),
+      !strcontains(aws_instance.app.user_data, "not-a-real-grafana-secret"),
+      !strcontains(aws_instance.app.user_data, "not-a-real-sonarqube-secret"),
+      !strcontains(local.caddyfile, "not-a-real"),
+    ])
+    error_message = "OAuth secrets must never enter compose, Caddy config, S3 host config, or EC2 user_data."
+  }
+
+  assert {
+    condition = (
+      length(aws_s3_object.host_config) == 13 &&
+      aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile
+    )
+    error_message = "The non-secret Caddyfile must be the only extra host-config object."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.nginx_conf, "real_ip_header X-Forwarded-For"),
+      strcontains(local.nginx_conf, "geo $realip_remote_addr $trusted_reverse_proxy"),
+      strcontains(local.nginx_conf, "X-Forwarded-Proto $forwarded_proto"),
+      aws_instance.app.user_data_replace_on_change,
+      strcontains(aws_instance.app.user_data, "SSO credential versions:"),
+    ])
+    error_message = "nginx must trust forwarded client data only from Caddy, and SSM credential rotation must replace the host."
+  }
+}
+
 run "dns_record" {
   command = plan
 
@@ -425,4 +516,28 @@ run "disabled" {
     condition     = length(regexall("mem_limit:", local.docker_compose)) == 7
     error_message = "Only the seven observability containers remain capped."
   }
+}
+
+# -----------------------------------------------------------------------------
+# OAuth credentials are atomic: an incomplete set must never silently deploy
+# -----------------------------------------------------------------------------
+
+run "rejects_partial_sonarqube_github_credentials" {
+  command = plan
+
+  variables {
+    sonarqube_github_client_id = "github-client-id-without-the-other-fields"
+  }
+
+  expect_failures = [aws_instance.app]
+}
+
+run "rejects_partial_grafana_github_credentials" {
+  command = plan
+
+  variables {
+    grafana_github_client_secret = "github-client-secret-without-an-id"
+  }
+
+  expect_failures = [aws_instance.app]
 }

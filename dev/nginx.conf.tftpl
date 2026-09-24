@@ -16,6 +16,32 @@ events {
 http {
   resolver 127.0.0.11 valid=10s ipv6=off;
 
+  # When GitHub SSO is configured, Caddy terminates TLS and forwards to this
+  # container over the private compose network. Trust proxy headers only from
+  # RFC1918 addresses so a direct internet client cannot spoof its source IP and
+  # bypass the Grafana/SonarQube allow lists below.
+  set_real_ip_from 10.0.0.0/8;
+  set_real_ip_from 172.16.0.0/12;
+  set_real_ip_from 192.168.0.0/16;
+  real_ip_header X-Forwarded-For;
+  real_ip_recursive on;
+
+  # Preserve the browser-facing scheme after TLS termination. Only a private
+  # compose-network peer may supply it; a direct client-provided header is
+  # ignored. $realip_remote_addr retains Caddy's address after $remote_addr is
+  # restored to the browser address by the real-ip module above.
+  geo $realip_remote_addr $trusted_reverse_proxy {
+    default        0;
+    10.0.0.0/8     1;
+    172.16.0.0/12  1;
+    192.168.0.0/16 1;
+  }
+
+  map "$trusted_reverse_proxy:$http_x_forwarded_proto" $forwarded_proto {
+    default          $scheme;
+    ~^1:(https?)$    $1;
+  }
+
   # One JSON object per request, so the access log is queryable instead of
   # grep fodder: status/uri/method/request_time become Loki labels or filters.
   log_format agrovesto_json escape=json
@@ -55,7 +81,7 @@ http {
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
     }
   }
 
@@ -84,7 +110,7 @@ http {
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
       # A LogQL query over a week of logs is not fast; do not kill it at 60s.
@@ -105,10 +131,10 @@ http {
   # are a self-hosted runner inside the allow list, an allowlisted NAT egress, or
   # (not recommended) 0.0.0.0/0 with SonarQube's own auth as the only gate.
   #
-  # Port 80 only, like every other vhost here: there is no certificate on this
-  # box, and the prod ACM wildcard cannot be attached to an EC2-hosted nginx.
-  # That is also why GitHub OAuth cannot complete against this URL yet — see
-  # dev/sonarqube.tf notes and the README.
+  # nginx still listens on the private HTTP hop. When GitHub SSO is configured,
+  # Caddy owns public ports 80/443, obtains the certificate and forwards this
+  # vhost with X-Forwarded-Proto=https. The allow list below therefore remains
+  # the authorization edge for both direct HTTP and TLS-proxied requests.
   server {
     listen 80;
     server_name ${sonar.subdomain}.${domain};
@@ -124,7 +150,7 @@ http {
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
       # A report upload is a multi-megabyte POST and the compute engine then

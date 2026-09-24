@@ -55,7 +55,8 @@ mock_provider "aws" {
   }
   mock_resource "aws_ssm_parameter" {
     defaults = {
-      arn = "arn:aws:ssm:eu-west-1:123456789012:parameter/agrovesto/monitoring/grafana-admin"
+      arn     = "arn:aws:ssm:eu-west-1:123456789012:parameter/agrovesto/monitoring/grafana-admin"
+      version = 1
     }
   }
   mock_data "aws_lb" {
@@ -207,6 +208,40 @@ run "dashboards_and_datasources_are_provisioned" {
   assert {
     condition     = strcontains(local.grafana_dashboards_provider, "path: /var/lib/grafana/config/dashboards")
     error_message = "Dashboards must be loaded from the provisioned directory."
+  }
+}
+
+run "grafana_github_sso_is_org_restricted_and_secret_backed" {
+  command = plan
+
+  variables {
+    grafana_github_client_id     = "test-grafana-client-id"
+    grafana_github_client_secret = "not-a-real-secret" # ggignore - test fixture
+  }
+
+  assert {
+    condition     = length(aws_ssm_parameter.grafana_github_client_id) == 1 && length(aws_ssm_parameter.grafana_github_client_secret) == 1
+    error_message = "A complete OAuth credential pair must be stored as SSM SecureStrings."
+  }
+
+  assert {
+    condition = (
+      aws_ssm_parameter.grafana_github_client_id[0].type == "SecureString" &&
+      aws_ssm_parameter.grafana_github_client_secret[0].type == "SecureString"
+    )
+    error_message = "Neither OAuth credential may be embedded as a plain task-definition value."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_ENABLED"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GF_AUTH_GITHUB_CLIENT_SECRET"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "Agrovesto"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "user:email,read:org"),
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "GITHUB_OAUTH_CONFIG_VERSION"),
+      !strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "not-a-real-secret"),
+    ])
+    error_message = "Grafana must enable GitHub OAuth for Agrovesto while referring to, never embedding, the client secret."
   }
 }
 
@@ -504,4 +539,14 @@ run "the_report_task_may_send_mail" {
     condition     = strcontains(jsonencode(aws_iam_role_policy.task.policy), "ses:SendRawEmail")
     error_message = "The report task must be allowed to send mail."
   }
+}
+
+run "rejects_partial_grafana_github_credentials" {
+  command = plan
+
+  variables {
+    grafana_github_client_id = "github-client-id-without-a-secret"
+  }
+
+  expect_failures = [aws_ecs_task_definition.grafana]
 }

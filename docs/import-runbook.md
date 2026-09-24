@@ -125,5 +125,5 @@ If the plan offers to **destroy Route 53 zones**, you are in the wrong workspace
 | `main` | `prod.yml` | same, for prod then monitoring | applies prod, then monitoring |
 
 - Replace the old workflows: `cp workflows/*.yml .github/workflows/ && git rm .github/workflows/monitoring.yml`. `prod.yml` now covers monitoring.
-- Secrets: `AWS_ROLE_ARN_DEV`, `AWS_ROLE_ARN_PROD`, `TF_VAR_MSSQL_SA_PASSWORD_DEV`, `SONAR_TOKEN`, `SONAR_HOST_URL` (optional), `INFRACOST_API_KEY`. Sonar and Infracost are skipped with a notice if their secret is missing.
+- Secrets: `AWS_ROLE_ARN_DEV`, `AWS_ROLE_ARN_PROD`, `TF_VAR_MSSQL_SA_PASSWORD_DEV`, `SONAR_TOKEN`, `SONAR_HOST_URL` (optional), `INFRACOST_API_KEY`. Sonar and Infracost are skipped with a notice if their secret is missing. GitHub UI login has additional optional Grafana OAuth and SonarQube GitHub App secrets listed in [`github-sso.md`](github-sso.md).
 - Environments: create `dev` and `production` in Settings → Environments. Add required reviewers on `production` so the prod apply waits for approval.

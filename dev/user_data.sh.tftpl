@@ -132,6 +132,14 @@ format_and_mount "${sonarqube.data_dir}" "/dev/disk/by-id/nvme-Amazon_Elastic_Bl
 mkdir -p "${sonarqube.data_dir}"/{data,extensions,logs}
 chown -R 1000:1000 "${sonarqube.data_dir}"
 %{ endif ~}
+%{ if sso_proxy.enabled ~}
+
+# Caddy's ACME account, certificates and renewal state must outlive the root
+# volume. The selected directory is on the SonarQube or logging EBS volume.
+mkdir -p "${sso_proxy.data_dir}"/{data,config}
+chown -R 1000:1000 "${sso_proxy.data_dir}"
+chmod 700 "${sso_proxy.data_dir}" "${sso_proxy.data_dir}"/{data,config}
+%{ endif ~}
 %{ if redis.enabled && redis.persistence ~}
 
 # Redis persistence lives on the root disk, not a volume of its own: this is dev,
@@ -194,6 +202,8 @@ chown -R 472:472 "${logging_root}/grafana"
 %{ endif ~}
 
 # Passwords are fetched from SSM at boot, never embedded in instance user data.
+# Including only these non-secret SSM versions makes credential rotation replace
+# the immutable host and therefore re-fetch the new values: ${join(",", sso_credential_versions)}
 mkdir -p /opt/agrovesto/{compose,scripts}
 SA_PW=$(aws ssm get-parameter --with-decryption --name "${mssql_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 {
@@ -203,6 +213,12 @@ printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\n' "${backup_bucket}" "${aws_region}"
 %{ if logging.enabled ~}
 GRAFANA_PW=$(aws ssm get-parameter --with-decryption --name "${grafana_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_PW"
+%{ endif ~}
+%{ if logging.github_sso_enabled ~}
+GRAFANA_GITHUB_CLIENT_ID=$(aws ssm get-parameter --with-decryption --name "${grafana_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+GRAFANA_GITHUB_CLIENT_SECRET=$(aws ssm get-parameter --with-decryption --name "${grafana_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'GRAFANA_GITHUB_CLIENT_ID=%s\n' "$GRAFANA_GITHUB_CLIENT_ID"
+printf 'GRAFANA_GITHUB_CLIENT_SECRET=%s\n' "$GRAFANA_GITHUB_CLIENT_SECRET"
 %{ endif ~}
 %{ if sonarqube.enabled ~}
 SONAR_DB_PW=$(aws ssm get-parameter --with-decryption --name "${sonarqube_parameter}" --query Parameter.Value --output text --region "${aws_region}")
@@ -214,7 +230,51 @@ printf 'REDIS_PASSWORD=%s\n' "$REDIS_PW"
 %{ endif ~}
 } >/opt/agrovesto/compose/.env
 chmod 600 /opt/agrovesto/compose/.env
-unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW
+%{ if sonarqube.github_sso_enabled ~}
+
+# SonarQube's GitHub App configuration is a generated local file rather than an
+# S3 object or user_data literal. Java-properties escaping preserves the PEM's
+# newlines, and uid 1000 is the only non-root user allowed to read the result.
+export SONAR_GITHUB_CLIENT_ID
+export SONAR_GITHUB_CLIENT_SECRET
+export SONAR_GITHUB_APP_ID
+export SONAR_GITHUB_PRIVATE_KEY
+SONAR_GITHUB_CLIENT_ID=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_CLIENT_SECRET=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_APP_ID=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.app_id}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_PRIVATE_KEY=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.private_key}" --query Parameter.Value --output text --region "${aws_region}")
+
+mkdir -p /opt/agrovesto/sonarqube
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+
+def java_property(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
+
+
+properties = {
+    "sonar.auth.github.enabled": "true",
+    "sonar.auth.github.clientId.secured": os.environ["SONAR_GITHUB_CLIENT_ID"],
+    "sonar.auth.github.clientSecret.secured": os.environ["SONAR_GITHUB_CLIENT_SECRET"],
+    "sonar.auth.github.appId": os.environ["SONAR_GITHUB_APP_ID"],
+    "sonar.auth.github.privateKey.secured": os.environ["SONAR_GITHUB_PRIVATE_KEY"],
+    "sonar.auth.github.allowUsersToSignUp": "${sonarqube.github_allow_sign_up}",
+    "sonar.auth.github.groupsSync": "${sonarqube.github_synchronize_groups}",
+    "sonar.auth.github.apiUrl": "https://api.github.com/",
+    "sonar.auth.github.webUrl": "https://github.com/",
+    "sonar.auth.github.organizations": "${sonarqube.github_organizations}",
+}
+path = Path("/opt/agrovesto/sonarqube/sonar-sso.properties")
+path.write_text("".join(f"{key}={java_property(value)}\n" for key, value in properties.items()))
+PY
+chown 1000:1000 /opt/agrovesto/sonarqube/sonar-sso.properties
+chmod 600 /opt/agrovesto/sonarqube/sonar-sso.properties
+%{ endif ~}
+unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW \
+  GRAFANA_GITHUB_CLIENT_ID GRAFANA_GITHUB_CLIENT_SECRET \
+  SONAR_GITHUB_CLIENT_ID SONAR_GITHUB_CLIENT_SECRET SONAR_GITHUB_APP_ID SONAR_GITHUB_PRIVATE_KEY
 
 # One-shot database bootstrap; compose has no init container of its own.
 cat >/opt/agrovesto/scripts/init-mssql.sh <<'INIT'

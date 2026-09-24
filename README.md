@@ -86,10 +86,19 @@ The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while
 
 ### Accessing Logs
 - **Prod**: Reachable at `https://grafana.nomaos.com` (IP allowlisted via `grafana_allowed_cidrs`).
-- **Dev**: Reachable at `dev-logs.nomaos.com` or via SSH tunnel:
+- **Dev**: Reachable at `http://dev-logs.nomaos.com` without SSO, `https://dev-logs.nomaos.com` when GitHub SSO is configured, or via SSH tunnel:
   ```bash
   ssh -N -L 3000:127.0.0.1:3000 -L 3100:127.0.0.1:3100 -L 9090:127.0.0.1:9090 ubuntu@<DEV_EIP>
   ```
+
+**Login:** production Grafana uses the configured admin user (default `admin`)
+plus the generated password in SSM
+`/agrovesto-monitoring/grafana/admin-password`; dev Grafana uses its configured
+admin user (default `admin`) plus `/agrovesto-dev/grafana_admin_password`. A
+fresh SonarQube database starts as `admin` / `admin` and forces a first-login
+password change. GitHub login is enabled when the credential sets documented
+in [`docs/github-sso.md`](docs/github-sso.md) are supplied; local admin stays
+enabled as a break-glass path.
 
 ### Accessing SonarQube and Redis (Dev)
 Both publish loopback ports only and have no security-group ingress, so the
@@ -112,10 +121,13 @@ ssh -N -L 6379:127.0.0.1:6379 ubuntu@<DEV_EIP>
 > of those is in the list, scanners are denied at the edge and the
 > `SONAR_HOST_URL` secret will not be reachable.
 >
-> SonarQube is also served over plain HTTP: nginx on the dev host terminates port
-> 80 only and there is no certificate for it (the prod ACM wildcard cannot be
-> attached to an EC2-hosted nginx). **That is why GitHub SSO cannot be enabled
-> against it yet** — SonarSource and GitHub both require an HTTPS callback.
+> GitHub SSO is supported for SonarQube and both Grafana instances. A complete
+> dev credential set adds a Caddy TLS edge automatically, because SonarSource
+> requires an HTTPS callback; production Grafana already terminates HTTPS at the
+> ALB. Access is still restricted by each service's CIDR allowlist, and CI still
+> uses `SONAR_TOKEN` rather than browser SSO. Registration, callback URLs, secret
+> names, fallback logins and rollout steps are in
+> [`docs/github-sso.md`](docs/github-sso.md).
 
 ---
 

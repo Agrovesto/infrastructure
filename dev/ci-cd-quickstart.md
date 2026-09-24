@@ -47,6 +47,11 @@ The runner talks to AWS via OIDC (no long-lived keys).
 | --- | --- | --- |
 | `AWS_ROLE_ARN_DEV` | Yes (plan/apply) | Role to assume via `configure-aws-credentials` |
 | `TF_VAR_MSSQL_SA_PASSWORD_DEV` | Yes (plan/apply) | MSSQL SA password (marked `sensitive` in code) |
+| `DEV_GRAFANA_GITHUB_CLIENT_ID` / `DEV_GRAFANA_GITHUB_CLIENT_SECRET` | No | Supplying both enables GitHub OAuth in dev Grafana |
+| `SONARQUBE_GITHUB_CLIENT_ID` / `SONARQUBE_GITHUB_CLIENT_SECRET` / `SONARQUBE_GITHUB_APP_ID` / `SONARQUBE_GITHUB_PRIVATE_KEY` | No | Supplying all four enables the SonarQube GitHub App login and HTTPS edge |
+
+OAuth callback URLs, app permissions and the required CIDR/DNS setup are in
+[`../docs/github-sso.md`](../docs/github-sso.md).
 
 > GitHub won't let you read an existing secret back. To set/add one:
 > **Settings → Secrets and variables → Actions**, then **New repository secret**.

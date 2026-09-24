@@ -75,6 +75,39 @@ variable "grafana_admin_user" {
   default = "admin"
 }
 
+# GitHub OAuth is enabled only when both credentials are supplied. They are
+# separate from the non-secret access policy so CI can source the secret from a
+# repository Actions secret and Terraform can store it in SSM SecureString.
+variable "grafana_github_client_id" {
+  description = "Client ID of the GitHub OAuth App used by prod Grafana; empty disables GitHub SSO"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_github_client_secret" {
+  description = "Client secret of the GitHub OAuth App used by prod Grafana"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "grafana_github_organizations" {
+  description = "GitHub organizations whose members may log in to prod Grafana"
+  type        = list(string)
+  default     = ["Agrovesto"]
+
+  validation {
+    condition     = length(var.grafana_github_organizations) > 0 && alltrue([for org in var.grafana_github_organizations : can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", org))])
+    error_message = "grafana_github_organizations must contain at least one valid GitHub organization login."
+  }
+}
+
+variable "grafana_github_allow_sign_up" {
+  description = "Allow an authorized GitHub organization member to be created in Grafana on first login"
+  type        = bool
+  default     = true
+}
+
 # --- Images ----------------------------------------------------------------------
 # Public OSS images only, pinned. Everything runs on Graviton (arm64).
 

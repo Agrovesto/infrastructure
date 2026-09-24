@@ -48,6 +48,17 @@ locals {
 
   grafana_host = "${var.grafana_subdomain}.${var.domain_name}"
 
+  grafana_github_credentials_set = [
+    var.grafana_github_client_id != "",
+    nonsensitive(var.grafana_github_client_secret != ""),
+  ]
+  grafana_github_configuration_valid = alltrue(local.grafana_github_credentials_set) || !anytrue(local.grafana_github_credentials_set)
+  grafana_github_sso_enabled         = alltrue(local.grafana_github_credentials_set)
+  grafana_github_parameter_names = {
+    client_id     = "${local.param}/grafana/github-client-id"
+    client_secret = "${local.param}/grafana/github-client-secret"
+  }
+
   # Config files are rendered here, published to SSM and pulled by a small
   # aws-cli init container into each task's EFS volume (see config.tf).
   # Config-fetch command: one parameter per file, written as <mount>/config/<rel>.

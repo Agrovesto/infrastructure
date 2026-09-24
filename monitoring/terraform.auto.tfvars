@@ -12,6 +12,10 @@ alb_security_group_name = "agrovesto-prod-alb-sg"
 
 grafana_subdomain     = "grafana"
 grafana_allowed_cidrs = [] # empty = Grafana is reachable from inside the VPC only
+# GitHub login activates when both GRAFANA_GITHUB_CLIENT_ID and
+# GRAFANA_GITHUB_CLIENT_SECRET repository secrets are present. Access remains
+# subject to grafana_allowed_cidrs; GitHub members start as Viewer. See
+# docs/github-sso.md. The generated local admin remains a break-glass login.
 
 # Alerts: with these empty, alerts stay in Alertmanager/Grafana and nothing is
 # sent out. Fill them in to start notifying.

@@ -282,7 +282,7 @@ Source files live in `workflows/` and are copied into `.github/workflows/` (the 
 6. **fmt / validate / plan**: `terraform fmt -check`, `validate`, `plan -detailed-exitcode`, then a diff table (import / create / update / delete / REPLACE) and the full plan in one updating PR comment.
 7. **Apply** (push only, and only when the plan has changes): applies the saved `tfplan` artifact inside the GitHub Environment.
 
-**Required repository secrets:** `AWS_ROLE_ARN_DEV`, `AWS_ROLE_ARN_PROD`, `TF_VAR_MSSQL_SA_PASSWORD_DEV`, `SONAR_TOKEN`, `SONAR_HOST_URL` (optional), `INFRACOST_API_KEY`.
+**Required repository secrets:** `AWS_ROLE_ARN_DEV`, `AWS_ROLE_ARN_PROD`, `TF_VAR_MSSQL_SA_PASSWORD_DEV`, `SONAR_TOKEN`, `SONAR_HOST_URL` (optional), `INFRACOST_API_KEY`. Optional GitHub UI login uses `GRAFANA_GITHUB_CLIENT_ID`, `GRAFANA_GITHUB_CLIENT_SECRET`, `DEV_GRAFANA_GITHUB_CLIENT_ID`, `DEV_GRAFANA_GITHUB_CLIENT_SECRET`, and the four `SONARQUBE_GITHUB_*` GitHub App secrets; see [`github-sso.md`](github-sso.md).
 **Required Environments:** `dev`, `production` (with reviewers).
 
 ---
