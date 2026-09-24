@@ -124,6 +124,10 @@ def collect_blocks(module_dir: str) -> dict[str, list[dict]]:
         for name in sorted(files):
             if not name.endswith(".tf"):
                 continue
+            # imports.tf / legacy.tf: existing resources imported as-is, not the
+            # design under test.
+            if name in {"imports.tf", "legacy.tf"}:
+                continue
             path = os.path.join(root, name)
             rel = os.path.relpath(path, module_dir)
             text = strip_comments(_read(path))

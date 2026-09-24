@@ -1,5 +1,5 @@
 # Bootstrap import for the DEV account (353833416626).
-#   AWS_PROFILE=agrovesto-dev terraform plan -state=dev.tfstate -var-file=../imports/bootstrap/dev.tfvars
+#   AWS_PROFILE=agrovesto-dev terraform plan -state=dev.tfstate -var-file=dev.tfvars
 account_id       = "353833416626"
 environment      = "dev"
 deploy_role_name = "nomaos-dev-github-terraform" # the role in the AWS_ROLE_ARN_DEV secret

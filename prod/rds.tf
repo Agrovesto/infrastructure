@@ -19,7 +19,7 @@
 # state - consumers read it at runtime via aws_db_instance.mssql
 # .master_user_secret[0].secret_arn (keys: username, password).
 #
-# Adopting the existing instance (imports/RUNBOOK.md): migration-prod does NOT
+# Adopting the existing instance (docs/import-runbook.md): migration-prod does NOT
 # use a managed secret (the import plan showed manage_master_user_password
 # null -> true, which would ROTATE the live password and break every current
 # client). So for the adopted instance var.mssql_manage_master_user_password =
@@ -43,7 +43,7 @@ resource "aws_db_instance" "mssql" {
   max_allocated_storage = var.mssql_max_allocated_storage_gb
   storage_type          = var.mssql_storage_type
   # ForceNew. true for every new instance; false ONLY while the adopted,
-  # unencrypted migration-prod is in service (encrypt-by-restore: RUNBOOK §4.2).
+  # unencrypted migration-prod is in service (encrypt-by-restore: docs/import-runbook.md §5).
   #trivy:ignore:AVD-AWS-0080
   storage_encrypted = var.mssql_storage_encrypted
 

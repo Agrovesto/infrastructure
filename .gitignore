@@ -27,13 +27,8 @@ __pycache__/
 # SonarScanner working directory (local/CI scanner state, never committed)
 .scannerwork/
 
-# Import window (imports/stage.sh): staged copies, generated config drafts,
-# discovery output (account facts), per-account bootstrap local state.
-zz_import_*.tf
+# Import window: draft of generated config before it is cleaned into legacy.tf
 generated_legacy.tf
-# imports/discovery-*.txt
 
-# plan.sh local bootstrap state never goes to git
+# bootstrap local state (per account) never goes to git
 bootstrap/*.tfstate*
-imports/discovery-*.txt
-legacy_lambda_placeholder.zip

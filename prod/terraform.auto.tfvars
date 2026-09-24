@@ -173,7 +173,7 @@ db_size_alarm_enabled = false
 # }
 
 # =============================================================================
-# Adoption of existing resources (imports/RUNBOOK.md, discovery 2026-09-23)
+# Adoption of existing resources (docs/import-runbook.md, discovery 2026-09-23)
 # Every value below is the REAL value of the adopted resource. Many of these
 # attributes are ForceNew, so changing one means replacing the resource.
 # =============================================================================
@@ -199,7 +199,7 @@ mssql_subnet_group_name            = "agxdb2subnetgroup"
 mssql_performance_insights_enabled = true  # live instance has it on (import plan)
 
 # !! migration-prod is NOT encrypted. storage_encrypted is ForceNew, so it must
-# stay false until the planned encrypt-by-restore window (RUNBOOK §4.2).
+# stay false until the planned encrypt-by-restore window (docs/import-runbook.md §5).
 mssql_storage_encrypted = false
 
 # Keep the instance's current SGs (default SG + rds-ec2-3) next to the design's
@@ -207,7 +207,7 @@ mssql_storage_encrypted = false
 # the apps connect through the ECS SG.
 mssql_additional_security_group_ids = ["sg-05a2722a050c1109b", "sg-0b555edfc6d445a18"]
 
-# --- Match the live resources (from imports/plans/prod.txt) ------------------
+# --- Match the live resources (import plan 2026-09-23) ------------------
 # Password stays as it is today; do NOT switch to an RDS-managed secret here,
 # that rotates the live password. nomaosDBcredentials holds the migration-prod
 # login (confirmed by owner 2026-09-24; agxdb2DBcredentials no longer exists).
