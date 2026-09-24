@@ -1,35 +1,48 @@
-tests/coverage.tftest.hcl... [37min progress[0m
-[0m  run "every_task_definition_is_complete"... [32mpass[0m[0m
-  run "secondary_ingress_rules_are_pinned"... [32mpass[0m[0m
-  run "policies_grant_the_minimum"... [32mpass[0m[0m
-  run "storage_and_schedule_settings"... [32mpass[0m[0m
-  run "alertmanager_publishes_to_sns"... [32mpass[0m[0m
-  run "no_sns_receiver_when_unset"... [32mpass[0m[0m
-  run "config_bucket_is_private_and_tls_only"... [31mfail[0m[0m
-tests/coverage.tftest.hcl... [37mtearing down[0m
-[0mtests/coverage.tftest.hcl... [31mfail[0m[0m
-tests/monitoring.tftest.hcl... [37min progress[0m
-[0m  run "components_run_on_fargate_with_their_own_state"... [32mpass[0m[0m
-  run "dashboards_and_datasources_are_provisioned"... [32mpass[0m[0m
-  run "traces_are_exported_as_span_metrics"... [32mpass[0m[0m
-  run "grafana_is_reachable_through_the_prod_alb_only"... [32mpass[0m[0m
-  run "exporters_cover_uptime_and_push_metrics"... [32mpass[0m[0m
-  run "cost_pipeline_is_wired"... [32mpass[0m[0m
-  run "database_metrics_are_scheduled"... [32mpass[0m[0m
-  run "ecs_collector_is_scheduled"... [32mpass[0m[0m
-  run "scheduled_tasks_can_be_turned_off"... [32mpass[0m[0m
-  run "monthly_report_is_mailed"... [32mpass[0m[0m
-  run "the_report_task_may_send_mail"... [32mpass[0m[0m
-tests/monitoring.tftest.hcl... [37mtearing down[0m
-[0mtests/monitoring.tftest.hcl... [32mpass[0m[0m
-tests/platform.tftest.hcl... [37min progress[0m
-[0m  run "discovers_the_prod_network"... [32mpass[0m[0m
-  run "storage_is_encrypted_and_shared"... [32mpass[0m[0m
-  run "security_groups_only_open_what_is_needed"... [32mpass[0m[0m
-  run "iam_is_scoped"... [32mpass[0m[0m
-  run "cloud_map_publishes_component_endpoints"... [32mpass[0m[0m
-  run "config_is_published_for_the_init_container"... [32mpass[0m[0m
-tests/platform.tftest.hcl... [37mtearing down[0m
-[0mtests/platform.tftest.hcl... [32mpass[0m[0m
+tests/coverage.tftest.hcl... in progress
+  run "every_task_definition_is_complete"... pass
+  run "secondary_ingress_rules_are_pinned"... pass
+  run "policies_grant_the_minimum"... pass
+  run "storage_and_schedule_settings"... pass
+  run "alertmanager_publishes_to_sns"... pass
+  run "no_sns_receiver_when_unset"... pass
+  run "config_bucket_is_private_and_tls_only"... fail
 
-[31mFailure![0m[0m 23 passed, 1 failed.
+Error: Unknown condition value
+
+  on tests/coverage.tftest.hcl line 321, in run "config_bucket_is_private_and_tls_only":
+ 321:     condition     = jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Sid == "DenyNonTls" && jsondecode(aws_s3_bucket_policy.config.policy).Statement[0].Condition.Bool["aws:SecureTransport"] == "false"
+    ├────────────────
+    │ aws_s3_bucket_policy.config.policy is a string
+
+Condition expression could not be evaluated at this time. This means you have
+executed a `run` block with `command = plan` and one of the values your
+condition depended on is not known until after the plan has been applied.
+Either remove this value from your condition, or execute an `apply` command
+from this `run` block.
+tests/coverage.tftest.hcl... tearing down
+tests/coverage.tftest.hcl... fail
+tests/monitoring.tftest.hcl... in progress
+  run "components_run_on_fargate_with_their_own_state"... pass
+  run "dashboards_and_datasources_are_provisioned"... pass
+  run "traces_are_exported_as_span_metrics"... pass
+  run "grafana_is_reachable_through_the_prod_alb_only"... pass
+  run "exporters_cover_uptime_and_push_metrics"... pass
+  run "cost_pipeline_is_wired"... pass
+  run "database_metrics_are_scheduled"... pass
+  run "ecs_collector_is_scheduled"... pass
+  run "scheduled_tasks_can_be_turned_off"... pass
+  run "monthly_report_is_mailed"... pass
+  run "the_report_task_may_send_mail"... pass
+tests/monitoring.tftest.hcl... tearing down
+tests/monitoring.tftest.hcl... pass
+tests/platform.tftest.hcl... in progress
+  run "discovers_the_prod_network"... pass
+  run "storage_is_encrypted_and_shared"... pass
+  run "security_groups_only_open_what_is_needed"... pass
+  run "iam_is_scoped"... pass
+  run "cloud_map_publishes_component_endpoints"... pass
+  run "config_is_published_for_the_init_container"... pass
+tests/platform.tftest.hcl... tearing down
+tests/platform.tftest.hcl... pass
+
+Failure! 23 passed, 1 failed.
