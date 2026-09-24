@@ -39,13 +39,11 @@ locals {
     subdomain = var.mssql_subdomain
   }
 
-  # Password parameters the host reads at boot (dev/host_config.tf). Three of the
-  # four are conditional, so they are spelled as ARNs instead of indexed out of a
-  # count'd resource: referencing aws_ssm_parameter.x[0].arn here would make the
-  # instance policy depend on the very values that decide whether those
-  # parameters exist.
+  # Password parameters the host reads at boot (dev/host_config.tf). Spelled as
+  # deterministic ARNs so the instance policy does not depend on unknown resource
+  # attributes or indexed counts at plan time.
   host_password_param_arns = [
-    aws_ssm_parameter.mssql_sa_password.arn,
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/mssql_sa_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_db_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/redis_password",
@@ -381,7 +379,7 @@ locals {
     # SonarQube gets a record only when it is actually served by nginx; with
     # expose_via_nginx = false there is nothing listening on that name, and a
     # record pointing at it would just be a dead hostname.
-    var.sonarqube_nginx.enabled ? {
+    local.sonarqube_nginx.enabled ? {
       (var.sonarqube.subdomain) = local.ec2_public_ip
     } : {},
     var.extra_a_records

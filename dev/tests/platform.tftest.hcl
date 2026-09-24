@@ -367,14 +367,14 @@ run "dns_managed_by_dev" {
     error_message = "manage_dns = true creates the zone for var.domain_name."
   }
 
-  # 5 APIs + mssql; Vault is deliberately not exposed via public DNS.
+# 5 APIs + mssql; plus sonarqube when enabled and exposed. Vault is deliberately not exposed via public DNS.
   assert {
-    condition     = length(aws_route53_record.a) == 6
-    error_message = "Only the APIs and mssql get A records to the EC2 host."
+    condition     = length(aws_route53_record.a) == 6 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
+    error_message = "Only the APIs, mssql, and optionally sonarqube get A records to the EC2 host."
   }
 
   assert {
-    condition     = toset(keys(aws_route53_record.a)) == toset(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql"])
+    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
     error_message = "A record keys are the API subdomains and mssql, excluding Vault."
   }
 

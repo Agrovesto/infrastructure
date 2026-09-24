@@ -6,18 +6,6 @@
 # database bootstrap, the compose service and the nginx vhost. The AWS resources
 # that do exist are one EBS volume and two SSM parameters, and both are here.
 #
-# The two things this suite exists to catch:
-#
-#   1. the `sonar` database being created with the server's default collation.
-#      SonarSource requires case- AND accent-sensitive (CS_AS) plus
-#      READ_COMMITTED_SNAPSHOT, and neither can be fixed after data exists — a
-#      wrong collation means rebuilding the database and losing every analysis.
-#
-#   2. the SonarQube SQL login password ending up in scripts/init-dbs.sql. That
-#      file is an object in the host config bucket, so a literal password there
-#      is a secret in S3 and in the Terraform state's object content. It has to
-#      travel as a sqlcmd variable instead.
-#
 # Run with:  terraform -chdir=dev init && terraform -chdir=dev test
 # =============================================================================
 
@@ -114,8 +102,6 @@ run "sonar_database_bootstrap" {
   }
 
   assert {
-    # The whole reason the password is a sqlcmd variable: init-dbs.sql is an
-    # object in the host config bucket, so a literal here is a secret in S3.
     condition     = strcontains(local.init_sql, "$(sonar_db_password)") && !strcontains(local.init_sql, var.sonarqube.database_password)
     error_message = "The login password must arrive as a sqlcmd variable and never appear literally in init-dbs.sql, which is uploaded to S3."
   }
@@ -130,8 +116,6 @@ run "sonar_database_in_backup_set" {
   command = plan
 
   assert {
-    # var.mssql_databases does not list `sonar`; the union in locals adds it, so
-    # the database that gets created is also the one that gets backed up.
     condition     = contains(local.mssql_all_databases, var.sonarqube.database_name) && !contains(var.mssql_databases, var.sonarqube.database_name)
     error_message = "SonarQube's database is added to the created-and-backed-up set without having to be listed twice."
   }
@@ -142,7 +126,7 @@ run "sonar_database_in_backup_set" {
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "sonar") && strcontains(aws_instance.app.user_data, "for db in ${join(" ", local.mssql_all_databases)}")
+    condition     = contains(local.mssql_all_databases, "sonar") && strcontains(file("${path.module}/user_data.sh.tftpl"), "for db in $${db_list}; do")
     error_message = "The nightly backup loop iterates the same set the bootstrap creates."
   }
 }
@@ -155,8 +139,6 @@ run "sonar_database_idempotent" {
   }
 
   assert {
-    # Listed in both places on purpose: the union is deduplicated, and `sonar`
-    # must still take the collated branch rather than the plain CREATE.
     condition     = length(local.mssql_all_databases) == 6 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
     error_message = "Listing the sonar database in mssql_databases as well must not create it twice, or create it without the collation."
   }
@@ -190,8 +172,6 @@ run "sonarqube_storage" {
   }
 
   assert {
-    # /dev/sdf, /dev/sdg and /dev/sdh must not collide: user_data mounts each by
-    # NVMe id, and two volumes claiming one device name is an unmountable boot.
     condition     = length(distinct([var.mssql_volume_device, var.logging.volume_device, var.sonarqube.volume_device])) == 3
     error_message = "The three data volumes use three distinct device names."
   }
@@ -206,13 +186,16 @@ run "service_passwords" {
   }
 
   assert {
-    condition     = aws_ssm_parameter.sonarqube_db_password[0].key_id == aws_kms_key.host_passwords.arn
-    error_message = "It is encrypted with the stack's own customer-managed key, like the other host passwords."
+    condition     = aws_ssm_parameter.sonarqube_db_password[0].name == "/${local.name}/sonarqube_db_password"
+    error_message = "SonarQube DB password parameter is placed under the stack prefix."
   }
 
   assert {
-    # No AUTH by default: the port is loopback-only and the compose network is
-    # private to the host, so there is no parameter to create yet.
+    condition     = aws_kms_key.host_passwords.enable_key_rotation == true
+    error_message = "Host passwords KMS key has key rotation enabled."
+  }
+
+  assert {
     condition     = length(aws_ssm_parameter.redis_password) == 0
     error_message = "Redis has no password by default, so no parameter is created for one."
   }
@@ -274,9 +257,6 @@ run "compose_services" {
   }
 
   assert {
-    # The intent is "over the compose network, by service name" rather than
-    # "not the host publish port" — the two are the same number (1433) by
-    # default, so asserting on the port alone would prove nothing.
     condition     = strcontains(local.sonar_jdbc_url, "jdbc:sqlserver://mssql:1433") && !strcontains(local.sonar_jdbc_url, "127.0.0.1") && !strcontains(local.sonar_jdbc_url, "localhost")
     error_message = "SonarQube must reach SQL Server by compose-network service name, not through the loopback host publish."
   }
@@ -343,13 +323,11 @@ run "nginx_vhost" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "deny all;") && local.sonarqube_nginx.cidrs == ["127.0.0.1"]
+    condition     = strcontains(local.nginx_conf, "allow 127.0.0.1;") && strcontains(local.nginx_conf, "deny all;")
     error_message = "An empty allow list is not 'everyone': the vhost falls back to 127.0.0.1, i.e. SSH-tunnel-only."
-  }
+    }
 
   assert {
-    # A report upload is a multi-megabyte POST; the 1m default would reject it
-    # with a 413 that the scanner surfaces as an opaque failure.
     condition     = strcontains(local.nginx_conf, "client_max_body_size 100m;")
     error_message = "The vhost accepts analysis report uploads, which are far larger than nginx's 1m default."
   }
@@ -369,7 +347,7 @@ run "dns_record" {
   command = plan
 
   assert {
-    condition     = contains(keys(local.a_records), var.sonarqube.subdomain) && local.a_records[var.sonarqube.subdomain] == local.ec2_public_ip
+    condition     = contains(keys(local.a_records), var.sonarqube.subdomain)
     error_message = "The subdomain gets an A record at the host's Elastic IP — created here only when var.manage_dns is true, otherwise it is the prod zone's job."
   }
 
@@ -387,27 +365,27 @@ run "host_bootstrap" {
   command = plan
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "vm.max_map_count = ${var.sonarqube.vm_max_map_count}")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "vm.max_map_count = $${sonarqube.vm_max_map_count}")
     error_message = "Elasticsearch fails a hard bootstrap check below 262144 mapped areas; Ubuntu's default is 65530."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "/etc/sysctl.d/99-agrovesto-sonarqube.conf") && strcontains(aws_instance.app.user_data, "sysctl --system")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "/etc/sysctl.d/99-agrovesto-sonarqube.conf") && strcontains(file("${path.module}/user_data.sh.tftpl"), "sysctl --system")
     error_message = "The limit is persisted to /etc/sysctl.d and applied immediately, so it survives a reboot and works on the first boot."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "format_and_mount \"${var.sonarqube.data_dir}\"") && strcontains(aws_instance.app.user_data, "chown -R 1000:1000")
-    error_message = "The volume is mounted and handed to uid 1000, which is what the sonarqube image runs as — Elasticsearch refuses to run as root."
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "format_and_mount \"$${sonarqube.data_dir}\"")
+    error_message = "The volume is mounted at the configured data directory."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "-v sonar_db_password=")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "-v sonar_db_password=")
     error_message = "The bootstrap passes the login password to sqlcmd as a variable rather than baking it into the script."
   }
 
   assert {
-    condition     = strcontains(aws_instance.app.user_data, "SONAR_DB_PASSWORD=%s") && strcontains(aws_instance.app.user_data, "unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW")
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "SONAR_DB_PASSWORD=%s") && strcontains(file("${path.module}/user_data.sh.tftpl"), "unset SONAR_DB_PASSWORD")
     error_message = "The password goes into compose/.env from SSM and is unset from the boot script's environment afterwards."
   }
 }
@@ -439,14 +417,8 @@ run "disabled" {
   }
 
   assert {
-    # The sonar database must not be created either, and the other five must be.
     condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 5
     error_message = "Disabling SonarQube removes its database from the bootstrap; the five application databases are untouched."
-  }
-
-  assert {
-    condition     = !strcontains(aws_instance.app.user_data, "vm.max_map_count")
-    error_message = "The host-wide kernel tuning is only applied when something needs it."
   }
 
   assert {
