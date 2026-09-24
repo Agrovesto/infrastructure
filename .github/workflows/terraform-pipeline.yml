@@ -243,6 +243,31 @@ jobs:
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
 
+      - name: Explain quality gate result
+        if: always() && steps.cfg.outputs.configured == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          KEY=$(grep '^sonar.projectKey=' "${{ inputs.sonar_properties }}" | cut -d= -f2)
+          Q="projectKey=$KEY"
+          [ "${{ github.event_name }}" = "pull_request" ] && Q="$Q&pullRequest=${{ github.event.pull_request.number }}"
+          {
+            echo "### SonarQube quality gate: \`$KEY\`"
+            echo "| Metric | Actual | Threshold | Status |"
+            echo "| --- | --- | --- | --- |"
+            curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?$Q" \
+              | jq -r '.projectStatus.conditions[] | "| \(.metricKey) | \(.actualValue // "-") | \(.errorThreshold // "-") | \(.status) |"'
+            echo ""
+            echo "#### Open issues"
+            curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/issues/search?componentKeys=$KEY&resolved=false&ps=50&${Q#projectKey=$KEY&}" \
+              | jq -r '.issues[]? | "- **\(.severity)** `\(.rule)` \(.component | sub(".*:";""))#\(.line // 0): \(.message)"'
+            echo ""
+            echo "#### Hotspots to review"
+            curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/hotspots/search?$Q&status=TO_REVIEW&ps=50" \
+              | jq -r '.hotspots[]? | "- `\(.ruleKey)` \(.component | sub(".*:";""))#\(.line // 0): \(.message)"'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
   # ---------------------------------------------------------------------------
   # Infracost: cost breakdown, plus a cost diff comment on PRs
   # ---------------------------------------------------------------------------

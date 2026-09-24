@@ -49,13 +49,6 @@ locals {
         port      = api.host_port
       }
     ],
-    [
-      {
-        name      = "vault"
-        subdomain = var.vault.subdomain
-        port      = var.vault.host_port
-      }
-    ]
   )
 
   # ---------------------------------------------------------------------------
