@@ -8,8 +8,26 @@ output "grafana_admin_user" {
 }
 
 output "grafana_admin_password_parameter" {
-  description = "SSM SecureString holding the generated admin password"
+  description = "SSM SecureString holding the generated break-glass admin password"
   value       = aws_ssm_parameter.grafana_admin_password.name
+}
+
+output "grafana_authentication" {
+  description = "Configured Grafana login methods and the GitHub OAuth callback"
+  value = {
+    github_enabled        = local.grafana_github_sso_enabled
+    github_login_url      = "https://${local.grafana_host}/login/github"
+    github_callback_url   = "https://${local.grafana_host}/login/github"
+    allowed_organizations = var.grafana_github_organizations
+    github_team_roles = {
+      for binding in var.grafana_github_team_roles :
+      "${binding.organization}/${binding.team_slug}" => binding.role
+    }
+    unlisted_teams_denied = local.grafana_github_sso_enabled
+    local_admin_enabled   = true
+    local_admin_user      = var.grafana_admin_user
+    local_password_ssm    = aws_ssm_parameter.grafana_admin_password.name
+  }
 }
 
 output "internal_endpoints" {

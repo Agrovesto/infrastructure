@@ -125,7 +125,7 @@ output "redis_access" {
 
 output "sonarqube_url" {
   description = "Set this as the SONAR_HOST_URL repository secret. Empty when sonarqube.enabled = false or expose_via_nginx = false, in which case there is no public name and CI cannot reach the server."
-  value       = local.sonarqube_nginx.enabled ? "${var.sonarqube.scheme}://${local.sonar_fqdn}" : ""
+  value       = local.sonarqube_nginx.enabled ? "${local.sonar_public_scheme}://${local.sonar_fqdn}" : ""
 }
 
 output "sonarqube_fqdn" {
@@ -147,6 +147,27 @@ output "sonarqube_access" {
   } : null
 }
 
+output "sonarqube_authentication" {
+  description = "Configured SonarQube login methods and GitHub App callback"
+  value = var.sonarqube.enabled ? {
+    github_enabled        = local.sonarqube_github_sso_enabled
+    github_callback_url   = "https://${local.sonar_fqdn}"
+    allowed_organizations = var.sonarqube_github_organizations
+    github_team_roles = {
+      "Agrovesto/Backend"        = "Reader"
+      "Agrovesto/Frontend"       = "Reader"
+      "Agrovesto/Infrastructure" = "System and project Admin"
+      "Agrovesto/mobile"         = "Reader"
+      "Agrovesto/team-leads"     = "Read/write issues and security hotspots"
+    }
+    github_group_sync     = local.sonarqube_github_sso_enabled && var.sonarqube_github_synchronize_groups
+    role_bootstrap_script = local.sonarqube_github_sso_enabled ? "/opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh" : null
+    local_admin_enabled   = true
+    initial_local_login   = "admin / admin (first boot only; SonarQube forces a password change)"
+    ci_authentication     = "SONAR_TOKEN (GitHub SSO is for people, not scanners)"
+  } : null
+}
+
 output "scheduler" {
   value = {
     start = aws_scheduler_schedule.start.arn
@@ -159,8 +180,26 @@ output "scheduler" {
 # =============================================================================
 
 output "grafana_url" {
-  description = "Empty when logging.enabled = false or expose_via_nginx = false. Served by nginx on the box's port 80 and limited to logging.allowed_cidrs - with the default empty allow list the vhost answers 127.0.0.1 only, so use the tunnel below."
-  value       = var.logging.enabled && var.logging.expose_via_nginx ? "http://${local.grafana_fqdn}" : ""
+  description = "Empty when logging.enabled = false or expose_via_nginx = false. Limited to logging.allowed_cidrs; GitHub SSO automatically enables HTTPS through Caddy."
+  value       = var.logging.enabled && var.logging.expose_via_nginx ? "${local.grafana_public_scheme}://${local.grafana_fqdn}" : ""
+}
+
+output "grafana_authentication" {
+  description = "Configured dev Grafana login methods and GitHub OAuth callback"
+  value = var.logging.enabled ? {
+    github_enabled        = local.grafana_github_sso_enabled
+    github_login_url      = "https://${local.grafana_fqdn}/login/github"
+    github_callback_url   = "https://${local.grafana_fqdn}/login/github"
+    allowed_organizations = var.grafana_github_organizations
+    github_team_roles = {
+      for binding in var.grafana_github_team_roles :
+      "${binding.organization}/${binding.team_slug}" => binding.role
+    }
+    unlisted_teams_denied = local.grafana_github_sso_enabled
+    local_admin_enabled   = true
+    local_admin_user      = var.logging.grafana_admin_user
+    local_password_ssm    = var.logging.enabled ? aws_ssm_parameter.grafana_admin_password[0].name : null
+  } : null
 }
 
 output "logging_access" {

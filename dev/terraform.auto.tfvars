@@ -148,6 +148,12 @@ logging = {
   # grafana_admin_password defaults to "agrovesto-dev" (dev only). Override with
   # TF_VAR_logging='{"grafana_admin_password":"..."}' in CI rather than committing
   # something better here - the file is public like the rest of this repo.
+  # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
+  # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
+  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
+  # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
+  # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
+  # admin remains available for break-glass use.
 
   # An API that logs one JSON object per line should be listed here: its level,
   # status and message fields then become queryable instead of grep fodder.
@@ -205,11 +211,12 @@ sonarqube = {
   # and no part of the login name.
   # database_password = "..."
 
-  # http, not https: nginx on this host terminates port 80 only and there is no
-  # certificate for it (the prod ACM wildcard cannot be attached to an
-  # EC2-hosted nginx). This is also why GitHub OAuth cannot complete against this
-  # URL yet — GitHub requires an HTTPS callback. See the README's SonarQube
-  # section before wiring SSO.
+  # Local-login-only deployments retain HTTP. Supplying the four
+  # SONARQUBE_GITHUB_* repository secrets adds a Caddy TLS edge, changes the
+  # canonical URL to https://sonar.nomaos.com, and enables GitHub App login.
+  # GitHub team membership sync is enabled; run the shipped permission bootstrap
+  # once with a separate SonarQube admin token (docs/github-sso.md).
+  # Caddy's certificate data survives on the SonarQube EBS volume.
   scheme = "http"
 }
 

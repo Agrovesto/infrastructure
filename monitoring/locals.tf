@@ -48,6 +48,36 @@ locals {
 
   grafana_host = "${var.grafana_subdomain}.${var.domain_name}"
 
+  grafana_github_credentials_set = [
+    var.grafana_github_client_id != "",
+    nonsensitive(var.grafana_github_client_secret != ""),
+  ]
+  grafana_github_configuration_valid = alltrue(local.grafana_github_credentials_set) || !anytrue(local.grafana_github_credentials_set)
+  grafana_github_team_organizations_valid = alltrue([
+    for binding in var.grafana_github_team_roles :
+    contains([for org in var.grafana_github_organizations : lower(org)], lower(binding.organization))
+  ])
+  grafana_github_sso_enabled = alltrue(local.grafana_github_credentials_set)
+  # Grafana evaluates this JMESPath expression against the signed-in user's
+  # GitHub teams. Strict mode denies organization members who are not explicitly
+  # mapped. Sorting guarantees highest-role-wins regardless of input list order.
+  grafana_github_team_roles_by_priority = flatten([
+    for role in ["Admin", "Editor", "Viewer"] : [
+      for binding in var.grafana_github_team_roles : binding if binding.role == role
+    ]
+  ])
+  grafana_github_role_attribute_path = join(" || ", concat(
+    [
+      for binding in local.grafana_github_team_roles_by_priority :
+      "contains(groups[*], '@${binding.organization}/${binding.team_slug}') && '${binding.role}'"
+    ],
+    ["''"],
+  ))
+  grafana_github_parameter_names = {
+    client_id     = "${local.param}/grafana/github-client-id"
+    client_secret = "${local.param}/grafana/github-client-secret"
+  }
+
   # Config files are rendered here, published to SSM and pulled by a small
   # aws-cli init container into each task's EFS volume (see config.tf).
   # Config-fetch command: one parameter per file, written as <mount>/config/<rel>.

@@ -1,0 +1,52 @@
+# Prod account (221434544570): any PR into `main` = checks + plan for prod AND
+# monitoring; any merge/push to `main` = deploy prod, then monitoring (it reads prod's
+# VPC/ALB/zone, so it always goes second).
+name: "Terraform (prod + monitoring)"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel a running prod apply.
+concurrency:
+  group: terraform-prod-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  prod:
+    uses: ./.github/workflows/terraform-pipeline.yml
+    with:
+      stack: prod
+      environment: production
+      sonar_properties: sonar-project-prod.properties
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
+  monitoring:
+    needs: prod
+    uses: ./.github/workflows/terraform-pipeline.yml
+    with:
+      stack: monitoring
+      workspace: monitoring
+      environment: production
+      sonar_properties: sonar-project-monitoring.properties
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+      # Production Grafana is owned by the monitoring stack, so its OAuth App
+      # credentials belong on this job rather than the prod application job.
+      GRAFANA_GITHUB_CLIENT_ID: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+      GRAFANA_GITHUB_CLIENT_SECRET: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}

@@ -358,12 +358,9 @@ variable "sonarqube" {
 
     # --- reaching the UI -----------------------------------------------------
     expose_via_nginx = optional(bool, true)
-    # The scheme of the public URL. http today: nginx on this host terminates
-    # nothing but port 80 and there is no certificate for it (the prod ACM
-    # wildcard cannot be attached to an EC2-hosted nginx). It has to be correct,
-    # not merely plausible — SonarQube builds absolute links from it and rejects
-    # an OAuth redirect whose origin does not match, so GitHub login breaks if
-    # this says http while the browser arrives over https.
+    # Public scheme when GitHub SSO is not configured. A complete set of
+    # sonarqube_github_* credentials adds a Caddy TLS edge and deliberately
+    # overrides this to https, because SonarSource rejects HTTP GitHub callbacks.
     scheme = optional(string, "http")
     # Same shape as logging.allowed_cidrs: empty means 127.0.0.1, i.e. the vhost
     # answers an SSH tunnel and nobody else. Note that this also decides whether
@@ -419,6 +416,61 @@ variable "sonarqube" {
     condition     = !can(regex("['\"]", var.sonarqube.database_password))
     error_message = "sonarqube.database_password must not contain a single or double quote: it is substituted literally into init-dbs.sql."
   }
+}
+
+# GitHub App credentials for SonarQube login. They stay separate from the
+# sonarqube object so the secret values can be marked sensitive and supplied by
+# CI without making the whole (widely-rendered) object sensitive. Leaving all
+# four empty keeps GitHub login disabled and preserves the normal local login.
+# Supplying any of them requires supplying all four; the app registration and
+# callback URL are documented in docs/github-sso.md.
+variable "sonarqube_github_client_id" {
+  description = "Client ID of the GitHub App used for SonarQube authentication; empty disables GitHub SSO"
+  type        = string
+  default     = ""
+}
+
+variable "sonarqube_github_client_secret" {
+  description = "Client secret of the GitHub App used for SonarQube authentication"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "sonarqube_github_app_id" {
+  description = "Numeric App ID of the GitHub App used for SonarQube authentication"
+  type        = string
+  default     = ""
+}
+
+variable "sonarqube_github_private_key" {
+  description = "PEM private key of the GitHub App used for SonarQube authentication"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "sonarqube_github_organizations" {
+  description = "GitHub organizations whose members may log in to SonarQube"
+  type        = list(string)
+  default     = ["Agrovesto"]
+
+  validation {
+    condition     = length(var.sonarqube_github_organizations) > 0 && alltrue([for org in var.sonarqube_github_organizations : can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", org))])
+    error_message = "sonarqube_github_organizations must contain at least one valid GitHub organization login."
+  }
+}
+
+variable "sonarqube_github_allow_sign_up" {
+  description = "Allow an authorized GitHub organization member to be created in SonarQube on first login"
+  type        = bool
+  default     = true
+}
+
+variable "sonarqube_github_synchronize_groups" {
+  description = "Synchronize GitHub teams to existing SonarQube groups named Organization/Team"
+  type        = bool
+  default     = true
 }
 
 # -----------------------------------------------------------------------------
@@ -666,6 +718,70 @@ variable "logging" {
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.logging.grafana_subdomain))
     error_message = "grafana_subdomain must be a single DNS label (lowercase letters, digits and dashes)."
+  }
+}
+
+# The dev Grafana uses a GitHub OAuth App (not the GitHub App used by
+# SonarQube). A GitHub OAuth App has one callback registration, so dev and prod
+# Grafana deliberately have separate credentials. Both values empty means the
+# existing local admin login is the only login method.
+variable "grafana_github_client_id" {
+  description = "Client ID of the GitHub OAuth App used by dev Grafana; empty disables GitHub SSO"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_github_client_secret" {
+  description = "Client secret of the GitHub OAuth App used by dev Grafana"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "grafana_github_organizations" {
+  description = "GitHub organizations whose members may log in to dev Grafana"
+  type        = list(string)
+  default     = ["Agrovesto"]
+
+  validation {
+    condition     = length(var.grafana_github_organizations) > 0 && alltrue([for org in var.grafana_github_organizations : can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", org))])
+    error_message = "grafana_github_organizations must contain at least one valid GitHub organization login."
+  }
+}
+
+variable "grafana_github_allow_sign_up" {
+  description = "Allow an authorized GitHub organization member to be created in dev Grafana on first login"
+  type        = bool
+  default     = true
+}
+
+variable "grafana_github_team_roles" {
+  description = "GitHub team-to-Grafana role mappings; role evaluation always prioritizes Admin, then Editor, then Viewer"
+  type = list(object({
+    organization = optional(string, "Agrovesto")
+    team_slug    = string
+    role         = string
+  }))
+  default = [
+    { team_slug = "infrastructure", role = "Admin" },
+    { team_slug = "team-leads", role = "Editor" },
+    { team_slug = "backend", role = "Viewer" },
+    { team_slug = "frontend", role = "Viewer" },
+    { team_slug = "mobile", role = "Viewer" },
+  ]
+
+  validation {
+    condition = (
+      length(var.grafana_github_team_roles) > 0 &&
+      length(distinct([for binding in var.grafana_github_team_roles : lower("${binding.organization}/${binding.team_slug}")])) == length(var.grafana_github_team_roles) &&
+      alltrue([
+        for binding in var.grafana_github_team_roles :
+        can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", binding.organization)) &&
+        can(regex("^[a-z0-9]([a-z0-9-]{0,98}[a-z0-9])?$", binding.team_slug)) &&
+        contains(["Viewer", "Editor", "Admin"], binding.role)
+      ])
+    )
+    error_message = "grafana_github_team_roles must contain unique organization/team slugs and a Viewer, Editor, or Admin role."
   }
 }
 

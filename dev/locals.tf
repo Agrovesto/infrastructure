@@ -39,7 +39,61 @@ locals {
     subdomain = var.mssql_subdomain
   }
 
-  # Password parameters the host reads at boot (dev/host_config.tf). Spelled as
+  # SSO is opt-in by credentials: all credentials empty keeps the existing local
+  # login; a complete set enables GitHub login. The lifecycle precondition on the
+  # host rejects partial sets before anything is replaced. Comparisons are made
+  # non-sensitive explicitly — only these booleans are exposed, never a secret.
+  sonarqube_github_credentials_set = [
+    var.sonarqube_github_client_id != "",
+    nonsensitive(var.sonarqube_github_client_secret != ""),
+    var.sonarqube_github_app_id != "",
+    nonsensitive(var.sonarqube_github_private_key != ""),
+  ]
+  sonarqube_github_configuration_valid = alltrue(local.sonarqube_github_credentials_set) || !anytrue(local.sonarqube_github_credentials_set)
+  sonarqube_github_sso_enabled         = alltrue(local.sonarqube_github_credentials_set) && var.sonarqube.enabled && var.sonarqube.expose_via_nginx
+
+  grafana_github_credentials_set = [
+    var.grafana_github_client_id != "",
+    nonsensitive(var.grafana_github_client_secret != ""),
+  ]
+  grafana_github_configuration_valid = alltrue(local.grafana_github_credentials_set) || !anytrue(local.grafana_github_credentials_set)
+  grafana_github_team_organizations_valid = alltrue([
+    for binding in var.grafana_github_team_roles :
+    contains([for org in var.grafana_github_organizations : lower(org)], lower(binding.organization))
+  ])
+  grafana_github_sso_enabled = alltrue(local.grafana_github_credentials_set) && var.logging.enabled && var.logging.expose_via_nginx
+  # Grafana evaluates this JMESPath expression against GitHub's /user/teams
+  # response at every login. An unlisted team yields no role and strict mode
+  # rejects the login. Sorting by role here guarantees highest-role-wins even if
+  # callers reorder the input list.
+  grafana_github_team_roles_by_priority = flatten([
+    for role in ["Admin", "Editor", "Viewer"] : [
+      for binding in var.grafana_github_team_roles : binding if binding.role == role
+    ]
+  ])
+  grafana_github_role_attribute_path = join(" || ", concat(
+    [
+      for binding in local.grafana_github_team_roles_by_priority :
+      "contains(groups[*], '@${binding.organization}/${binding.team_slug}') && '${binding.role}'"
+    ],
+    ["''"],
+  ))
+
+  github_sso_proxy_enabled = local.sonarqube_github_sso_enabled || local.grafana_github_sso_enabled
+
+  sonarqube_github_parameter_names = {
+    client_id     = "/${local.name}/sonarqube_github_client_id"
+    client_secret = "/${local.name}/sonarqube_github_client_secret"
+    app_id        = "/${local.name}/sonarqube_github_app_id"
+    private_key   = "/${local.name}/sonarqube_github_private_key"
+  }
+
+  grafana_github_parameter_names = {
+    client_id     = "/${local.name}/grafana_github_client_id"
+    client_secret = "/${local.name}/grafana_github_client_secret"
+  }
+
+  # Secret parameters the host reads at boot (dev/host_config.tf). Spelled as
   # deterministic ARNs so the instance policy does not depend on unknown resource
   # attributes or indexed counts at plan time.
   host_password_param_arns = [
@@ -47,6 +101,12 @@ locals {
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_db_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/redis_password",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_client_id",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_client_secret",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_app_id",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_private_key",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_id",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_secret",
   ]
 
   # ---------------------------------------------------------------------------
@@ -97,11 +157,23 @@ locals {
 
   sonar_fqdn = "${var.sonarqube.subdomain}.${var.domain_name}"
 
+  # GitHub refuses an HTTP SonarQube callback. When credentials are present, the
+  # Caddy edge container obtains and renews a public certificate and this becomes
+  # the canonical URL regardless of the legacy `sonarqube.scheme` value.
+  sonar_public_scheme = local.sonarqube_github_sso_enabled ? "https" : var.sonarqube.scheme
+
   # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
   # container's own address: SonarQube builds absolute links from it and compares
   # OAuth redirect origins against it. When nginx is not serving the vhost there
   # is no public name, so the loopback publish is the only honest answer.
-  sonar_web_baseurl = var.sonarqube.expose_via_nginx ? "${var.sonarqube.scheme}://${local.sonar_fqdn}" : "http://127.0.0.1:${var.sonarqube.host_port}"
+  sonar_web_baseurl = var.sonarqube.expose_via_nginx ? "${local.sonar_public_scheme}://${local.sonar_fqdn}" : "http://127.0.0.1:${var.sonarqube.host_port}"
+
+  sonarqube_runtime = merge(var.sonarqube, {
+    github_sso_enabled        = local.sonarqube_github_sso_enabled
+    github_organizations      = join(",", var.sonarqube_github_organizations)
+    github_allow_sign_up      = var.sonarqube_github_allow_sign_up
+    github_synchronize_groups = var.sonarqube_github_synchronize_groups
+  })
 
   nginx_upstreams = [
     for k, api in var.apis : {
@@ -129,7 +201,10 @@ locals {
   # The collector's own containers are dropped from its own inputs — Loki tailing
   # the logs of the thing that writes its logs is an unbounded loop that ends with
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
-  logging_own_services = ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"]
+  logging_own_services = concat(
+    ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
+    local.github_sso_proxy_enabled ? ["edge"] : [],
+  )
 
   # nginx is always parsed as JSON (its access log format is), plus whatever the
   # caller lists. Rendered as a LogQL/Prometheus regex alternation.
@@ -156,7 +231,39 @@ locals {
     cidrs     = length(var.logging.allowed_cidrs) > 0 ? var.logging.allowed_cidrs : ["127.0.0.1"]
   }
 
-  grafana_fqdn = "${var.logging.grafana_subdomain}.${var.domain_name}"
+  grafana_fqdn          = "${var.logging.grafana_subdomain}.${var.domain_name}"
+  grafana_public_scheme = local.grafana_github_sso_enabled ? "https" : "http"
+
+  logging_runtime = merge(var.logging, {
+    grafana_root_url             = "${local.grafana_public_scheme}://${local.grafana_fqdn}"
+    github_sso_enabled           = local.grafana_github_sso_enabled
+    github_allowed_organizations = join(" ", var.grafana_github_organizations)
+    github_allow_sign_up         = var.grafana_github_allow_sign_up
+    github_role_attribute_path   = local.grafana_github_role_attribute_path
+  })
+
+  # Caddy is a narrow TLS edge in front of the existing nginx router. It only
+  # obtains certificates for SSO-enabled hosts; all source-IP checks remain in
+  # nginx, which restores the client address from Caddy's X-Forwarded-For header.
+  # Certificate state lives on one of the persistent service volumes, so an EC2
+  # replacement does not repeatedly consume ACME issuance limits.
+  github_sso_proxy = {
+    enabled         = local.github_sso_proxy_enabled
+    image           = "caddy:2.11.4-alpine"
+    acme_email      = "tech@agrovesto.com"
+    cpu_limit       = "0.10"
+    memory_limit_mb = 128
+    data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : "${local.logging_root}/caddy"
+    domains = compact([
+      local.sonarqube_github_sso_enabled ? local.sonar_fqdn : "",
+      local.grafana_github_sso_enabled ? local.grafana_fqdn : "",
+    ])
+  }
+
+  caddyfile = local.github_sso_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
+    email   = local.github_sso_proxy.acme_email
+    domains = local.github_sso_proxy.domains
+  }) : ""
 
   loki_config = templatefile("${path.module}/loki-config.yml.tftpl", {
     retention_hours        = local.logging_retention_hours
@@ -206,6 +313,7 @@ locals {
       ["nginx", "mssql", "vault"],
       var.redis.enabled ? ["redis"] : [],
       var.sonarqube.enabled ? ["sonarqube"] : [],
+      local.github_sso_proxy_enabled ? ["edge"] : [],
     )
   })
 
@@ -254,6 +362,12 @@ locals {
         content_type = "text/plain"
       }
     },
+    local.sonarqube_github_sso_enabled ? {
+      "scripts/configure-sonarqube-team-permissions.sh" = {
+        content      = file("${path.module}/configure-sonarqube-team-permissions.sh")
+        content_type = "text/x-shellscript"
+      }
+    } : {},
     var.logging.enabled ? {
       "logging/loki/config.yml" = {
         content      = local.loki_config
@@ -292,6 +406,12 @@ locals {
         content_type = "application/json"
       }
     } : {},
+    local.github_sso_proxy_enabled ? {
+      "edge/Caddyfile" = {
+        content      = local.caddyfile
+        content_type = "text/plain"
+      }
+    } : {},
   )
 
   docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
@@ -299,12 +419,13 @@ locals {
     mssql             = local.mssql
     vault             = var.vault
     redis             = var.redis
-    sonarqube         = var.sonarqube
+    sonarqube         = local.sonarqube_runtime
     sonar_jdbc_url    = local.sonar_jdbc_url
     sonar_web_baseurl = local.sonar_web_baseurl
     backup_bucket     = aws_s3_bucket.backup.bucket
-    logging           = var.logging
+    logging           = local.logging_runtime
     logging_root      = local.logging_root
+    sso_proxy         = local.github_sso_proxy
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {

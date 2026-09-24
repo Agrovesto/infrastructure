@@ -149,6 +149,28 @@ resource "aws_ssm_parameter" "grafana_admin_password" {
   tags = local.tags
 }
 
+resource "aws_ssm_parameter" "grafana_github_client_id" {
+  count = local.grafana_github_sso_enabled ? 1 : 0
+
+  name   = local.grafana_github_parameter_names.client_id
+  type   = "SecureString"
+  value  = var.grafana_github_client_id
+  key_id = "alias/${local.name}-efs"
+
+  tags = local.tags
+}
+
+resource "aws_ssm_parameter" "grafana_github_client_secret" {
+  count = local.grafana_github_sso_enabled ? 1 : 0
+
+  name   = local.grafana_github_parameter_names.client_secret
+  type   = "SecureString"
+  value  = var.grafana_github_client_secret
+  key_id = "alias/${local.name}-efs"
+
+  tags = local.tags
+}
+
 resource "aws_ssm_parameter" "alert_smtp_password" {
   count = nonsensitive(var.alert_smtp_password != "") ? 1 : 0
 

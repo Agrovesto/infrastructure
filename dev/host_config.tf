@@ -12,7 +12,7 @@
 # The bucket is unconditional, unlike the logging volume: the compose project and
 # nginx.conf are delivered through it on every boot, logging stack or not.
 resource "aws_kms_key" "host_passwords" {
-  description         = "${local.name} host passwords in SSM"
+  description         = "${local.name} host passwords and OAuth credentials in SSM"
   enable_key_rotation = true
 
   policy = jsonencode({
@@ -73,6 +73,69 @@ resource "aws_ssm_parameter" "redis_password" {
   name   = "/${local.name}/redis_password"
   type   = "SecureString"
   value  = var.redis.password
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+# GitHub identity-provider credentials follow the same path as every other host
+# secret: Terraform receives them from CI, stores them encrypted in SSM, and the
+# instance fetches them at boot. Only parameter names enter user_data or S3.
+resource "aws_ssm_parameter" "sonarqube_github_client_id" {
+  count = local.sonarqube_github_sso_enabled ? 1 : 0
+
+  name   = local.sonarqube_github_parameter_names.client_id
+  type   = "SecureString"
+  value  = var.sonarqube_github_client_id
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "sonarqube_github_client_secret" {
+  count = local.sonarqube_github_sso_enabled ? 1 : 0
+
+  name   = local.sonarqube_github_parameter_names.client_secret
+  type   = "SecureString"
+  value  = var.sonarqube_github_client_secret
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "sonarqube_github_app_id" {
+  count = local.sonarqube_github_sso_enabled ? 1 : 0
+
+  name   = local.sonarqube_github_parameter_names.app_id
+  type   = "SecureString"
+  value  = var.sonarqube_github_app_id
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "sonarqube_github_private_key" {
+  count = local.sonarqube_github_sso_enabled ? 1 : 0
+
+  name   = local.sonarqube_github_parameter_names.private_key
+  type   = "SecureString"
+  value  = var.sonarqube_github_private_key
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "grafana_github_client_id" {
+  count = local.grafana_github_sso_enabled ? 1 : 0
+
+  name   = local.grafana_github_parameter_names.client_id
+  type   = "SecureString"
+  value  = var.grafana_github_client_id
+  key_id = aws_kms_key.host_passwords.arn
+  tags   = local.tags
+}
+
+resource "aws_ssm_parameter" "grafana_github_client_secret" {
+  count = local.grafana_github_sso_enabled ? 1 : 0
+
+  name   = local.grafana_github_parameter_names.client_secret
+  type   = "SecureString"
+  value  = var.grafana_github_client_secret
   key_id = aws_kms_key.host_passwords.arn
   tags   = local.tags
 }
@@ -143,9 +206,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "host_config" {
 
 # Every value here is already in Terraform state (it is derived from tfvars and
 # module output), so the objects leak nothing the state file does not already
-# hold. What must never land here is a secret: the Grafana admin password and the
-# SA password go into the host's .env from user_data and are not objects.
-# HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
+# hold. What must never land here is a secret: database/admin passwords and the
+# GitHub identity-provider credentials are fetched from SSM at boot and are not
+# objects in this bucket.
 # HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
 
 resource "aws_s3_object" "host_config" {

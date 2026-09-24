@@ -36,7 +36,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 }
 
 # The execution role also pulls the SSM SecureStrings ECS injects as container
-# secrets (the Grafana admin password).
+# secrets (the Grafana admin password and optional GitHub OAuth credentials).
 resource "aws_iam_role_policy" "execution_ssm" {
   name = "${local.name}-execution-ssm"
   role = aws_iam_role.execution.id

@@ -17,9 +17,10 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: agrovesto-nginx
+%{ if !sso_proxy.enabled ~}
     ports:
       - "80:80"
-      - "443:443"
+%{ endif ~}
     volumes:
       - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
@@ -34,6 +35,27 @@ services:
       # SonarQube is listed for that reason only — nginx does proxy to it, and
       # it is the slowest thing on this box to come up.
       - sonarqube
+%{ endif ~}
+%{ if sso_proxy.enabled ~}
+
+  # TLS edge for the GitHub OAuth callbacks. Caddy manages public certificates
+  # automatically and forwards to nginx, which remains the application router
+  # and source-IP authorization edge. Certificate state is on persistent EBS.
+  edge:
+    image: ${sso_proxy.image}
+    container_name: agrovesto-edge
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/agrovesto/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${sso_proxy.data_dir}/data:/data
+      - ${sso_proxy.data_dir}/config:/config
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    cpus: "${sso_proxy.cpu_limit}"
+    mem_limit: ${sso_proxy.memory_limit_mb}M
 %{ endif ~}
 
 %{ for name, api in apis ~}
@@ -180,6 +202,11 @@ services:
       - ${sonarqube.data_dir}/data:/opt/sonarqube/data
       - ${sonarqube.data_dir}/extensions:/opt/sonarqube/extensions
       - ${sonarqube.data_dir}/logs:/opt/sonarqube/logs
+%{ if sonarqube.github_sso_enabled ~}
+      # Generated from SSM SecureStrings at boot (never uploaded to the config
+      # bucket). This is the supported sonar.* property surface for GitHub auth.
+      - /opt/agrovesto/sonarqube/sonar-sso.properties:/opt/sonarqube/conf/sonar.properties:ro
+%{ endif ~}
     healthcheck:
       # Port-level only, and on purpose: the image ships a JDK and bash but no
       # curl or wget, and /api/system/status needs an HTTP client. The same
@@ -271,7 +298,24 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "${logging.grafana_admin_user}"
       GF_SECURITY_ADMIN_PASSWORD: "$${GRAFANA_ADMIN_PASSWORD}"
+      GF_SERVER_ROOT_URL: "${logging.grafana_root_url}"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Viewer"
+%{ if logging.github_sso_enabled ~}
+      GF_AUTH_GITHUB_ENABLED: "true"
+      GF_AUTH_GITHUB_CLIENT_ID: "$${GRAFANA_GITHUB_CLIENT_ID}"
+      GF_AUTH_GITHUB_CLIENT_SECRET: "$${GRAFANA_GITHUB_CLIENT_SECRET}"
+      GF_AUTH_GITHUB_SCOPES: "user:email,read:org"
+      GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS: "${logging.github_allowed_organizations}"
+      GF_AUTH_GITHUB_ALLOW_SIGN_UP: "${logging.github_allow_sign_up}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH: "${logging.github_role_attribute_path}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT: "true"
+      GF_AUTH_GITHUB_SKIP_ORG_ROLE_SYNC: "false"
+      # Admin is an organization role, never unrestricted Grafana server admin.
+      GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN: "false"
+      # Keep the login form as a break-glass path for the local admin account.
+      GF_AUTH_GITHUB_AUTO_LOGIN: "false"
+%{ endif ~}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"

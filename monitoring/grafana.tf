@@ -37,23 +37,54 @@ resource "aws_ecs_task_definition" "grafana" {
       portMappings = [{ name = "http", containerPort = 3000, protocol = "tcp" }]
       mountPoints  = [{ sourceVolume = "data", containerPath = "/var/lib/grafana", readOnly = false }]
 
-      environment = [
-        { name = "GF_SERVER_HTTP_PORT", value = "3000" },
-        { name = "GF_SERVER_ROOT_URL", value = "https://${local.grafana_host}" },
-        { name = "GF_SECURITY_ADMIN_USER", value = var.grafana_admin_user },
-        { name = "GF_USERS_ALLOW_SIGN_UP", value = "false" },
-        { name = "GF_ANALYTICS_REPORTING_ENABLED", value = "false" },
-        { name = "GF_ANALYTICS_CHECK_FOR_UPDATES", value = "false" },
-        { name = "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES", value = "false" },
-        { name = "GF_PATHS_PROVISIONING", value = "/var/lib/grafana/config/provisioning" },
-        { name = "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH", value = "/var/lib/grafana/config/dashboards/platform.json" },
-        { name = "GF_LOG_LEVEL", value = "warn" },
-      ]
+      environment = concat(
+        [
+          { name = "GF_SERVER_HTTP_PORT", value = "3000" },
+          { name = "GF_SERVER_ROOT_URL", value = "https://${local.grafana_host}" },
+          { name = "GF_SECURITY_ADMIN_USER", value = var.grafana_admin_user },
+          { name = "GF_USERS_ALLOW_SIGN_UP", value = "false" },
+          { name = "GF_USERS_AUTO_ASSIGN_ORG_ROLE", value = "Viewer" },
+          { name = "GF_ANALYTICS_REPORTING_ENABLED", value = "false" },
+          { name = "GF_ANALYTICS_CHECK_FOR_UPDATES", value = "false" },
+          { name = "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES", value = "false" },
+          { name = "GF_PATHS_PROVISIONING", value = "/var/lib/grafana/config/provisioning" },
+          { name = "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH", value = "/var/lib/grafana/config/dashboards/platform.json" },
+          { name = "GF_LOG_LEVEL", value = "warn" },
+        ],
+        local.grafana_github_sso_enabled ? [
+          { name = "GF_AUTH_GITHUB_ENABLED", value = "true" },
+          { name = "GF_AUTH_GITHUB_SCOPES", value = "user:email,read:org" },
+          { name = "GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS", value = join(" ", var.grafana_github_organizations) },
+          { name = "GF_AUTH_GITHUB_ALLOW_SIGN_UP", value = tostring(var.grafana_github_allow_sign_up) },
+          { name = "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH", value = local.grafana_github_role_attribute_path },
+          { name = "GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT", value = "true" },
+          { name = "GF_AUTH_GITHUB_SKIP_ORG_ROLE_SYNC", value = "false" },
+          # Admin is an organization role, never unrestricted server admin.
+          { name = "GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN", value = "false" },
+          # Force a new task revision when either SecureString is rotated; ECS
+          # resolves secret values only when a task starts.
+          { name = "GITHUB_OAUTH_CONFIG_VERSION", value = join("-", [tostring(aws_ssm_parameter.grafana_github_client_id[0].version), tostring(aws_ssm_parameter.grafana_github_client_secret[0].version)]) },
+          # Keep the local admin form available as a break-glass login.
+          { name = "GF_AUTH_GITHUB_AUTO_LOGIN", value = "false" },
+        ] : []
+      )
 
-      secrets = [{
-        name      = "GF_SECURITY_ADMIN_PASSWORD"
-        valueFrom = aws_ssm_parameter.grafana_admin_password.arn
-      }]
+      secrets = concat(
+        [{
+          name      = "GF_SECURITY_ADMIN_PASSWORD"
+          valueFrom = aws_ssm_parameter.grafana_admin_password.arn
+        }],
+        local.grafana_github_sso_enabled ? [
+          {
+            name      = "GF_AUTH_GITHUB_CLIENT_ID"
+            valueFrom = aws_ssm_parameter.grafana_github_client_id[0].arn
+          },
+          {
+            name      = "GF_AUTH_GITHUB_CLIENT_SECRET"
+            valueFrom = aws_ssm_parameter.grafana_github_client_secret[0].arn
+          },
+        ] : []
+      )
 
       healthCheck = {
         command     = ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health > /dev/null || exit 1"]
@@ -66,6 +97,18 @@ resource "aws_ecs_task_definition" "grafana" {
       logConfiguration = local.log_config.grafana
     }
   ])
+
+  lifecycle {
+    precondition {
+      condition     = local.grafana_github_configuration_valid
+      error_message = "Grafana GitHub SSO requires both the client ID and client secret, or both must be empty."
+    }
+
+    precondition {
+      condition     = !alltrue(local.grafana_github_credentials_set) || local.grafana_github_team_organizations_valid
+      error_message = "Every production Grafana GitHub team-role organization must also be present in grafana_github_organizations."
+    }
+  }
 
   tags = local.tags
 }
