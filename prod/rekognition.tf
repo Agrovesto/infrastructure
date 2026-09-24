@@ -243,6 +243,7 @@ resource "aws_iam_role_policy" "liveness_guest" {
   })
 }
 
+
 resource "aws_cognito_identity_pool_roles_attachment" "liveness" {
   count            = var.rekognition.liveness_identity_pool ? 1 : 0
   identity_pool_id = aws_cognito_identity_pool.liveness[0].id
@@ -260,12 +261,18 @@ resource "aws_iam_role_policy" "app_rekognition" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Stateless analysis, liveness sessions, video jobs and custom-label
-        # inference. These actions do not support resource-level scoping.
-        Sid    = "Analysis"
+        # Stateless analysis, liveness sessions and video jobs. AWS defines NO
+        # resource types for these actions, so IAM only accepts Resource "*"
+        # (any ARN would silently deny them). Everything that CAN be scoped is
+        # in the statements below.
+        Sid    = "AnalysisNoResourceTypes"
         Effect = "Allow"
         Action = [
-          "rekognition:Detect*",
+          "rekognition:DetectFaces",
+          "rekognition:DetectLabels",
+          "rekognition:DetectModerationLabels",
+          "rekognition:DetectProtectiveEquipment",
+          "rekognition:DetectText",
           "rekognition:CompareFaces",
           "rekognition:RecognizeCelebrities",
           "rekognition:GetCelebrityInfo",
@@ -287,6 +294,18 @@ resource "aws_iam_role_policy" "app_rekognition" {
           "rekognition:DescribeProjectVersions"
         ]
         Resource = "*"
+      },
+      {
+        # Custom Labels inference: scoped to this account's projects/models.
+        Sid    = "CustomLabels"
+        Effect = "Allow"
+        Action = [
+          "rekognition:DetectCustomLabels",
+          "rekognition:DescribeProjectVersions"
+        ]
+        Resource = [
+          "arn:aws:rekognition:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/*"
+        ]
       },
       {
         Sid    = "FaceCollections"

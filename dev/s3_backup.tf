@@ -63,3 +63,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
     }
   }
 }
+
+
+# HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
+resource "aws_s3_bucket_policy" "backup" {
+  bucket = aws_s3_bucket.backup.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureTransport"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.backup.arn, "${aws_s3_bucket.backup.arn}/*"]
+      Condition = { Bool = { "aws:SecureTransport" = "false" } }
+    }]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.backup]
+}

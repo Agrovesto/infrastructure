@@ -483,6 +483,35 @@ run "rekognition" {
   }
 
   assert {
+    condition     = aws_s3_bucket_policy.backup != null && aws_s3_bucket_policy.host_config != null
+    error_message = "The backup and host-config buckets carry an HTTPS-only bucket policy."
+  }
+
+
+  assert {
+    condition = (
+      aws_s3_bucket_acl.access_logs.acl == "log-delivery-write" &&
+      aws_s3_bucket_ownership_controls.access_logs.rule[0].object_ownership == "BucketOwnerPreferred" &&
+      aws_s3_bucket_public_access_block.access_logs.restrict_public_buckets &&
+      aws_s3_bucket_versioning.access_logs.versioning_configuration[0].status == "Enabled" &&
+      one(aws_s3_bucket_server_side_encryption_configuration.access_logs.rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256" &&
+      aws_s3_bucket_lifecycle_configuration.access_logs.rule[0].expiration[0].days == 90 &&
+      aws_s3_bucket_policy.access_logs != null &&
+      startswith(aws_s3_bucket.access_logs.bucket, "${local.name}-s3-access-logs-")
+    )
+    error_message = "The S3 access-log bucket is private, versioned, encrypted, expiring and writable only by S3 log delivery."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_logging.backup.target_prefix == "backup/" &&
+      aws_s3_bucket_logging.host_config.target_prefix == "host-config/" &&
+      aws_s3_bucket_logging.rekognition.target_prefix == "rekognition/"
+    )
+    error_message = "Backup, host-config and Rekognition buckets all send server access logs."
+  }
+
+  assert {
     condition     = startswith(aws_s3_bucket.rekognition.bucket, "${local.name}-rekognition-") && aws_s3_bucket_policy.rekognition != null
     error_message = "The media bucket is account-scoped and TLS-only."
   }

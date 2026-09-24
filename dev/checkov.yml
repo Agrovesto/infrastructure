@@ -18,7 +18,7 @@ skip-check:
   - CKV_AWS_260 # Port 80 open - nginx serves HTTP (add TLS termination later)
   - CKV_AWS_297 # EventBridge schedules use AWS-managed encryption
   - CKV_AWS_382 # Unrestricted egress needed: docker pulls, S3 backups, GitHub
-  - CKV_AWS_18 # S3 access logging would need a second bucket
+  # - CKV_AWS_18 # S3 access logging would need a second bucket
   - CKV2_AWS_11 # VPC flow logs cost extra; enable for prod
   - CKV2_AWS_38 # DNSSEC needs KMS + registrar DS records
   - CKV2_AWS_39 # Route53 query logging costs extra

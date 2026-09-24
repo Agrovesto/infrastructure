@@ -79,6 +79,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "host_config" {
 # module output), so the objects leak nothing the state file does not already
 # hold. What must never land here is a secret: the Grafana admin password and the
 # SA password go into the host's .env from user_data and are not objects.
+# HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
+# HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
+
 resource "aws_s3_object" "host_config" {
   for_each = local.host_config_files
 
@@ -94,4 +97,22 @@ resource "aws_s3_object" "host_config" {
   # Versioning has to exist before the first write, or these keys land as
   # unversioned versions that no history can later prune.
   depends_on = [aws_s3_bucket_versioning.host_config]
+}
+
+
+# HTTPS-only: deny any request made over plain HTTP (Sonar S6249).
+resource "aws_s3_bucket_policy" "host_config" {
+  bucket = aws_s3_bucket.host_config.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureTransport"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.host_config.arn, "${aws_s3_bucket.host_config.arn}/*"]
+      Condition = { Bool = { "aws:SecureTransport" = "false" } }
+    }]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.host_config]
 }

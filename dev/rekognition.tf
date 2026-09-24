@@ -252,19 +252,24 @@ resource "aws_cognito_identity_pool_roles_attachment" "liveness" {
 
 # --- What the application may do ---------------------------------------------
 resource "aws_iam_role_policy" "app_rekognition" {
-  #checkov:skip=CKV_AWS_355: only the "Analysis" statement uses "*": Detect*/CompareFaces/celebrity/liveness/video Start*/Get* have no resource-level permissions in Rekognition; collections, S3, SQS and PassRole are all scoped to ARNs
-  name = "${local.name}-app-rekognition"
+  #checkov:skip=CKV_AWS_355: only the "AnalysisNoResourceTypes" statement uses "*": DetectFaces/Labels/Text/Moderation/PPE, CompareFaces/celebrity/liveness/video Start*/Get* have no resource-level permissions in Rekognition; collections, S3, SQS and PassRole are all scoped to ARNs  name = "${local.name}-app-rekognition"
   role = aws_iam_role.ec2.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        # Stateless analysis, liveness sessions, video jobs and custom-label
-        # inference. These actions do not support resource-level scoping.
-        Sid    = "Analysis"
+        # Stateless analysis, liveness sessions and video jobs. AWS defines NO
+        # resource types for these actions, so IAM only accepts Resource "*"
+        # (any ARN would silently deny them). Everything that CAN be scoped is
+        # in the statements below.
+        Sid    = "AnalysisNoResourceTypes"
         Effect = "Allow"
         Action = [
-          "rekognition:Detect*",
+          "rekognition:DetectFaces",
+          "rekognition:DetectLabels",
+          "rekognition:DetectModerationLabels",
+          "rekognition:DetectProtectiveEquipment",
+          "rekognition:DetectText",
           "rekognition:CompareFaces",
           "rekognition:RecognizeCelebrities",
           "rekognition:GetCelebrityInfo",
@@ -285,7 +290,19 @@ resource "aws_iam_role_policy" "app_rekognition" {
           "rekognition:DescribeProjects",
           "rekognition:DescribeProjectVersions"
         ]
-        Resource = "*"
+        Resource = "*" # NOSONAR: actions above have no resource types (see comment)
+      },
+      {
+        # Custom Labels inference: scoped to this account's projects/models.
+        Sid    = "CustomLabels"
+        Effect = "Allow"
+        Action = [
+          "rekognition:DetectCustomLabels",
+          "rekognition:DescribeProjectVersions"
+        ]
+        Resource = [
+          "arn:aws:rekognition:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/*"
+        ]
       },
       {
         Sid    = "FaceCollections"

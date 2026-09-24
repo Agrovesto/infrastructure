@@ -526,3 +526,9 @@ variable "import_existing" {
   type        = bool
   default     = true
 }
+
+variable "s3_access_log_retention_days" {
+  description = "Days to keep S3 server access logs for the dev buckets"
+  type        = number
+  default     = 90
+}

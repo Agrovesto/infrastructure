@@ -54,7 +54,7 @@ resource "aws_iam_role_policy" "execution_ssm" {
         Sid      = "DecryptConfigParameters"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
-        Resource = [aws_kms_key.monitoring.arn]      
+        Resource = [aws_kms_key.monitoring.arn]
       }
     ]
   })
@@ -90,7 +90,7 @@ resource "aws_iam_role_policy" "task" {
         Sid      = "DecryptConfigParameters"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
-        Resource = [aws_kms_key.monitoring.arn]      
+        Resource = [aws_kms_key.monitoring.arn]
       },
       {
         Sid      = "MountMonitoringVolumes"
@@ -102,7 +102,7 @@ resource "aws_iam_role_policy" "task" {
         Sid      = "UseMonitoringKey"
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey"]
-        Resource = [aws_kms_key.monitoring.arn]      
+        Resource = [aws_kms_key.monitoring.arn]
       },
       {
         # ECS Exec (enable_execute_command) opens a shell through SSM.
