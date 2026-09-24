@@ -25,7 +25,7 @@ jobs:
     uses: ./.github/workflows/terraform-pipeline.yml
     with:
       stack: prod
-      environment: production
+      environment: prod
       sonar_properties: sonar-project-prod.properties
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
@@ -39,10 +39,14 @@ jobs:
     with:
       stack: monitoring
       workspace: monitoring
-      environment: production
+      environment: prod
       sonar_properties: sonar-project-monitoring.properties
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+      # Production Grafana is owned by the monitoring stack, so its OAuth App
+      # credentials belong on this job rather than the prod application job.
+      GRAFANA_GITHUB_CLIENT_ID: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+      GRAFANA_GITHUB_CLIENT_SECRET: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
