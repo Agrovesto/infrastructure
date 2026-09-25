@@ -10,7 +10,7 @@ domain_name = "nomaos.com"
 manage_dns = false
 
 # --- App host ------------------------------------------------------------------
-# t3.large (2 vCPU / 8 GiB): the box runs nginx + 5 API containers + Vault + SQL
+# t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL
 # Server + Redis + SonarQube + the logging stack below, all in one docker compose
 # project. Rough budget at the caps set in this file: SQL Server ~2 GiB, logging
 # ~1.3 GiB, SonarQube up to 3 GiB, Redis ~0.4 GiB, leaving ~1.3 GiB for the five
