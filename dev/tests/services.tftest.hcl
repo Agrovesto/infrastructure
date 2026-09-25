@@ -462,10 +462,10 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.nginx_conf, "real_ip_header X-Forwarded-For"),
       strcontains(local.nginx_conf, "geo $realip_remote_addr $trusted_reverse_proxy"),
       strcontains(local.nginx_conf, "X-Forwarded-Proto $forwarded_proto"),
-      aws_instance.app.user_data_replace_on_change,
+      !aws_instance.app.user_data_replace_on_change,
       strcontains(file("${path.module}/user_data.sh.tftpl"), "sso_credential_versions"),
     ])
-    error_message = "nginx must trust forwarded client data only from Caddy, and SSM credential rotation must replace the host."
+    error_message = "nginx must trust forwarded client data only from Caddy, and the host must not be replaced on user_data changes (config is refreshed via SSM)."
   }
 }
 
