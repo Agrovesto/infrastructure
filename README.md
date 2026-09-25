@@ -86,7 +86,7 @@ The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while
 
 ### Accessing Logs
 - **Prod**: Reachable at `https://grafana.nomaos.com` (IP allowlisted via `grafana_allowed_cidrs`).
-- **Dev**: Reachable at `http://dev-logs.nomaos.com` without SSO, `https://dev-logs.nomaos.com` when GitHub SSO is configured, or via SSH tunnel:
+- **Dev**: Reachable at `http://dev-grafana.nomaos.com` without SSO, `https://dev-grafana.nomaos.com` when GitHub SSO is configured, or via SSH tunnel:
   ```bash
   ssh -N -L 3000:127.0.0.1:3000 -L 3100:127.0.0.1:3100 -L 9090:127.0.0.1:9090 ubuntu@<DEV_EIP>
   ```

@@ -209,7 +209,7 @@ db_size_alarm_enabled = false
 #   # The dev logging stack's Grafana (nginx vhost on the dev host). Without this
 #   # record the UI is still reachable through the SSH tunnel printed by
 #   # `terraform -chdir=../dev output logging_access`.
-#   "dev-logs"                 = "<dev EC2 Elastic IP>"
+#   "dev-grafana"                 = "<dev EC2 Elastic IP>"
 #   # Dev SonarQube. Not dev-prefixed on purpose: sonar.nomaos.com is the name the
 #   # SONAR_HOST_URL secret and the sonar-project-*.properties files use, and it
 #   # is served by nginx on the dev EC2 host (dev/terraform.auto.tfvars ->

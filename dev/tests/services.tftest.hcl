@@ -406,9 +406,9 @@ run "github_sso_uses_https_and_ssm_credentials" {
   assert {
     condition = alltrue([
       local.sonar_web_baseurl == "https://sonar.nomaos.com",
-      local.logging_runtime.grafana_root_url == "https://dev-logs.nomaos.com",
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com",
       strcontains(local.caddyfile, "sonar.nomaos.com"),
-      strcontains(local.caddyfile, "dev-logs.nomaos.com"),
+      strcontains(local.caddyfile, "dev-grafana.nomaos.com"),
       strcontains(local.docker_compose, "container_name: agrovesto-edge"),
       strcontains(local.docker_compose, "80:80"),
       strcontains(local.docker_compose, "443:443"),

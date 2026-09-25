@@ -134,7 +134,7 @@ ecr_images_to_keep       = 3         # tagged images retained per repo
 # Prometheus/cAdvisor/node-exporter carry the metrics. No CloudWatch, no AWS
 # ingestion or per-query charges.
 #
-# Grafana is served by nginx at dev-logs.nomaos.com. The prod stack owns DNS, so
+# Grafana is served by nginx at dev-grafana.nomaos.com. The prod stack owns DNS, so
 # add the A record there (see the extra_a_records block in
 # prod/terraform.auto.tfvars) or leave it tunnel-only.
 logging = {
@@ -156,7 +156,7 @@ logging = {
   # something better here - the file is public like the rest of this repo.
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
-  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
+  # Its callback is https://dev-grafana.nomaos.com/login/github; setup is in
   # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
   # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
   # admin remains available for break-glass use.

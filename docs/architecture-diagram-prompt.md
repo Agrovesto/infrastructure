@@ -185,7 +185,7 @@ Native (non-monitoring) alerts, currently OFF
   — Alloy tailing the docker logs and journald into Loki, Grafana, Prometheus
   with cAdvisor and node-exporter. Same compose project, no CloudWatch Logs or
   Container Insights anywhere in dev. Grafana is the only one of them nginx
-  serves publicly (`dev-logs`, IP-allowlisted); the rest bind 127.0.0.1.
+  serves publicly (`dev-grafana`, IP-allowlisted); the rest bind 127.0.0.1.
 - EventBridge Scheduler keeps cost down: start 08:00, stop 20:00, Monday to
   Friday, Africa/Lagos — roughly 260 running hours a month.
 - ECR repos agrovesto-dev-<svc> ×5 (MUTABLE tags, 3 kept); Amplify hosts two

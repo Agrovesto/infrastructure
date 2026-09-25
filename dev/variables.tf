@@ -634,7 +634,7 @@ variable "logging" {
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
-    grafana_subdomain = optional(string, "dev-logs")
+    grafana_subdomain = optional(string, "dev-grafana")
 
     # Sources allowed to reach the Grafana vhost through nginx. Empty means
     # 127.0.0.1 only — the UI is then reachable over an SSH tunnel and from

@@ -358,7 +358,7 @@ run "nginx_vhost_defaults_to_loopback" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "server_name dev-logs.nomaos.com;")
+    condition     = strcontains(local.nginx_conf, "server_name dev-grafana.nomaos.com;")
     error_message = "Grafana is served from logging.grafana_subdomain through nginx, like every other dev host."
   }
 
@@ -525,7 +525,7 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.nginx_conf, "dev-logs")
+    condition     = !strcontains(local.nginx_conf, "dev-grafana")
     error_message = "No Grafana vhost, so no new listener on port 80."
   }
 
