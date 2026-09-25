@@ -1,0 +1,10 @@
+misconfigurations:
+  - id: AWS-0053
+    paths:
+      - alb.tf
+    statement: The production ALB is the intended public HTTPS ingress.
+  - id: AWS-0132
+    paths:
+      - alb.tf
+      - rekognition.tf
+    statement: The access-log and Rekognition media buckets use SSE-S3 by design.

@@ -2,7 +2,33 @@
 *.tfstate
 *.tfstate.*
 crash.log
+crash.*.log
 override.tf
+override.tf.json
 terraform.tfvars
 .terraform.lock.hcl
-**/.terraform/
+tfplan
+tfplan.txt
+tfplan*
+
+# CI artifacts (written by the Terraform Test & Coverage job)
+test-results.json
+test-stderr.log
+coverage.json
+coverage.md
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc
+
+# Infracost local cost runs (scripts/infracost.sh)
+.infracost/
+
+# SonarScanner working directory (local/CI scanner state, never committed)
+.scannerwork/
+
+
+# bootstrap local state (per account) never goes to git
+bootstrap/*.tfstate*
+terraformer/*
+infrastructure/terraformer/*

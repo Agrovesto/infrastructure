@@ -1,0 +1,39 @@
+# =============================================================================
+# Grafana datasources for the dev host stack
+#
+# Uploaded as the object
+# logging/grafana/provisioning/datasources/datasources.yml in the host config
+# bucket (dev/host_config.tf) and synced to
+# /opt/agrovesto/logging/grafana/provisioning/datasources/datasources.yml, which
+# the container mounts at /etc/grafana/provisioning/datasources.
+#
+# The URLs are docker service names on the compose network, so Grafana reaches
+# Loki and Prometheus without either of them publishing a public port, and the
+# uids are what the provisioned dashboards reference.
+# =============================================================================
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    uid: agrovesto-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    editable: false
+    jsonData:
+      # Ceiling for Explore and the dashboard log panels; raise it here if you
+      # would rather scroll deeper than 1000 lines.
+      maxLines: 1000
+
+  - name: Prometheus
+    uid: agrovesto-prom
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    editable: false
+    jsonData:
+      httpMethod: POST
+      # Matches scrape_interval in prometheus.yml: anything finer is an
+      # evaluation of data that does not exist.
+      timeInterval: ${scrape_interval}s

@@ -1,0 +1,60 @@
+# dev/ — one t3.large (nginx + 5 API containers + Vault + SQL Server + the
+# Loki/Alloy/Grafana/Prometheus logging stack, all in one docker compose project)
+# that an EventBridge Scheduler stops outside working hours, two Amplify
+# frontends, five ECR repos, a backup bucket and a host-config bucket.
+#
+# Amplify, the scheduler and the in-use public IPv4 of the Elastic IP are not in
+# Infracost's price list — they are itemised in infracost-extras.json.
+version: 0.1
+
+resource_type_default_usage:
+  # The scheduler runs the host 08:00-20:00 Mon-Fri (Africa/Lagos), which is
+  # 260 hours a month, not the 730 Infracost assumes. This is the single biggest
+  # correction in this file: at 730 h the instance line would read ~$33 instead
+  # of ~$12.
+  aws_instance:
+    operating_system: linux
+    monthly_hrs: 260
+    monthly_cpu_credit_hrs: 0 # no sustained CPU bursting assumed
+    vcpu_count: 2
+  # gp3 includes 3000 IOPS and 125 MB/s, so no per-request charge; the key only
+  # applies to standard/magnetic volumes.
+  aws_ebs_volume:
+    monthly_standard_io_requests: 0
+
+resource_usage:
+  # 50 GB SQL Server data disk, gp3, encrypted.
+  aws_ebs_volume.mssql:
+    monthly_standard_io_requests: 0
+
+  # 5 API repos (agrovesto-dev-<svc>), ~200 MB of ARM64 images each, keeping the
+  # newest 3 tags.
+  'aws_ecr_repository.apis[*]':
+    storage_gb: 0.2
+
+  # 20 GB gp3 for the log and metric stores (Loki chunks, the Prometheus TSDB,
+  # Grafana's sqlite). The size is read from the resource and gp3's included
+  # 3000 IOPS / 125 MB/s cost nothing, so only the request key is left to set.
+  aws_ebs_volume.logging:
+    monthly_standard_io_requests: 0
+
+  # Ten rendered config files (~40 KB), versioned for a month. The host reads them
+  # once per boot, so the request counts here are the sync plus a few applies.
+  aws_s3_bucket.host_config:
+    object_tags: 0
+    standard:
+      storage_gb: 0.01
+      monthly_tier_1_requests: 200
+      monthly_tier_2_requests: 2000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0
+
+  # SQL Server dumps, versioned with a 14-day expiry.
+  aws_s3_bucket.backup:
+    object_tags: 0
+    standard:
+      storage_gb: 3
+      monthly_tier_1_requests: 10000
+      monthly_tier_2_requests: 200000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0

@@ -1,0 +1,446 @@
+# =============================================================================
+# docker-compose for the dev EC2 host — rendered by Terraform
+#
+# dev/locals.tf feeds this template; the result is uploaded as the object
+# compose/docker-compose.yml in the host config bucket (dev/host_config.tf) and
+# user_data.sh.tftpl syncs it down to /opt/agrovesto/compose/docker-compose.yml
+# at boot. Edit the template, not the file on the host - though an experiment on
+# the host is one `docker compose up -d` away, see dev/README.md.
+#
+# The services after `vault` are the on-host logging & metrics stack (Loki,
+# Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of this
+# compose project on purpose: they share the docker network with the apps, which
+# is how Grafana reaches Loki and how Alloy reaches the docker daemon. No AWS
+# service is involved in any of it.
+# =============================================================================
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: agrovesto-nginx
+%{ if !sso_proxy.enabled ~}
+    ports:
+      - "80:80"
+%{ endif ~}
+    volumes:
+      - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+    depends_on:
+%{ for name, api in apis ~}
+      - ${name}
+%{ endfor ~}
+      - vault
+%{ if sonarqube.enabled ~}
+      # nginx resolves a static proxy_pass hostname at start-up, so a container
+      # that is not up yet makes nginx fail to start rather than answer 502.
+      # SonarQube is listed for that reason only — nginx does proxy to it, and
+      # it is the slowest thing on this box to come up.
+      - sonarqube
+%{ endif ~}
+%{ if sso_proxy.enabled ~}
+
+  # TLS edge for the GitHub OAuth callbacks. Caddy manages public certificates
+  # automatically and forwards to nginx, which remains the application router
+  # and source-IP authorization edge. Certificate state is on persistent EBS.
+  edge:
+    image: ${sso_proxy.image}
+    container_name: agrovesto-edge
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/agrovesto/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${sso_proxy.data_dir}/data:/data
+      - ${sso_proxy.data_dir}/config:/config
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    cpus: "${sso_proxy.cpu_limit}"
+    mem_limit: ${sso_proxy.memory_limit_mb}M
+%{ endif ~}
+
+%{ for name, api in apis ~}
+  ${name}:
+    image: ${api.image}
+    container_name: agrovesto-${name}
+    ports:
+      - "127.0.0.1:${api.host_port}:${api.host_port}"
+    environment:
+%{ for k, v in api.env ~}
+      ${k}: "${v}"
+%{ endfor ~}
+    restart: unless-stopped
+
+%{ endfor ~}
+  mssql:
+    image: ${mssql.image}
+    container_name: agrovesto-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "$${MSSQL_SA_PASSWORD}"
+      MSSQL_PID: "${mssql.pid}"
+    ports:
+      - "127.0.0.1:${mssql.host_port}:1433"
+    volumes:
+      - /data/mssql:/var/opt/mssql
+    restart: unless-stopped
+
+  vault:
+    image: ${vault.image}
+    container_name: agrovesto-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "$${VAULT_DEV_ROOT_TOKEN}"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_ADDR: "http://127.0.0.1:8200"
+    ports:
+      - "127.0.0.1:${vault.host_port}:8200"
+    command: server -dev
+    restart: unless-stopped
+%{ if redis.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Redis: shared cache for the APIs above. Reachable from every container on
+  # this network as redis:6379 (and from the host as 127.0.0.1:${redis.host_port},
+  # which the security group does not open either — redis-cli from a laptop is
+  # an SSH tunnel away, see the redis_access output).
+  #
+  # --maxmemory is the line that matters on this box: SQL Server lives here too,
+  # so a cache that grows without bound is what takes the APIs down. It evicts
+  # instead (allkeys-lru). Switch maxmemory_policy to noeviction the moment an
+  # API stores queues or locks here rather than cache entries — evicting those
+  # silently loses work.
+  # ─────────────────────────────────────────────────────────────────────────
+  redis:
+    image: ${redis.image}
+    container_name: agrovesto-redis
+    command:
+      - redis-server
+      - --maxmemory ${redis.maxmemory_mb}mb
+      - --maxmemory-policy ${redis.maxmemory_policy}
+%{ if redis.persistence ~}
+      - --appendonly yes
+      - --appendfsync everysec
+%{ else ~}
+      - --appendonly no
+      # Two list entries, not one: `- --save ""` would hand redis the literal
+      # four-character string `""` instead of an empty snapshot schedule.
+      - --save
+      - ""
+%{ endif ~}
+%{ if redis.password != "" ~}
+      # Visible in `docker inspect` and in the process list — acceptable while
+      # the port is loopback-only, and the reason to revisit this the moment
+      # Redis is reachable from anywhere else.
+      - --requirepass $${REDIS_PASSWORD}
+%{ endif ~}
+    ports:
+      - "127.0.0.1:${redis.host_port}:6379"
+%{ if redis.persistence ~}
+    volumes:
+      # A bind mount on the root disk, not an EBS volume of its own: this is
+      # dev, the root volume is delete_on_termination, and losing a queue on an
+      # instance replacement is a smaller problem than another volume to manage.
+      - ${redis.data_dir}:/data
+%{ endif ~}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    cpus: "${redis.cpu_limit}"
+    mem_limit: ${redis.memory_limit_mb}M
+%{ endif ~}
+%{ if sonarqube.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SonarQube Community Build — the server the CI pipelines push to
+  # (SONAR_HOST_URL / SONAR_TOKEN, see run-sonar.sh and
+  # sonar-project-*.properties in the repository root).
+  #
+  # Its database is the mssql container above rather than a bundled H2 or a
+  # Postgres of its own: analyses then survive a container rebuild and are
+  # covered by the same nightly S3 backup as every other database on this box.
+  # The CS_AS collation and READ_COMMITTED_SNAPSHOT that SonarSource requires
+  # are set when the database is created (see local.init_sql in dev/locals.tf) —
+  # neither can be changed afterwards without rebuilding the database.
+  #
+  # The caps below are the whole argument about running this here. SonarSource's
+  # own guidance is 4 GB of RAM for a small installation; this is a t3.large
+  # (8 GiB) that also runs SQL Server, five APIs, Vault and the logging stack.
+  # So Elasticsearch gets a 1 GB heap and the container is capped, which means a
+  # heavy analysis makes *this* container slow — or gets it killed by its own
+  # cgroup — instead of letting the kernel OOM-kill SQL Server. Raise
+  # instance_type before raising these numbers.
+  # ─────────────────────────────────────────────────────────────────────────
+  sonarqube:
+    image: ${sonarqube.image}
+    container_name: agrovesto-sonarqube
+    environment:
+      SONAR_JDBC_URL: "${sonar_jdbc_url}"
+      SONAR_JDBC_USERNAME: "${sonarqube.database_username}"
+      # From compose/.env, which user_data fills from SSM at boot — the password
+      # is not rendered into this file, so it never reaches the config bucket.
+      SONAR_JDBC_PASSWORD: "$${SONAR_DB_PASSWORD}"
+      SONAR_ES_JAVA_OPTS: "${sonarqube.es_java_opts}"
+      SONAR_WEB_JAVA_OPTS: "${sonarqube.web_java_opts}"
+      SONAR_CE_JAVA_OPTS: "${sonarqube.ce_java_opts}"
+      SONAR_TELEMETRY_ENABLE: "false"
+      # Must match the public hostname or SonarQube builds wrong links in its
+      # UI and, more importantly, rejects OAuth redirects (GitHub login).
+      SONAR_WEB_BASEURL: "${sonar_web_baseurl}"
+    ports:
+      - "127.0.0.1:${sonarqube.host_port}:9000"
+    volumes:
+      # data/ holds the Elasticsearch indices, extensions/ the installed plugins.
+      # Both on the dedicated volume (dev/sonarqube.tf), which is not
+      # delete_on_termination, so replacing the instance keeps the analyses.
+      # conf/ is deliberately not mounted: the image generates it, and a bind
+      # mount would pin an empty directory over the generated one.
+      - ${sonarqube.data_dir}/data:/opt/sonarqube/data
+      - ${sonarqube.data_dir}/extensions:/opt/sonarqube/extensions
+      - ${sonarqube.data_dir}/logs:/opt/sonarqube/logs
+%{ if sonarqube.github_sso_enabled ~}
+      # Generated from SSM SecureStrings at boot (never uploaded to the config
+      # bucket). This is the supported sonar.* property surface for GitHub auth.
+      - /opt/agrovesto/sonarqube/sonar-sso.properties:/opt/sonarqube/conf/sonar.properties:ro
+%{ endif ~}
+    healthcheck:
+      # Port-level only, and on purpose: the image ships a JDK and bash but no
+      # curl or wget, and /api/system/status needs an HTTP client. The same
+      # trade-off the Loki container above makes. A long start_period because
+      # booting three JVMs on a 1 GB heap takes minutes on this box.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9000' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+    depends_on:
+      # Start order only. On the very first boot this still races the database
+      # bootstrap that user_data runs after `docker compose up`, so SonarQube
+      # exits and the restart policy brings it back once init-dbs.sql has landed.
+      - mssql
+    cpus: "${sonarqube.cpu_limit}"
+    mem_limit: ${sonarqube.memory_limit_mb}M
+%{ endif ~}
+%{ if logging.enabled ~}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Logging & metrics. Every published port is on 127.0.0.1: the security group
+  # has no ingress for them either, so access is `ssh -L` or the Grafana vhost
+  # in nginx.conf. Each container is limited so it cannot starve SQL Server.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Log store: single binary, filesystem storage on the logging volume, its own
+  # retention in config.yml. No image ships a shell or wget, so there is no
+  # health check here — the same trade-off the prod monitoring stack makes.
+  loki:
+    image: ${logging.loki_image}
+    container_name: agrovesto-loki
+    command:
+      - -config.file=/loki/config.yml
+      - -target=all
+    user: "10001"
+    ports:
+      - "127.0.0.1:${logging.loki_port}:3100"
+    volumes:
+      # The whole directory is writable: /loki holds config.yml, the TSDB
+      # chunks, the WAL and the compactor's working files.
+      - ${logging_root}/loki:/loki
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["loki"]}"
+    mem_limit: ${logging.memory_limits_mb["loki"]}M
+
+  # The collector: tails docker logs + journald, parses them, pushes to Loki.
+  # Runs as root: the docker socket has to be writable and the sealed journal
+  # files are only readable by root and the systemd-journal group. Both host
+  # mounts are read-only except the socket. That access is why this stack belongs
+  # on a dev box and why prod ships its logs to the monitoring/ stack instead.
+  alloy:
+    image: ${logging.alloy_image}
+    container_name: agrovesto-alloy
+    user: "0"
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      # 12345: Prometheus scrape + Alloy's debug UI.
+      # 3101: the Loki push API, for an app that would rather send its own logs.
+      - "127.0.0.1:${logging.alloy_port}:12345"
+      - "127.0.0.1:${logging.alloy_push_port}:3101"
+    volumes:
+      - ${logging_root}/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Positions file, so a container restart resumes instead of re-reading.
+      - ${logging_root}/alloy/data:/var/lib/alloy/data
+      # Not :ro — every HTTP request is a write() against the socket, so a
+      # read-only bind mount makes the API unreadable.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    restart: unless-stopped
+    depends_on:
+      - loki
+    cpus: "${logging.cpu_limits["alloy"]}"
+    mem_limit: ${logging.memory_limits_mb["alloy"]}M
+
+  # The UI: Explore for LogQL, the two provisioned dashboards, and the
+  # read-only Prometheus browser. Data is on the logging volume so dashboards
+  # and the admin password survive an instance replacement.
+  grafana:
+    image: ${logging.grafana_image}
+    container_name: agrovesto-grafana
+    user: "472"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${logging.grafana_admin_user}"
+      GF_SECURITY_ADMIN_PASSWORD: "$${GRAFANA_ADMIN_PASSWORD}"
+      GF_SERVER_ROOT_URL: "${logging.grafana_root_url}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Viewer"
+%{ if logging.github_sso_enabled ~}
+      GF_AUTH_GITHUB_ENABLED: "true"
+      GF_AUTH_GITHUB_CLIENT_ID: "$${GRAFANA_GITHUB_CLIENT_ID}"
+      GF_AUTH_GITHUB_CLIENT_SECRET: "$${GRAFANA_GITHUB_CLIENT_SECRET}"
+      GF_AUTH_GITHUB_SCOPES: "user:email,read:org"
+      GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS: "${logging.github_allowed_organizations}"
+      GF_AUTH_GITHUB_ALLOW_SIGN_UP: "${logging.github_allow_sign_up}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH: "${logging.github_role_attribute_path}"
+      GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT: "true"
+      GF_AUTH_GITHUB_SKIP_ORG_ROLE_SYNC: "false"
+      # Admin is an organization role, never unrestricted Grafana server admin.
+      GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN: "false"
+      # Keep the login form as a break-glass path for the local admin account.
+      GF_AUTH_GITHUB_AUTO_LOGIN: "false"
+%{ endif ~}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_FEED_ENABLED: "false"
+      GF_LOG_LEVEL: "warn"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/dev-logs.json"
+    ports:
+      - "127.0.0.1:${logging.grafana_port}:3000"
+    volumes:
+      - ${logging_root}/grafana/data:/var/lib/grafana
+      - ${logging_root}/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${logging_root}/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - prometheus
+    cpus: "${logging.cpu_limits["grafana"]}"
+    mem_limit: ${logging.memory_limits_mb["grafana"]}M
+
+  # Metrics: the box and every container. Retention is bounded twice over - by
+  # age and by bytes - so a busy week cannot fill the logging volume.
+  prometheus:
+    image: ${logging.prometheus_image}
+    container_name: agrovesto-prometheus
+    user: "65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${logging.prometheus_retention}
+      - --storage.tsdb.retention.size=${logging.prometheus_retention_size}
+    ports:
+      - "127.0.0.1:${logging.prometheus_port}:9090"
+    volumes:
+      - ${logging_root}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${logging_root}/prometheus/rules:/etc/prometheus/rules:ro
+      - ${logging_root}/prometheus/data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["prometheus"]}"
+    mem_limit: ${logging.memory_limits_mb["prometheus"]}M
+    depends_on:
+      - alertmanager
+
+  # Routes Prometheus alerts to the dev SNS alerts topic. AWS credentials come
+  # from the instance role through IMDSv2 (hop limit 2, dev/ec2.tf).
+  alertmanager:
+    image: ${logging.alertmanager_image}
+    container_name: agrovesto-alertmanager
+    user: "65534"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:${logging.alertmanager_port}:9093"
+    volumes:
+      - ${logging_root}/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${logging_root}/alertmanager/data:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9093/-/healthy > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "alertmanager", "0.10")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "alertmanager", 64)}M
+
+  # Per-container CPU / memory / network, read from the cgroups.
+  cadvisor:
+    image: ${logging.cadvisor_image}
+    container_name: agrovesto-cadvisor
+    command:
+      - --docker_only=true
+      - --store_container_labels=false
+      - --housekeeping_interval=30s
+      - --max_housekeeping_interval=2m
+      - --event_ttl=10m
+    ports:
+      - "127.0.0.1:${logging.cadvisor_port}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["cadvisor"]}"
+    mem_limit: ${logging.memory_limits_mb["cadvisor"]}M
+
+  # Host metrics: CPU, memory, disk, load, filesystem.
+  node-exporter:
+    image: ${logging.node_exporter_image}
+    container_name: agrovesto-node-exporter
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --web.listen-address=:9100
+      # Host paths node_exporter should not stat (container overlays are noise).
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker)($$|/)
+    ports:
+      - "127.0.0.1:${logging.node_exporter_port}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9100/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    cpus: "${logging.cpu_limits["node-exporter"]}"
+    mem_limit: ${logging.memory_limits_mb["node-exporter"]}M
+%{ endif ~}

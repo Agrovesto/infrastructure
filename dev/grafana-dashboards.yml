@@ -1,0 +1,24 @@
+# =============================================================================
+# Grafana dashboard provisioning for the dev host stack
+#
+# Uploaded as logging/grafana/provisioning/dashboards/dashboards.yml in the host
+# config bucket (dev/host_config.tf) and synced by user_data to
+# /opt/agrovesto/logging/grafana/provisioning/dashboards,
+# mounted into the container. The two JSON files it points at come from the same
+# sync, so a dashboard edit belongs in this repository (dev/grafana/dashboards/)
+# and not in the UI: Grafana re-applies the provisioned files every
+# updateIntervalSeconds and a UI-only change is silently reverted within ~30s.
+# =============================================================================
+apiVersion: 1
+
+providers:
+  - name: agrovesto-dev
+    orgId: 1
+    folder: Agrovesto Dev
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

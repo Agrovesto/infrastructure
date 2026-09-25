@@ -1,0 +1,776 @@
+{
+  "uid": "agrovesto-dev-logs",
+  "title": "Agrovesto dev \u2014 logs",
+  "description": "Application, nginx and journald logs from the dev EC2 host. Tailed by Alloy, stored in Loki; both run on this box.",
+  "tags": [
+    "agrovesto",
+    "dev",
+    "loki",
+    "logs"
+  ],
+  "timezone": "Africa/Lagos",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "agrovesto-loki"
+        },
+        "query": {
+          "query": "label_values({job=\"docker\"}, service)",
+          "refId": "LokiVariableQueryEditor-VariableQuery"
+        },
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "reg": "",
+        "sort": 1,
+        "options": []
+      },
+      {
+        "name": "level",
+        "label": "Line filter",
+        "type": "custom",
+        "description": "Applied as a LogQL line filter (|~).",
+        "query": ".*,(?i)(fail|crit|error),(?i)(warn|fail|crit|error)",
+        "current": {
+          "text": "everything",
+          "value": ".*"
+        },
+        "options": [
+          {
+            "text": "everything",
+            "value": ".*",
+            "selected": true
+          },
+          {
+            "text": "errors only",
+            "value": "(?i)(fail|crit|error)",
+            "selected": false
+          },
+          {
+            "text": "warn and above",
+            "value": "(?i)(warn|fail|crit|error)",
+            "selected": false
+          }
+        ],
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "App log lines (15 min)",
+      "description": "",
+      "id": 1,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({job=\"docker\"} [15m]))",
+          "legendFormat": "lines",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "nginx requests (15 min)",
+      "description": "",
+      "id": 2,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\"} [15m]))",
+          "legendFormat": "requests",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "nginx 5xx (15 min)",
+      "description": "",
+      "id": 3,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\", status=~\"5..\"} [15m]))",
+          "legendFormat": "5xx",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "App errors (15 min)",
+      "description": "",
+      "id": 4,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({job=\"docker\"} | level=~\"(?i)(fail|crit|error)\" [15m]))",
+          "legendFormat": "errors",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Log rate by service",
+      "description": "Lines per second per container. Alloy tails docker's own json-file logs, so no logging driver has to change in the app containers.",
+      "id": 5,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (service) (rate({job=\"docker\", service=~\"$service\"} [$__auto]))",
+          "legendFormat": "{{service}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors and warnings by service",
+      "description": "The level label comes from the ASP.NET Core console prefix (info:/warn:/fail:/crit:) or from the level field of a JSON log line.",
+      "id": 6,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (service, level) (count_over_time({job=\"docker\", service=~\"$service\", level=~\"(?i)(warn|fail|crit|error)\"} [$__auto]))",
+          "legendFormat": "{{service}} {{level}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "nginx requests by status",
+      "description": "",
+      "id": 7,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (status) (count_over_time({component=\"nginx\"} [$__auto]))",
+          "legendFormat": "{{status}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "nginx p95 request time",
+      "description": "Read out of the JSON access log at query time; nothing here is indexed as a label.",
+      "id": 8,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.95, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto])",
+          "legendFormat": "p95",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.5, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto])",
+          "legendFormat": "median",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "journald rate by priority",
+      "description": "sshd, kernel, cloud-init, dockerd and every other systemd unit on the box.",
+      "id": 9,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (priority) (rate({job=\"journal\"} [$__auto]))",
+          "legendFormat": "{{priority}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "App logs",
+      "description": "Add your own filters to the query, e.g. |~ \"(?i)timeout\" or != \"healthcheck\".",
+      "id": 10,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupEnabled": false,
+        "sortOrder": "Descending",
+        "logTimeStyle": "ISO",
+        "tolerance": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "{job=\"docker\", service=~\"$service\"} |~ \"$level\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "nginx access log",
+      "description": "One JSON object per request: status, method, uri, upstream, request_time.",
+      "id": 11,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupEnabled": false,
+        "sortOrder": "Descending",
+        "logTimeStyle": "ISO",
+        "tolerance": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "{component=\"nginx\"}",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "system journal \u2014 err and above",
+      "description": "",
+      "id": 12,
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupEnabled": false,
+        "sortOrder": "Descending",
+        "logTimeStyle": "ISO",
+        "tolerance": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "{job=\"journal\"} | priority=~\"err|crit|alert|emerg\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ]
+    }
+  ]
+}
