@@ -318,7 +318,7 @@ run "retention" {
   }
 
   assert {
-    condition     = strcontains(local.loki_config, "label_selector")
+    condition     = strcontains(local.loki_config, "selector: ")
     error_message = "The shorter per-stream retention (journald, nginx) must be in the config while system_retention_days < loki_retention_days."
   }
 
