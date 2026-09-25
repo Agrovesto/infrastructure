@@ -160,7 +160,9 @@ locals {
   # GitHub refuses an HTTP SonarQube callback. When credentials are present, the
   # Caddy edge container obtains and renews a public certificate and this becomes
   # the canonical URL regardless of the legacy `sonarqube.scheme` value.
-  sonar_public_scheme = local.sonarqube_github_sso_enabled ? "https" : var.sonarqube.scheme
+  # Once Caddy is running (any SSO enabled) it serves HTTPS for every exposed UI,
+  # not only the SSO ones, so the public scheme follows the proxy.
+  sonar_public_scheme = local.github_sso_proxy_enabled && var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? "https" : var.sonarqube.scheme
 
   # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
   # container's own address: SonarQube builds absolute links from it and compares
@@ -232,7 +234,7 @@ locals {
   }
 
   grafana_fqdn          = "${var.logging.grafana_subdomain}.${var.domain_name}"
-  grafana_public_scheme = local.grafana_github_sso_enabled ? "https" : "http"
+  grafana_public_scheme = local.github_sso_proxy_enabled && var.logging.enabled && var.logging.expose_via_nginx ? "https" : "http"
 
   logging_runtime = merge(var.logging, {
     grafana_root_url             = "${local.grafana_public_scheme}://${local.grafana_fqdn}"
@@ -255,8 +257,8 @@ locals {
     memory_limit_mb = 128
     data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : "${local.logging_root}/caddy"
     domains = compact([
-      local.sonarqube_github_sso_enabled ? local.sonar_fqdn : "",
-      local.grafana_github_sso_enabled ? local.grafana_fqdn : "",
+      var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? local.sonar_fqdn : "",
+      var.logging.enabled && var.logging.expose_via_nginx ? local.grafana_fqdn : "",
     ])
   }
 
