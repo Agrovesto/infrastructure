@@ -15,7 +15,8 @@
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
             "repo:Agrovesto@101108012/infrastructure@1360104538:ref:refs/heads/main",
-            "repo:Agrovesto@101108012/infrastructure@1360104538:pull_request"
+            "repo:Agrovesto@101108012/infrastructure@1360104538:pull_request",
+            "repo:Agrovesto@101108012/infrastructure@1360104538:environment:production"
           ]
         }
       }
