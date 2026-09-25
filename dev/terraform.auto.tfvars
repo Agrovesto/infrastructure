@@ -54,7 +54,7 @@ amplify_apps = {
 # ASP.NET terms this is what goes into
 # ConnectionStrings:Redis / IConnectionMultiplexer.Connect("redis:6379").
 apis = {
-    nomaos = {
+  nomaos = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5001
     subdomain = "noma-api"

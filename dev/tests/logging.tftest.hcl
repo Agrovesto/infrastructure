@@ -57,9 +57,9 @@ variables {
 
   apis = {
     nomaos = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5000
-    subdomain = "noma-wallet-api"
+      image     = "public.ecr.aws/nginx/nginx:alpine"
+      host_port = 5000
+      subdomain = "noma-wallet-api"
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
