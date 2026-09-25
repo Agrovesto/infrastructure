@@ -1,21 +1,21 @@
-# =============================================================================
-# Grafana Alloy — the collector on the dev EC2 host
-#
-# Rendered by Terraform (dev/locals.tf), uploaded as the object
-# logging/alloy/config.alloy in the host config bucket (dev/host_config.tf) and
-# synced by user_data to /opt/agrovesto/logging/alloy/config.alloy on every boot.
-#
-# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
-# Iterate there instead - `docker compose restart alloy` after editing the file
-# makes a change visible without a Terraform run, and apply makes it final.
-#
-# Three inputs, one output:
-#
-#   docker containers (the 5 APIs, Vault, SQL Server, nginx access log)
-#   journald         (sshd, kernel, cloud-init, unit failures)
-#   Loki push API    (an app that logs straight to Alloy, port ${push_port})
-#                            -> loki.process -> Loki on 127.0.0.1:3100
-# =============================================================================
+// =============================================================================
+// Grafana Alloy — the collector on the dev EC2 host
+//
+// Rendered by Terraform (dev/locals.tf), uploaded as the object
+// logging/alloy/config.alloy in the host config bucket (dev/host_config.tf) and
+// synced by user_data to /opt/agrovesto/logging/alloy/config.alloy on every boot.
+//
+// Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+// Iterate there instead - `docker compose restart alloy` after editing the file
+// makes a change visible without a Terraform run, and apply makes it final.
+//
+// Three inputs, one output:
+//
+//   docker containers (the 5 APIs, Vault, SQL Server, nginx access log)
+//   journald         (sshd, kernel, cloud-init, unit failures)
+//   Loki push API    (an app that logs straight to Alloy, port ${push_port})
+//                            -> loki.process -> Loki on 127.0.0.1:3100
+// =============================================================================
 
 logging {
   level = "warn"
@@ -134,19 +134,19 @@ loki.process "lines" {
 
     stage.json {
       expressions = {
-        component = "component"
-        level     = "level"
-        status    = "status"
-        method    = "method"
+        component = "component",
+        level     = "level",
+        status    = "status",
+        method    = "method",
       }
     }
 
     stage.labels {
       values = {
-        component = ""
-        level     = ""
-        status    = ""
-        method    = ""
+        component = "",
+        level     = "",
+        status    = "",
+        method    = "",
       }
     }
   }

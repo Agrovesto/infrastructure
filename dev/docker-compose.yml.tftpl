@@ -403,7 +403,6 @@ services:
       - --store_container_labels=false
       - --housekeeping_interval=30s
       - --max_housekeeping_interval=2m
-      - --event_ttl=10m
     ports:
       - "127.0.0.1:${logging.cadvisor_port}:8080"
     volumes:
