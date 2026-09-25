@@ -447,11 +447,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    environment: ${{ inputs.environment }}
     env:
       TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
     needs: [terraform-plan, infracost, git-metadata]
     if: inputs.deploy && github.event_name == 'push' && needs.terraform-plan.outputs.changes == 'true'
-    environment: ${{ inputs.environment }}
     runs-on: ubuntu-latest
     defaults:
       run:
