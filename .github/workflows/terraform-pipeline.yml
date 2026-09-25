@@ -317,6 +317,7 @@ jobs:
       contents: read
       id-token: write
       pull-requests: write
+    environment: ${{inputs.environment}}
     env:
       TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
     needs: [security-scan, terraform-test, sonarqube]
