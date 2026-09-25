@@ -1,0 +1,47 @@
+# Cost configuration for every Terraform stack in this repository.
+#
+#   ./scripts/infracost.sh                     # all four projects, one report
+#   infracost breakdown --config-file infracost.yml --show-skipped
+#
+# There are four separate Terraform roots and two AWS accounts (dev
+# 353833416626, prod 221434544570). The monitoring stack lives in the prod
+# account, but it is its own root, its own state workspace and its own project
+# here so its lines can be read — and removed — independently.
+#
+# `.auto.tfvars` files are loaded automatically by Infracost, the same way
+# Terraform loads them, so only two kinds of variable appear below: the one
+# secret that has no value anywhere in the repo, and the one flag that has to be
+# pinned for the numbers to be right.
+#
+# Usage-based charges (storage, log ingestion, LCU-hours, GB through NAT, ...)
+# come from infracost-usage/*.yml. Anything Infracost cannot price at all —
+# Fargate batch tasks, Cloud Map, public IPv4, egress, Amplify, SES — is
+# itemised in infracost-extras.json and added by scripts/infracost.sh, so the
+# report has no silent gaps. See docs/infracost.md.
+version: 0.1
+
+projects:
+  - path: bootstrap
+    name: bootstrap (prod account - state bucket + GitHub OIDC deploy role)
+    usage_file: infracost-usage/bootstrap.yml
+
+  - path: dev
+    name: dev (353833416626 - EC2 host, Amplify, ECR)
+    terraform_vars:
+      mssql_sa_password: cost-estimate-placeholder # no value is committed anywhere
+    usage_file: infracost-usage/dev.yml
+
+  - path: prod
+    name: prod app (221434544570 - ECS, RDS, ALB, NAT)
+    usage_file: infracost-usage/prod.yml
+
+  - path: monitoring
+    name: monitoring (prod account - OSS observability stack)
+    terraform_vars:
+      # Pinned to on-demand on purpose. `launch_type` is
+      # `var.use_fargate_spot ? null : "FARGATE"`, and Infracost only prices an
+      # `aws_ecs_service` whose launch_type is FARGATE — flipping this to true
+      # in the tfvars would silently drop ~$81/month of Fargate cost out of the
+      # report instead of showing the spot discount.
+      use_fargate_spot: false
+    usage_file: infracost-usage/monitoring.yml

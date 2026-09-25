@@ -1,0 +1,30 @@
+{
+  # Caddy obtains and renews public certificates automatically. Its /data and
+  # /config directories are mounted from a persistent encrypted EBS volume.
+  email ${email}
+  admin off
+
+  # Only the SSO hosts move to HTTPS. The other dev API vhosts retain their
+  # current HTTP behaviour through the catch-all below.
+  auto_https disable_redirects
+}
+
+:80 {
+  @sso_hosts host ${join(" ", domains)}
+  redir @sso_hosts https://{host}{uri} 308
+
+  reverse_proxy nginx:80
+}
+
+${join(", ", domains)} {
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+
+  # nginx remains the only application router and source-IP authorization edge.
+  # Caddy supplies X-Forwarded-For/Host/Proto automatically.
+  reverse_proxy nginx:80
+}

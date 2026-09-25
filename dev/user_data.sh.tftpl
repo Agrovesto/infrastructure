@@ -1,0 +1,339 @@
+#!/bin/bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get upgrade -y -o Dpkg::Options::=--force-confold
+apt-get install -y docker.io git xfsprogs curl
+apt-get install -y unzip
+curl -sSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
+systemctl enable --now docker
+usermod -aG docker ubuntu
+
+# Container logs are bounded at the daemon level: json-file with rotation keeps
+# ${logging.docker_log_max_files} x ${logging.docker_log_max_size} per container, so an app that
+# logs hard cannot fill the root volume. The collector on this host reads exactly
+# those files, which is why no service needs a logging driver of its own.
+mkdir -p /etc/docker
+cat >/etc/docker/daemon.json <<'DAEMON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "${logging.docker_log_max_size}",
+    "max-file": "${logging.docker_log_max_files}"
+  }
+}
+DAEMON
+systemctl restart docker
+
+# No CloudWatch agent and no CloudWatch Logs: collecting, storing and querying
+# logs all happen on this host (dev/logging.tf, docker-compose.yml.tftpl).
+
+# Docker Compose plugin
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+%{ if sonarqube.enabled ~}
+
+# -----------------------------------------------------------------------------
+# Kernel limits for SonarQube's embedded Elasticsearch
+#
+# Elasticsearch refuses to start unless the host can map enough virtual memory
+# areas: it is a hard bootstrap check, not a warning, and Ubuntu's default
+# (65530) is below the 262144 it wants. Written to /etc/sysctl.d rather than a
+# bare `sysctl -w` so it survives a reboot, then applied immediately so the
+# `docker compose up` further down this script can succeed on the first boot.
+#
+# These are host-wide. There is no per-container vm.max_map_count, which is one
+# of the reasons SonarQube is a heavier neighbour on this box than anything else
+# in the compose project: tuning for it tunes the whole host.
+# -----------------------------------------------------------------------------
+cat >/etc/sysctl.d/99-agrovesto-sonarqube.conf <<'SYSCTL'
+vm.max_map_count = ${sonarqube.vm_max_map_count}
+fs.file-max = ${sonarqube.fs_file_max}
+SYSCTL
+sysctl --system >/dev/null
+%{ endif ~}
+
+# -----------------------------------------------------------------------------
+# Data disks
+#
+# format_and_mount <mount-point> <device> [device...] waits for the first device
+# that shows up, builds an XFS filesystem only when the disk is raw, and records
+# it in fstab by UUID. Re-running it never destroys existing data, which is what
+# makes replacing the instance survivable: both volumes outlive it.
+#
+# NVMe naming on Nitro: the root disk is nvme0n1, then the EBS volumes in
+# attachment order (mssql, then logging) — /dev/sdf and friends are the
+# Xen-compatible names, so both spellings are probed.
+# -----------------------------------------------------------------------------
+format_and_mount() {
+  local mountpoint="$1"
+  shift
+
+  local dev=""
+  local i cand
+  for i in $(seq 1 30); do
+    for cand in "$@"; do
+      if [ -b "$cand" ]; then
+        dev="$cand"
+        break 2
+      fi
+    done
+    sleep 5
+  done
+
+  if [ -z "$dev" ]; then
+    echo "WARN: no volume attached for $mountpoint (looked for: $*)" >&2
+    return 1
+  fi
+
+  blkid "$dev" >/dev/null 2>&1 || mkfs.xfs -f "$dev"
+  mkdir -p "$mountpoint"
+
+  local uuid
+  uuid=$(blkid -s UUID -o value "$dev")
+  grep -q "$uuid" /etc/fstab || echo "UUID=$uuid $mountpoint xfs defaults,nofail 0 2" >>/etc/fstab
+  mount -a
+}
+
+format_and_mount /data/mssql "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${mssql_volume_id}" /dev/xvdf
+chown -R 10001:0 /data/mssql || true
+%{ if logging.enabled ~}
+
+# The journal has to be persistent for the collector to read it from a container:
+# a cloud image keeps it in /run (RAM) by default, so a reboot loses the boot log.
+mkdir -p /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/agrovesto.conf <<'JOURNALD'
+[Journal]
+Storage=persistent
+SystemMaxUse=${logging.journal_max_use}
+JOURNALD
+mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal || true
+systemctl restart systemd-journald
+journalctl --flush || true
+
+# Loki's chunks, the Prometheus TSDB and Grafana's sqlite live here, so a
+# replacement of the instance does not throw away the logs already in.
+format_and_mount "${logging_root}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${logging_volume_id}" /dev/xvdg
+%{ endif ~}
+%{ if sonarqube.enabled ~}
+
+# SonarQube: Elasticsearch's indices, installed plugins and logs. Its own volume
+# for the same two reasons as the ones above — it is not delete_on_termination, so
+# replacing the instance keeps the analyses already run, and an analysis is a
+# burst of heavy index I/O that should not share a disk with SQL Server's data
+# files. uid 1000 is what the sonarqube image runs as, and Elasticsearch refuses
+# to run as root, so the mount has to be handed over before compose starts.
+format_and_mount "${sonarqube.data_dir}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${sonarqube_volume_id}" /dev/xvdh
+mkdir -p "${sonarqube.data_dir}"/{data,extensions,logs}
+chown -R 1000:1000 "${sonarqube.data_dir}"
+%{ endif ~}
+%{ if sso_proxy.enabled ~}
+
+# Caddy's ACME account, certificates and renewal state must outlive the root
+# volume. The selected directory is on the SonarQube or logging EBS volume.
+mkdir -p "${sso_proxy.data_dir}"/{data,config}
+chown -R 1000:1000 "${sso_proxy.data_dir}"
+chmod 700 "${sso_proxy.data_dir}" "${sso_proxy.data_dir}"/{data,config}
+%{ endif ~}
+%{ if redis.enabled && redis.persistence ~}
+
+# Redis persistence lives on the root disk, not a volume of its own: this is dev,
+# the root volume is delete_on_termination, and losing a queue on an instance
+# replacement is a smaller problem than another volume to attach and monitor.
+# uid 999 is the `redis` user the official image drops privileges to.
+mkdir -p "${redis.data_dir}"
+chown -R 999:999 "${redis.data_dir}"
+%{ endif ~}
+
+# -----------------------------------------------------------------------------
+# Host config
+#
+# Every rendered file this box needs is one object per file in this stack's config
+# bucket (dev/host_config.tf): the compose project, nginx.conf, the SQL bootstrap
+# and, when logging is on, the collectors' configs and Grafana's provisioning.
+#
+# They are pulled rather than inlined because EC2 caps instance user data at 16 KB
+# and the compose file outgrows that on its own once the logging stack is in it —
+# the side benefit is that none of it lands in instance metadata. Object keys are
+# the paths on disk, so one sync lays out /opt/agrovesto.
+# -----------------------------------------------------------------------------
+mkdir -p /opt/agrovesto
+aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}" --only-show-errors
+
+cat >/etc/systemd/system/agrovesto-sync.service <<'UNIT'
+[Unit]
+Description=Refresh host configuration and start Agrovesto containers
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+ConditionPathExists=/opt/agrovesto/compose/docker-compose.yml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
+ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable agrovesto-sync.service
+test -s /opt/agrovesto/compose/docker-compose.yml || {
+  echo "FATAL: host config did not sync from s3://${host_config_bucket}" >&2
+  exit 1
+}
+%{ if sonarqube.github_sso_enabled ~}
+chmod 700 /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
+%{ endif ~}
+%{ if logging.enabled ~}
+
+# Every directory a compose bind mount points at, so docker never has to create
+# one as root:config.yml lands in loki/, the WAL and TSDB next to it; alloy/ holds
+# config.alloy plus its positions/state; the grafana/ tree is what the container
+# mounts read-only except for its sqlite data dir.
+mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+
+# The images run as their own users, and a bind mount keeps host ownership, so
+# each store has to be handed to the uid its image drops to.
+chown -R 10001:10001 "${logging_root}/loki"
+chown -R 65534:65534 "${logging_root}/prometheus" "${logging_root}/alertmanager"
+chown -R 472:472 "${logging_root}/grafana"
+%{ endif ~}
+
+# Passwords are fetched from SSM at boot, never embedded in instance user data.
+# Including only these non-secret SSM versions makes credential rotation replace
+# the immutable host and therefore re-fetch the new values: ${join(",", sso_credential_versions)}
+mkdir -p /opt/agrovesto/{compose,scripts}
+SA_PW=$(aws ssm get-parameter --with-decryption --name "${mssql_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+{
+printf 'MSSQL_SA_PASSWORD=%s\n' "$SA_PW"
+printf 'VAULT_DEV_ROOT_TOKEN=%s\n' "$(openssl rand -hex 32)"
+printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\n' "${backup_bucket}" "${aws_region}"
+%{ if logging.enabled ~}
+GRAFANA_PW=$(aws ssm get-parameter --with-decryption --name "${grafana_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_PW"
+%{ endif ~}
+%{ if logging.github_sso_enabled ~}
+GRAFANA_GITHUB_CLIENT_ID=$(aws ssm get-parameter --with-decryption --name "${grafana_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+GRAFANA_GITHUB_CLIENT_SECRET=$(aws ssm get-parameter --with-decryption --name "${grafana_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'GRAFANA_GITHUB_CLIENT_ID=%s\n' "$GRAFANA_GITHUB_CLIENT_ID"
+printf 'GRAFANA_GITHUB_CLIENT_SECRET=%s\n' "$GRAFANA_GITHUB_CLIENT_SECRET"
+%{ endif ~}
+%{ if sonarqube.enabled ~}
+SONAR_DB_PW=$(aws ssm get-parameter --with-decryption --name "${sonarqube_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'SONAR_DB_PASSWORD=%s\n' "$SONAR_DB_PW"
+%{ endif ~}
+%{ if redis_parameter != "" ~}
+REDIS_PW=$(aws ssm get-parameter --with-decryption --name "${redis_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'REDIS_PASSWORD=%s\n' "$REDIS_PW"
+%{ endif ~}
+} >/opt/agrovesto/compose/.env
+chmod 600 /opt/agrovesto/compose/.env
+%{ if sonarqube.github_sso_enabled ~}
+
+# SonarQube's GitHub App configuration is a generated local file rather than an
+# S3 object or user_data literal. Java-properties escaping preserves the PEM's
+# newlines, and uid 1000 is the only non-root user allowed to read the result.
+export SONAR_GITHUB_CLIENT_ID
+export SONAR_GITHUB_CLIENT_SECRET
+export SONAR_GITHUB_APP_ID
+export SONAR_GITHUB_PRIVATE_KEY
+SONAR_GITHUB_CLIENT_ID=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_CLIENT_SECRET=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_APP_ID=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.app_id}" --query Parameter.Value --output text --region "${aws_region}")
+SONAR_GITHUB_PRIVATE_KEY=$(aws ssm get-parameter --with-decryption --name "${sonarqube_github_parameters.private_key}" --query Parameter.Value --output text --region "${aws_region}")
+
+mkdir -p /opt/agrovesto/sonarqube
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+
+def java_property(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
+
+
+properties = {
+    "sonar.auth.github.enabled": "true",
+    "sonar.auth.github.clientId.secured": os.environ["SONAR_GITHUB_CLIENT_ID"],
+    "sonar.auth.github.clientSecret.secured": os.environ["SONAR_GITHUB_CLIENT_SECRET"],
+    "sonar.auth.github.appId": os.environ["SONAR_GITHUB_APP_ID"],
+    "sonar.auth.github.privateKey.secured": os.environ["SONAR_GITHUB_PRIVATE_KEY"],
+    "sonar.auth.github.allowUsersToSignUp": "${sonarqube.github_allow_sign_up}",
+    "sonar.auth.github.groupsSync": "${sonarqube.github_synchronize_groups}",
+    "sonar.auth.github.apiUrl": "https://api.github.com/",
+    "sonar.auth.github.webUrl": "https://github.com/",
+    "sonar.auth.github.organizations": "${sonarqube.github_organizations}",
+}
+path = Path("/opt/agrovesto/sonarqube/sonar-sso.properties")
+path.write_text("".join(f"{key}={java_property(value)}\n" for key, value in properties.items()))
+PY
+chown 1000:1000 /opt/agrovesto/sonarqube/sonar-sso.properties
+chmod 600 /opt/agrovesto/sonarqube/sonar-sso.properties
+%{ endif ~}
+unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW \
+  GRAFANA_GITHUB_CLIENT_ID GRAFANA_GITHUB_CLIENT_SECRET \
+  SONAR_GITHUB_CLIENT_ID SONAR_GITHUB_CLIENT_SECRET SONAR_GITHUB_APP_ID SONAR_GITHUB_PRIVATE_KEY
+
+# One-shot database bootstrap; compose has no init container of its own.
+cat >/opt/agrovesto/scripts/init-mssql.sh <<'INIT'
+#!/bin/bash
+set -euo pipefail
+# Re-runnable by hand, and reads the same .env compose does, so the SonarQube
+# login password is not something anyone has to supply on a command line (where
+# it would land in shell history and in the process list).
+set -a; . /opt/agrovesto/compose/.env; set +a
+until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; do
+  sleep 5
+done
+# -v substitutes $(sonar_db_password) inside the script. That is how CREATE LOGIN
+# gets its password without the password ever being written into the file:
+# init-dbs.sql is an object in the config bucket, which must stay secret-free.
+/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+  -v sonar_db_password="$${SONAR_DB_PASSWORD:-}" \
+  -i /scripts/init-dbs.sql
+INIT
+chmod +x /opt/agrovesto/scripts/init-mssql.sh
+
+# Daily backup to S3 (the bucket itself is Terraform's; see dev/s3_backup.tf).
+cat >/opt/agrovesto/scripts/backup-mssql.sh <<'BKP'
+#!/bin/bash
+set -euo pipefail
+source /opt/agrovesto/compose/.env
+STAMP=$(date +%Y%m%d-%H%M)
+mkdir -p /data/mssql/backups
+mkdir -p /data/mssql/backup
+# Backup each DB via sqlcmd inside the mssql container
+for db in ${db_list}; do
+  docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+    -Q "BACKUP DATABASE [$db] TO DISK = N'/var/opt/mssql/backup/$db-$STAMP.bak' WITH COMPRESSION, INIT"
+done
+aws s3 sync /data/mssql/backup "s3://$BACKUP_BUCKET/mssql/$STAMP/" --region "$AWS_REGION"
+find /data/mssql/backup -type f -mtime +3 -delete || true
+BKP
+chmod +x /opt/agrovesto/scripts/backup-mssql.sh
+echo "0 2 * * * root /opt/agrovesto/scripts/backup-mssql.sh >> /var/log/mssql-backup.log 2>&1" >/etc/cron.d/mssql-backup
+
+cd /opt/agrovesto/compose
+# Authenticate to this account's ECR so compose can pull the agrovesto-dev-* API images
+aws ecr get-login-password --region "${aws_region}" \
+| docker login --username AWS --password-stdin "${ecr_registry}"
+docker compose up -d
+
+# wait then init DBs
+sleep 40
+docker exec agrovesto-mssql bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; do sleep 5; done'
+docker cp /opt/agrovesto/scripts/init-dbs.sql agrovesto-mssql:/tmp/init-dbs.sql
+
+# SonarQube's login password is substituted into the script by `sqlcmd -v`, so it
+# has to be handed to the container for this one call. It is read back from .env
+# rather than kept in this script's environment, which the `unset` above cleared.
+set -a; . /opt/agrovesto/compose/.env; set +a
+docker exec -e SONAR_DB_PW="$${SONAR_DB_PASSWORD:-}" agrovesto-mssql \
+  bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -v sonar_db_password="$SONAR_DB_PW" -i /tmp/init-dbs.sql' \
+  || echo "WARN: init-dbs.sql did not complete cleanly (check the sonar database and login); re-run /opt/agrovesto/scripts/init-mssql.sh" >&2
+unset SONAR_DB_PASSWORD MSSQL_SA_PASSWORD GRAFANA_ADMIN_PASSWORD VAULT_DEV_ROOT_TOKEN REDIS_PASSWORD

@@ -1,0 +1,480 @@
+# =============================================================================
+# Reusable Terraform pipeline for ONE stack. Called by dev.yml, prod.yml and
+# devops.yml. Copy this whole folder into .github/workflows/.
+#
+# Pull request : metadata -> scans (Checkov, Trivy) -> test+coverage ->
+#                SonarQube -> Infracost -> fmt / validate / plan / diff (PR comment)
+# Push         : same checks, then plan + apply (only when inputs.deploy is true)
+# =============================================================================
+name: terraform-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      stack:
+        description: "Terraform root directory (dev | prod | monitoring)"
+        type: string
+        required: true
+      environment:
+        description: "GitHub Environment for the apply job (add required reviewers on it for prod)"
+        type: string
+        required: true
+      role_secret:
+        description: "Name of the repo secret holding the OIDC deploy role ARN"
+        type: string
+        default: ""
+      deploy:
+        description: "Run plan/apply against AWS. false = checks only (devops playground)"
+        type: boolean
+        default: true
+      workspace:
+        description: "Terraform workspace (monitoring shares prod's state key under workspace 'monitoring')"
+        type: string
+        default: "default"
+      coverage_fail_under:
+        type: string
+        default: "95"
+      sonar_properties:
+        type: string
+        required: true
+    secrets:
+      AWS_ROLE_ARN:
+        required: false
+      TF_VAR_MSSQL_SA_PASSWORD:
+        required: false
+      SONAR_TOKEN:
+        required: false
+      SONAR_HOST_URL:
+        required: false
+      INFRACOST_API_KEY:
+        required: false
+      GRAFANA_GITHUB_CLIENT_ID:
+        required: false
+      GRAFANA_GITHUB_CLIENT_SECRET:
+        required: false
+      SONARQUBE_GITHUB_CLIENT_ID:
+        required: false
+      SONARQUBE_GITHUB_CLIENT_SECRET:
+        required: false
+      SONARQUBE_GITHUB_APP_ID:
+        required: false
+      SONARQUBE_GITHUB_PRIVATE_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  TF_VERSION: "1.10.5"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  # Only dev needs it; empty elsewhere (unused variables are ignored).
+  TF_VAR_mssql_sa_password: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Git metadata: who raised the PR / pushed, and which commits are in it
+  # ---------------------------------------------------------------------------
+  git-metadata:
+    name: "Git metadata (${{ inputs.stack }})"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Print metadata
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSHER: ${{ github.event.pusher.name }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            RANGE="$PR_BASE_SHA..$PR_HEAD_SHA"
+          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="$PUSH_BEFORE..$SHA"
+          else
+            RANGE="-1 $SHA"
+          fi
+          # Merge commit that produced this push (if any)
+          MERGE=$(git log -1 --merges --format='%h %s (%an)' "$SHA" -- 2>/dev/null | head -1)
+
+          {
+            echo "## Git metadata: \`${{ inputs.stack }}\`"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Event | \`$EVENT\` |"
+            echo "| Triggered by | @$ACTOR |"
+            if [ "$EVENT" = "pull_request" ]; then
+              echo "| PR | #$PR_NUMBER: $PR_TITLE |"
+              echo "| Raised by | @$PR_AUTHOR |"
+              echo "| Branches | \`$PR_HEAD\` -> \`$PR_BASE\` |"
+            else
+              echo "| Branch | \`$REF\` |"
+              echo "| Pushed by | ${PUSHER:-$ACTOR} |"
+              echo "| Merge commit | ${MERGE:-none (direct push)} |"
+            fi
+            echo "| Head commit | \`$SHA\` |"
+            echo ""
+            echo "### Commits"
+            echo ""
+            echo "| SHA | Author | Date | Message |"
+            echo "| --- | --- | --- | --- |"
+            # shellcheck disable=SC2086
+            git log --no-color --format='| `%h` | %an <%ae> | %ad | %s |' --date=short $RANGE | head -100
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Security scans: Checkov + Trivy
+  # ---------------------------------------------------------------------------
+  security-scan:
+    name: "Checkov & Trivy (${{ inputs.stack }})"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12.3122.0
+        with:
+          directory: ${{ inputs.stack }}
+          config_file: ${{ inputs.stack }}/checkov.yml
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+          soft_fail: false
+
+      - name: Trivy (vuln + secret + misconfig)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ inputs.stack }}
+          trivy-config: ${{ inputs.stack }}/trivy.yml
+          format: table
+          output: trivy-report.txt
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Show Trivy report
+        if: always()
+        run: |
+          [ -f trivy-report.txt ] || exit 0
+          { echo "### Trivy (${{ inputs.stack }})"; echo '```'; head -c 60000 trivy-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scans-${{ inputs.stack }}
+          path: |
+            checkov.sarif
+            trivy-report.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # terraform test + resource coverage (feeds SonarQube)
+  # ---------------------------------------------------------------------------
+  terraform-test:
+    name: "Test & coverage (${{ inputs.stack }})"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform test
+        working-directory: ${{ inputs.stack }}
+        run: |
+          terraform init -backend=false -no-color
+          set -o pipefail
+          terraform test -no-color -json | tee test-results.json
+
+      - name: Coverage gate (${{ inputs.coverage_fail_under }}%)
+        run: |
+          python3 scripts/tf_coverage.py "${{ inputs.stack }}" \
+            --test-json "${{ inputs.stack }}/test-results.json" \
+            --json "${{ inputs.stack }}/coverage.json" \
+            --summary-md coverage.md \
+            --fail-under "${{ inputs.coverage_fail_under }}"
+          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ inputs.stack }}
+          path: |
+            ${{ inputs.stack }}/test-results.json
+            ${{ inputs.stack }}/coverage.json
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # SonarQube (skipped with a notice when SONAR_TOKEN is not set)
+  # ---------------------------------------------------------------------------
+  sonarqube:
+    name: "SonarQube (${{ inputs.stack }})"
+    needs: terraform-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-${{ inputs.stack }}
+          path: ${{ inputs.stack }}
+      - name: Check token
+        id: cfg
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then echo "configured=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::SONAR_TOKEN not set; SonarQube skipped."; echo "configured=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Scan + quality gate
+        if: steps.cfg.outputs.configured == 'true'
+        uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9 # v5.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dproject.settings=${{ inputs.sonar_properties }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+
+  # ---------------------------------------------------------------------------
+  # Infracost: cost breakdown, plus a cost diff comment on PRs
+  # ---------------------------------------------------------------------------
+  infracost:
+    name: "Infracost (${{ inputs.stack }})"
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check key
+        id: cfg
+        env:
+          KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then echo "configured=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::INFRACOST_API_KEY not set; Infracost skipped."; echo "configured=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.configured == 'true'
+      - uses: infracost/actions/setup@v3
+        if: steps.cfg.outputs.configured == 'true'
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      - name: Baseline (target branch)
+        if: steps.cfg.outputs.configured == 'true' && github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          git worktree add /tmp/base "origin/${{ github.base_ref }}"
+          infracost breakdown --path "/tmp/base/${{ inputs.stack }}" \
+            --terraform-var mssql_sa_password=cost-estimate-placeholder \
+            --format json --out-file /tmp/base.json || echo '{}' > /tmp/base.json
+      - name: Breakdown / diff
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          infracost breakdown --path "${{ inputs.stack }}" \
+            --usage-file "infracost-usage/${{ inputs.stack }}.yml" \
+            --terraform-var mssql_sa_password=cost-estimate-placeholder \
+            --format json --out-file /tmp/infracost.json
+          infracost output --path /tmp/infracost.json --format table | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -s /tmp/base.json ]; then
+            infracost diff --path "${{ inputs.stack }}" --compare-to /tmp/base.json \
+              --usage-file "infracost-usage/${{ inputs.stack }}.yml" \
+              --terraform-var mssql_sa_password=cost-estimate-placeholder \
+              --format json --out-file /tmp/diff.json
+          fi
+      - name: PR cost comment
+        if: steps.cfg.outputs.configured == 'true' && github.event_name == 'pull_request'
+        run: |
+          infracost comment github --path /tmp/diff.json \
+            --repo "${{ github.repository }}" --pull-request "${{ github.event.pull_request.number }}" \
+            --github-token "${{ github.token }}" --behavior update \
+            --tag "${{ inputs.stack }}"
+
+  # ---------------------------------------------------------------------------
+  # fmt / validate / plan / diff. On PRs the plan goes into a PR comment.
+  # ---------------------------------------------------------------------------
+  terraform-plan:
+    name: "fmt / validate / plan (${{ inputs.stack }})"
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
+    needs: [security-scan, terraform-test, sonarqube]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.stack }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        id: fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: AWS credentials (OIDC)
+        if: inputs.deploy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        id: init
+        run: |
+          if [ "${{ inputs.deploy }}" = "true" ]; then terraform init -no-color
+          else terraform init -backend=false -no-color; fi
+
+      - name: terraform validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: terraform plan
+        id: plan
+        if: inputs.deploy
+        # Keep identity-provider credentials off third-party scan and reporting
+        # actions; only Terraform needs them in order to write SSM SecureStrings.
+        env:
+          TF_VAR_grafana_github_client_id: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+          TF_VAR_grafana_github_client_secret: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_client_id: ${{ secrets.SONARQUBE_GITHUB_CLIENT_ID }}
+          TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
+          TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
+        run: |
+          set +e
+          terraform plan -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan > plan.log 2>&1
+          code=$?
+          cat plan.log
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -eq 1 ] && exit 1
+          terraform show -no-color tfplan > tfplan.txt
+          terraform show -json tfplan > tfplan.json
+          exit 0
+
+      - name: Diff summary
+        id: diff
+        if: inputs.deploy && steps.plan.outcome == 'success'
+        run: |
+          python3 - <<'PY' | tee diff.md
+          import json
+          plan = json.load(open("tfplan.json"))
+          rows, counts = [], {}
+          for rc in plan.get("resource_changes", []):
+              acts = rc["change"]["actions"]
+              imported = "importing" in rc["change"]
+              if acts == ["no-op"]:
+                  if not imported:
+                      continue
+                  act = "import"
+              elif set(acts) == {"create", "delete"}:
+                  act = "REPLACE"
+              else:
+                  act = "/".join(acts)
+              if imported and act != "import":
+                  act = "import+" + act
+              counts[act] = counts.get(act, 0) + 1
+              rows.append("| `%s` | %s |" % (rc["address"], act))
+          print("**Changes:** " + (", ".join("%s %d" % kv for kv in sorted(counts.items())) or "none"))
+          print()
+          if rows:
+              print("| Resource | Action |")
+              print("| --- | --- |")
+              print("\n".join(rows[:300]))
+          PY
+          cat diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment plan on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          STACK: ${{ inputs.stack }}
+          FMT: ${{ steps.fmt.outcome }}
+          INIT: ${{ steps.init.outcome }}
+          VALIDATE: ${{ steps.validate.outcome }}
+          PLAN: ${{ steps.plan.outcome }}
+        with:
+          script: |
+            const fs = require("fs");
+            const read = (f, n) => { try { const s = fs.readFileSync(`${process.env.STACK}/${f}`, "utf8"); return s.length > n ? s.slice(0, n) + "\n... truncated, see the run log" : s; } catch { return ""; } };
+            const marker = `<!-- tf-plan:${process.env.STACK} -->`;
+            const body = [
+              marker,
+              `### Terraform \`${process.env.STACK}\``,
+              `fmt \`${process.env.FMT}\` · init \`${process.env.INIT}\` · validate \`${process.env.VALIDATE}\` · plan \`${process.env.PLAN}\``,
+              "", read("diff.md", 20000), "",
+              "<details><summary>Full plan</summary>", "", "```terraform", read("tfplan.txt", 40000) || "(no plan)", "```", "</details>",
+              "", `*PR by @${context.payload.pull_request.user.login}, run by @${context.actor}*`
+            ].join("\n");
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const old = comments.find(c => c.body && c.body.startsWith(marker));
+            if (old) await github.rest.issues.updateComment({ owner, repo, comment_id: old.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+    outputs:
+      changes: ${{ steps.plan.outputs.exitcode == '2' }}
+
+  # ---------------------------------------------------------------------------
+  # Apply the exact reviewed plan (push only)
+  # ---------------------------------------------------------------------------
+  terraform-apply:
+    name: "Apply (${{ inputs.stack }})"
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_WORKSPACE: ${{ inputs.deploy && inputs.workspace || '' }}
+    needs: [terraform-plan, infracost, git-metadata]
+    if: inputs.deploy && github.event_name == 'push' && needs.terraform-plan.outputs.changes == 'true'
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.stack }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -no-color
+      - name: Plan with current state
+        env:
+          TF_VAR_grafana_github_client_id: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
+          TF_VAR_grafana_github_client_secret: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_client_id: ${{ secrets.SONARQUBE_GITHUB_CLIENT_ID }}
+          TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
+          TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
+          TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
+        run: terraform plan -no-color -input=false -lock-timeout=5m -out=tfplan
+      - name: terraform apply
+        run: terraform apply -no-color -input=false -lock-timeout=5m tfplan

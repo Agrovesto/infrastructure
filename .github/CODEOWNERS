@@ -1,0 +1,116 @@
+# =============================================================================
+# CODEOWNERS — Agrovesto/infrastructure
+#
+# Docs: https://docs.github.com/repositories/managing-your-repositories-settings-and-
+#       security/customizing-your-repository/about-code-owners
+#
+# HOW TO READ THIS FILE
+#   * Order matters. The LAST matching pattern wins, so the broad `*` rule goes
+#     first and the specific ones below override it.
+#   * Owners are GitHub teams, not individuals, on purpose: this repository
+#     outlives any one person's access, and a team can be re-staffed without a
+#     commit here. The teams referenced below all exist in the Agrovesto org and
+#     all have members.
+#
+# ⚠️  PREREQUISITE — NOT YET DONE (verified 2026-09-24)
+#   None of these teams has been granted access to this repository. A team only
+#   becomes an effective code owner once it has `write` permission here; until
+#   then GitHub renders these owners as unable to approve, and this file requests
+#   reviews from people who cannot give them.
+#
+#   Check the current state with:
+#       gh api /orgs/Agrovesto/teams/<team>/repos/Agrovesto/infrastructure
+#   (a 404 means "not associated", which is what every team returns today)
+#
+#   Grant it with:
+#       gh api -X PUT /orgs/Agrovesto/teams/infrastructure/repos/Agrovesto/infrastructure \
+#         -f permission=push
+#       # repeat for team-leads, and for backend/frontend if their rules below
+#       # are uncommented
+#
+#   ⚠️  Do NOT turn on "Require review from Code Owners" in branch protection
+#   until that is done. Combined with the missing permissions it makes the
+#   repository unmergeable: the required reviewer would be a team that cannot
+#   approve. Today nothing is enforced, so merging still works normally.
+#
+# ENFORCING IT
+#   Listing owners here only *requests* their review. To make it a merge gate,
+#   turn on "Require a pull request before merging" + "Require review from Code
+#   Owners" in branch protection for the branches that matter:
+#       main     -> prod/ and monitoring/ apply on merge here
+#       dev      -> dev/ applies on merge here
+#       devops   -> the working branch this repository is cut from
+#   Until that is on, nothing below blocks a merge, and a self-merge stays
+#   possible. That is deliberate for now: with two people on the infrastructure
+#   team, a hard code-owner gate on every path would block the team on itself.
+#   See docs/team.md for the review expectations that apply either way.
+# =============================================================================
+
+# --- Default ------------------------------------------------------------------
+# Anything not matched below belongs to the infrastructure team.
+*                               @Agrovesto/infrastructure
+
+# --- Account bootstrap and identity -------------------------------------------
+# One-time, account-wide, and hard to undo: the state bucket, the GitHub OIDC
+# provider and the role that CI assumes to deploy with. A mistake here is not a
+# bad plan, it is a pipeline that can no longer reach the account — or one that
+# can reach more of it than intended.
+/bootstrap/                     @Agrovesto/infrastructure @Agrovesto/team-leads
+**/iam.tf                       @Agrovesto/infrastructure @Agrovesto/team-leads
+**/trust-policy.json            @Agrovesto/infrastructure @Agrovesto/team-leads
+
+# --- CI/CD --------------------------------------------------------------------
+# These workflows hold OIDC credentials that can apply infrastructure. A change
+# to a trigger, an environment or a secret name is a change to what runs with
+# deploy rights, so it gets the same review as the IAM above.
+/.github/workflows/             @Agrovesto/infrastructure @Agrovesto/team-leads
+/workflows/                     @Agrovesto/infrastructure @Agrovesto/team-leads
+
+# --- Production ---------------------------------------------------------------
+# prod/ applies on merge to main and talks to live money-path resources: the
+# ALB, RDS SQL Server, the ECS services and the authoritative DNS zone for
+# nomaos.com. Several of these were ADOPTED from a pre-existing account (see
+# docs/import-runbook.md), which means an attribute marked ForceNew does not
+# produce a plan to review — it produces a replacement of a live resource.
+/prod/                          @Agrovesto/infrastructure @Agrovesto/team-leads
+
+# --- Monitoring ---------------------------------------------------------------
+# Runs in the prod account but is non-critical infrastructure: losing it loses
+# visibility, not traffic. Infrastructure team only.
+/monitoring/                    @Agrovesto/infrastructure
+
+# --- Dev ----------------------------------------------------------------------
+# A disposable, scheduled, single-EC2 environment. Infrastructure team only.
+/dev/                           @Agrovesto/infrastructure
+
+# --- Cost and scan configuration ----------------------------------------------
+# The budgets, the Checkov/Trivy suppressions and the coverage gates. Changing a
+# suppression or a threshold is how a real finding gets quietly closed, so these
+# are reviewed like policy rather than like configuration.
+**/checkov.yml                  @Agrovesto/infrastructure @Agrovesto/team-leads
+**/.trivyignore.yaml            @Agrovesto/infrastructure @Agrovesto/team-leads
+/infracost.yml                  @Agrovesto/infrastructure @Agrovesto/team-leads
+/infracost-usage/               @Agrovesto/infrastructure @Agrovesto/team-leads
+/scripts/                       @Agrovesto/infrastructure
+
+# --- Documentation ------------------------------------------------------------
+/docs/                          @Agrovesto/infrastructure
+/README.md                      @Agrovesto/infrastructure
+
+# =============================================================================
+# DELIBERATELY NOT ASSIGNED (uncomment when the owning team wants the review)
+# =============================================================================
+#
+# The application contract that prod/ecs.tf and dev/terraform.auto.tfvars encode
+# — container ports, environment variables, the OTEL_* block, image tags — is
+# really an agreement between this repository and the backend team. Giving them
+# ownership means backend approval is required to change a port or an env var,
+# which is correct in spirit and slow in practice while the images are still
+# placeholders. Turn it on when the real API images land:
+#
+# /prod/ecs.tf                    @Agrovesto/infrastructure @Agrovesto/backend
+# /dev/docker-compose.yml.tftpl   @Agrovesto/infrastructure @Agrovesto/backend
+#
+# The Amplify frontends are configured here but built elsewhere:
+#
+# /dev/amplify.tf                 @Agrovesto/infrastructure @Agrovesto/frontend

@@ -1,0 +1,5 @@
+misconfigurations:
+  - id: AWS-0132
+    paths:
+      - rekognition.tf
+    statement: Rekognition media uses SSE-S3 so callers need no additional KMS grants.

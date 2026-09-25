@@ -1,0 +1,17 @@
+# trivy.yml — filesystem scan of the monitoring/ folder:
+# vulnerabilities (package files, if any), IaC misconfig (Terraform), secrets.
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret
+
+ignorefile: monitoring/.trivyignore.yaml
+
+severity:
+  - HIGH
+  - CRITICAL
+
+misconfiguration:
+  scanners:
+    - terraform

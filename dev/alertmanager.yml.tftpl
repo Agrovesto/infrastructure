@@ -1,0 +1,32 @@
+# =============================================================================
+# Alertmanager on the dev EC2 host. Rendered by Terraform (dev/locals.tf).
+# Publishes to the dev SNS alerts topic with the instance role's credentials.
+# =============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: sns
+  group_by: [alertname, job]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: sns
+      repeat_interval: 1h
+
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname]
+
+receivers:
+  - name: sns
+    sns_configs:
+      - topic_arn: ${topic_arn}
+        sigv4:
+          region: ${region}
+        subject: '[${stack}] [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        send_resolved: true

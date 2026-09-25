@@ -1,0 +1,64 @@
+# =============================================================================
+# Prometheus alert rules for the dev EC2 host. Rendered by Terraform
+# (dev/locals.tf), synced to /opt/agrovesto/logging/prometheus/rules/host.yml.
+# Firing alerts go to Alertmanager, then to the dev SNS alerts topic.
+# =============================================================================
+
+groups:
+  - name: dev-host
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is not being scraped"
+          description: "Prometheus could not scrape {{ $labels.job }} ({{ $labels.instance }}) for 5 minutes."
+
+      - alert: HostHighCpu
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > ${cpu_percent}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dev host CPU above ${cpu_percent}%"
+          description: "CPU has been at {{ $value | printf \"%.0f\" }}% for 15 minutes."
+
+      - alert: HostHighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > ${memory_percent}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dev host memory above ${memory_percent}%"
+          description: "Memory use is {{ $value | printf \"%.0f\" }}%."
+
+      - alert: HostDiskAlmostFull
+        expr: 100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < ${disk_free_percent}
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.mountpoint }} has less than ${disk_free_percent}% free"
+          description: "{{ $labels.mountpoint }} is at {{ $value | printf \"%.1f\" }}% free."
+
+%{ for container in expected_containers ~}
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name="agrovesto-${container}"})
+        for: 2m
+        labels:
+          severity: critical
+          name: agrovesto-${container}
+        annotations:
+          summary: "Container agrovesto-${container} is not running"
+          description: "cAdvisor has not reported agrovesto-${container} for 2 minutes."
+%{ endfor ~}
+
+      - alert: ContainerRestarting
+        expr: changes(container_start_time_seconds{name=~"agrovesto-.+"}[15m]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} keeps restarting"
+          description: "{{ $labels.name }} restarted {{ $value }} times in 15 minutes."
