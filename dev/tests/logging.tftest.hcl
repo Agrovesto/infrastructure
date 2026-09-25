@@ -194,7 +194,7 @@ run "compose_services" {
     # 7 observability containers, plus Redis and SonarQube when they are on: the
     # count has to follow what is enabled, or disabling either service turns this
     # into a false failure.
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0)
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
     error_message = "Every capped container carries a memory limit — the seven observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
   }
 
@@ -318,7 +318,7 @@ run "retention" {
   }
 
   assert {
-    condition     = strcontains(local.loki_config, "label_selector")
+    condition     = strcontains(local.loki_config, "selector: ")
     error_message = "The shorter per-stream retention (journald, nginx) must be in the config while system_retention_days < loki_retention_days."
   }
 
@@ -358,7 +358,7 @@ run "nginx_vhost_defaults_to_loopback" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "server_name dev-logs.nomaos.com;")
+    condition     = strcontains(local.nginx_conf, "server_name dev-grafana.nomaos.com;")
     error_message = "Grafana is served from logging.grafana_subdomain through nginx, like every other dev host."
   }
 
@@ -525,7 +525,7 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.nginx_conf, "dev-logs")
+    condition     = !strcontains(local.nginx_conf, "dev-grafana")
     error_message = "No Grafana vhost, so no new listener on port 80."
   }
 

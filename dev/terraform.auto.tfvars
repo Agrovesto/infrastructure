@@ -134,7 +134,7 @@ ecr_images_to_keep       = 3         # tagged images retained per repo
 # Prometheus/cAdvisor/node-exporter carry the metrics. No CloudWatch, no AWS
 # ingestion or per-query charges.
 #
-# Grafana is served by nginx at dev-logs.nomaos.com. The prod stack owns DNS, so
+# Grafana is served by nginx at dev-grafana.nomaos.com. The prod stack owns DNS, so
 # add the A record there (see the extra_a_records block in
 # prod/terraform.auto.tfvars) or leave it tunnel-only.
 logging = {
@@ -156,7 +156,7 @@ logging = {
   # something better here - the file is public like the rest of this repo.
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
-  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
+  # Its callback is https://dev-grafana.nomaos.com/login/github; setup is in
   # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
   # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
   # admin remains available for break-glass use.
@@ -181,6 +181,17 @@ sonarqube = {
   # prod/terraform.auto.tfvars has the line to copy, and the `sonarqube_fqdn` and
   # `ec2_public_ip` outputs are the two values it needs.
   subdomain = "sonar"
+
+  # Same image and version as the old server (sonar.agrovesto.com, 26.4 + the
+  # community branch plugin), so the restored database needs no schema upgrade
+  # and branch / PR analysis + PR decoration keep working. The plugin trails
+  # SonarQube releases: bump only to a tag that exists for
+  # mc1arke/sonarqube-with-community-branch-plugin.
+  image = "mc1arke/sonarqube-with-community-branch-plugin:26.4.0.121862-community"
+
+  # Own PostgreSQL container instead of the shared SQL Server, so the old
+  # server's pg_dump can be restored as-is (docs/sonarqube-migration.md).
+  database_engine = "postgres"
 
   # READ THIS BEFORE POINTING CI AT IT: allowed_cidrs = [] means the nginx vhost
   # answers 127.0.0.1 only, i.e. the UI is reachable through an SSH tunnel and

@@ -76,6 +76,21 @@ variables {
     }
   }
 
+  # Mirrors terraform.auto.tfvars except for the engine: most runs below pin the
+  # SQL Server path; "sonar_on_postgres" covers the postgres one.
+  sonarqube = {
+    subdomain       = "sonar"
+    database_engine = "mssql"
+    allowed_cidrs   = ["0.0.0.0/0"]
+    es_java_opts    = "-Xms512m -Xmx1g"
+    web_java_opts   = "-Xms256m -Xmx512m"
+    ce_java_opts    = "-Xms256m -Xmx512m"
+    memory_limit_mb = 3072
+    cpu_limit       = "1.00"
+    volume_size_gb  = 20
+    scheme          = "http"
+  }
+
   amplify_apps = {
     landing = {
       repository = "https://github.com/Agrovesto/nomaos-landingpage"
@@ -391,9 +406,9 @@ run "github_sso_uses_https_and_ssm_credentials" {
   assert {
     condition = alltrue([
       local.sonar_web_baseurl == "https://sonar.nomaos.com",
-      local.logging_runtime.grafana_root_url == "https://dev-logs.nomaos.com",
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com",
       strcontains(local.caddyfile, "sonar.nomaos.com"),
-      strcontains(local.caddyfile, "dev-logs.nomaos.com"),
+      strcontains(local.caddyfile, "dev-grafana.nomaos.com"),
       strcontains(local.docker_compose, "container_name: agrovesto-edge"),
       strcontains(local.docker_compose, "80:80"),
       strcontains(local.docker_compose, "443:443"),
@@ -462,10 +477,10 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.nginx_conf, "real_ip_header X-Forwarded-For"),
       strcontains(local.nginx_conf, "geo $realip_remote_addr $trusted_reverse_proxy"),
       strcontains(local.nginx_conf, "X-Forwarded-Proto $forwarded_proto"),
-      aws_instance.app.user_data_replace_on_change,
+      !aws_instance.app.user_data_replace_on_change,
       strcontains(file("${path.module}/user_data.sh.tftpl"), "sso_credential_versions"),
     ])
-    error_message = "nginx must trust forwarded client data only from Caddy, and SSM credential rotation must replace the host."
+    error_message = "nginx must trust forwarded client data only from Caddy, and the host must not be replaced on user_data changes (config is refreshed via SSM)."
   }
 }
 
@@ -575,4 +590,29 @@ run "rejects_partial_grafana_github_credentials" {
   }
 
   expect_failures = [aws_instance.app]
+}
+run "sonar_on_postgres" {
+  command = plan
+
+  variables {
+    sonarqube = {
+      database_engine = "postgres"
+      allowed_cidrs   = ["0.0.0.0/0"]
+    }
+  }
+
+  assert {
+    condition     = local.sonar_jdbc_url == "jdbc:postgresql://sonarqube-db:5432/sonar"
+    error_message = "With database_engine = postgres SonarQube must use its own postgres container."
+  }
+
+  assert {
+    condition     = !contains(local.mssql_all_databases, "sonar") && !strcontains(local.init_sql, "COLLATE")
+    error_message = "The sonar database must not be created in SQL Server when SonarQube runs on postgres."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "sonarqube-db:") && strcontains(local.docker_compose, "POSTGRES_PASSWORD: \"$${SONAR_DB_PASSWORD}\"")
+    error_message = "The compose project must include the sonarqube-db service with the password from .env."
+  }
 }

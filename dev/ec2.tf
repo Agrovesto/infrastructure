@@ -27,9 +27,12 @@ resource "aws_instance" "app" {
   # objects in aws_s3_bucket.host_config and this script syncs them, because EC2
   # caps user data at 16 KB raw and none of that config belongs in metadata.
   # See dev/host_config.tf.
-  # cloud-init runs this bootstrap only on first boot. Replacing rather than
-  # merely stop/starting is therefore required for config and SSO rotations.
-  user_data_replace_on_change = true
+  # cloud-init runs this bootstrap only on first boot. It is deliberately NOT a
+  # replacement trigger any more (see lifecycle.ignore_changes below): config
+  # changes reach the running host through aws_ssm_association.host_config_refresh.
+  # To rebuild the host on purpose (e.g. after rotating SSO credentials or to
+  # pick up a newer Ubuntu AMI):  terraform apply -replace=aws_instance.app
+  user_data_replace_on_change = false
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     mssql_volume_id = replace(aws_ebs_volume.mssql.id, "-", "")
     mssql_parameter = aws_ssm_parameter.mssql_sa_password.name
@@ -54,6 +57,7 @@ resource "aws_instance" "app" {
     redis_parameter = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
 
     sonarqube           = local.sonarqube_runtime
+    sonar_web_baseurl   = local.sonar_web_baseurl
     sonarqube_volume_id = var.sonarqube.enabled ? replace(aws_ebs_volume.sonarqube[0].id, "-", "") : ""
     sonarqube_parameter = var.sonarqube.enabled ? aws_ssm_parameter.sonarqube_db_password[0].name : ""
     sonarqube_github_parameters = local.sonarqube_github_sso_enabled ? {
@@ -83,6 +87,10 @@ resource "aws_instance" "app" {
   depends_on = [aws_s3_object.host_config, aws_iam_role_policy.ec2]
 
   lifecycle {
+    # A new Canonical AMI (most_recent = true) or any edit to the rendered
+    # bootstrap would otherwise destroy and recreate the host on every apply.
+    ignore_changes = [ami, user_data]
+
     precondition {
       condition     = local.sonarqube_github_configuration_valid
       error_message = "SonarQube GitHub SSO requires all four values (client ID, client secret, App ID and private key), or all four must be empty."
@@ -147,4 +155,28 @@ resource "aws_eip_association" "app" {
 
   instance_id   = aws_instance.app.id
   allocation_id = aws_eip.app[0].id
+}
+
+# Push config changes to the running host instead of replacing it. The
+# association re-runs whenever the rendered host config (the S3 objects) changes:
+# it re-syncs /opt/agrovesto from S3 and runs `docker compose up -d`, which only
+# recreates the containers whose definition actually changed.
+resource "aws_ssm_association" "host_config_refresh" {
+  name             = "AWS-RunShellScript"
+  association_name = "${local.name}-host-config-refresh"
+
+  targets {
+    key    = "InstanceIds"
+    values = [aws_instance.app.id]
+  }
+
+  parameters = {
+    commands = join("\n", [
+      "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
+      "set -euo pipefail",
+      "systemctl start agrovesto-sync.service",
+    ])
+  }
+
+  depends_on = [aws_s3_object.host_config]
 }

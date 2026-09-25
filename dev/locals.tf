@@ -123,9 +123,12 @@ locals {
   # Listing it twice is harmless — the union is deduplicated — but forgetting to
   # add it to mssql_databases would otherwise mean a database that is created and
   # never backed up, or the reverse.
+  sonarqube_on_mssql    = var.sonarqube.enabled && var.sonarqube.database_engine == "mssql"
+  sonarqube_on_postgres = var.sonarqube.enabled && var.sonarqube.database_engine == "postgres"
+
   mssql_all_databases = distinct(concat(
     var.mssql_databases,
-    var.sonarqube.enabled ? [var.sonarqube.database_name] : [],
+    local.sonarqube_on_mssql ? [var.sonarqube.database_name] : [],
   ))
 
   # 1433 is the container port, not var.mssql_host_port: that one is the host
@@ -136,7 +139,7 @@ locals {
   # self-signed certificate; without it the JDBC driver refuses the connection.
   # Encryption stays on — it is loopback-adjacent, but there is no reason to send
   # credentials in the clear.
-  sonar_jdbc_url = join(";", concat(
+  sonar_jdbc_url = local.sonarqube_on_postgres ? "jdbc:postgresql://sonarqube-db:5432/${var.sonarqube.database_name}" : join(";", concat(
     [
       "jdbc:sqlserver://mssql:1433",
       "databaseName=${var.sonarqube.database_name}",
@@ -160,7 +163,9 @@ locals {
   # GitHub refuses an HTTP SonarQube callback. When credentials are present, the
   # Caddy edge container obtains and renews a public certificate and this becomes
   # the canonical URL regardless of the legacy `sonarqube.scheme` value.
-  sonar_public_scheme = local.sonarqube_github_sso_enabled ? "https" : var.sonarqube.scheme
+  # Once Caddy is running (any SSO enabled) it serves HTTPS for every exposed UI,
+  # not only the SSO ones, so the public scheme follows the proxy.
+  sonar_public_scheme = local.github_sso_proxy_enabled && var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? "https" : var.sonarqube.scheme
 
   # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
   # container's own address: SonarQube builds absolute links from it and compares
@@ -169,6 +174,7 @@ locals {
   sonar_web_baseurl = var.sonarqube.expose_via_nginx ? "${local.sonar_public_scheme}://${local.sonar_fqdn}" : "http://127.0.0.1:${var.sonarqube.host_port}"
 
   sonarqube_runtime = merge(var.sonarqube, {
+    on_postgres               = local.sonarqube_on_postgres
     github_sso_enabled        = local.sonarqube_github_sso_enabled
     github_organizations      = join(",", var.sonarqube_github_organizations)
     github_allow_sign_up      = var.sonarqube_github_allow_sign_up
@@ -232,7 +238,7 @@ locals {
   }
 
   grafana_fqdn          = "${var.logging.grafana_subdomain}.${var.domain_name}"
-  grafana_public_scheme = local.grafana_github_sso_enabled ? "https" : "http"
+  grafana_public_scheme = local.github_sso_proxy_enabled && var.logging.enabled && var.logging.expose_via_nginx ? "https" : "http"
 
   logging_runtime = merge(var.logging, {
     grafana_root_url             = "${local.grafana_public_scheme}://${local.grafana_fqdn}"
@@ -255,8 +261,8 @@ locals {
     memory_limit_mb = 128
     data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : "${local.logging_root}/caddy"
     domains = compact([
-      local.sonarqube_github_sso_enabled ? local.sonar_fqdn : "",
-      local.grafana_github_sso_enabled ? local.grafana_fqdn : "",
+      var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? local.sonar_fqdn : "",
+      var.logging.enabled && var.logging.expose_via_nginx ? local.grafana_fqdn : "",
     ])
   }
 
@@ -450,9 +456,9 @@ locals {
   init_sql = join("\n", concat(
     [
       for db in local.mssql_all_databases :
-      (var.sonarqube.enabled && db == var.sonarqube.database_name) ? "" : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
+      (local.sonarqube_on_mssql && db == var.sonarqube.database_name) ? "" : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
     ],
-    var.sonarqube.enabled ? [
+    local.sonarqube_on_mssql ? [
       "-- SonarQube: CS_AS collation is mandatory; the SQL Server default is not.",
       "IF DB_ID(N'${var.sonarqube.database_name}') IS NULL CREATE DATABASE [${var.sonarqube.database_name}] COLLATE ${var.sonarqube.database_collation};",
       "GO",

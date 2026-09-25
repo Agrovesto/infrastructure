@@ -258,6 +258,9 @@ def java_property(value: str) -> str:
 
 
 properties = {
+    # The public URL SonarQube builds its OAuth redirect_uri from. Without it,
+    # SonarQube sends GitHub http://localhost:9000/oauth2/callback/github.
+    "sonar.core.serverBaseURL": "${sonar_web_baseurl}",
     "sonar.auth.github.enabled": "true",
     "sonar.auth.github.clientId.secured": os.environ["SONAR_GITHUB_CLIENT_ID"],
     "sonar.auth.github.clientSecret.secured": os.environ["SONAR_GITHUB_CLIENT_SECRET"],
@@ -312,6 +315,10 @@ for db in ${db_list}; do
   docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
     -Q "BACKUP DATABASE [$db] TO DISK = N'/var/opt/mssql/backup/$db-$STAMP.bak' WITH COMPRESSION, INIT"
 done
+%{ if sonarqube.on_postgres ~}
+# SonarQube's PostgreSQL (custom-format dump, restorable with pg_restore)
+docker exec agrovesto-sonarqube-db pg_dump -U ${sonarqube.database_username} -Fc ${sonarqube.database_name} >"/data/mssql/backup/sonarqube-pg-$STAMP.dump"
+%{ endif ~}
 aws s3 sync /data/mssql/backup "s3://$BACKUP_BUCKET/mssql/$STAMP/" --region "$AWS_REGION"
 find /data/mssql/backup -type f -mtime +3 -delete || true
 BKP

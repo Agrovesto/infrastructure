@@ -310,6 +310,12 @@ variable "sonarqube" {
     # init-dbs.sql and included in the nightly backup loop without being listed
     # in var.mssql_databases as well (listing it there is harmless: the union is
     # deduplicated).
+    # "postgres" runs a dedicated postgres container (sonarqube-db) for
+    # SonarQube, with its data on the SonarQube EBS volume; "mssql" uses the
+    # shared SQL Server container. Postgres is SonarSource's recommended engine
+    # and the only way to restore a pg_dump from an existing SonarQube.
+    database_engine    = optional(string, "mssql")
+    postgres_image     = optional(string, "postgres:17-alpine")
     database_name      = optional(string, "sonar")
     database_collation = optional(string, "SQL_Latin1_General_CP1_CS_AS")
 
@@ -373,6 +379,11 @@ variable "sonarqube" {
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.sonarqube.subdomain))
     error_message = "sonarqube.subdomain must be a single DNS label (lowercase letters, digits and dashes)."
+  }
+
+  validation {
+    condition     = contains(["mssql", "postgres"], var.sonarqube.database_engine)
+    error_message = "sonarqube.database_engine must be \"mssql\" or \"postgres\"."
   }
 
   validation {
@@ -623,7 +634,7 @@ variable "logging" {
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
-    grafana_subdomain = optional(string, "dev-logs")
+    grafana_subdomain = optional(string, "dev-grafana")
 
     # Sources allowed to reach the Grafana vhost through nginx. Empty means
     # 127.0.0.1 only — the UI is then reachable over an SSH tunnel and from

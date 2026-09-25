@@ -41,7 +41,7 @@ describe are listed separately at the end.
   own. Those records are filled from dev stack outputs after an apply.
 - Traffic lands on the dev Elastic IP and is terminated by nginx 1.27-alpine on
   the t3.large host, which forwards to the five containers on 5001–5005 — and to
-  Grafana on `dev-logs`, the logging UI of the stack below.
+  Grafana on `dev-grafana`, the logging UI of the stack below.
 - The React front ends never touch the host: Amplify serves them from its CDN,
   with two branches and domains attached.
 
