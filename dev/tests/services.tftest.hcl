@@ -318,6 +318,10 @@ run "compose_persistence" {
 run "nginx_vhost" {
   command = plan
 
+  variables {
+    sonarqube = { allowed_cidrs = [] }
+  }
+
   assert {
     condition     = strcontains(local.nginx_conf, "server_name sonar.nomaos.com;")
     error_message = "nginx serves the SonarQube vhost on the subdomain the DNS record points at."

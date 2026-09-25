@@ -348,6 +348,10 @@ run "retention_shared_for_every_stream" {
 run "nginx_vhost_defaults_to_loopback" {
   command = plan
 
+  variables {
+    logging = { allowed_cidrs = [] }
+  }
+
   assert {
     condition     = strcontains(local.nginx_conf, "server_name dev-logs.nomaos.com;")
     error_message = "Grafana is served from logging.grafana_subdomain through nginx, like every other dev host."

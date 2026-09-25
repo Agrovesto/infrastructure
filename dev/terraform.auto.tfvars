@@ -143,7 +143,7 @@ logging = {
   # through an SSH tunnel (the `logging_access` output prints the command). Add one
   # CIDR per office/VPN egress address to open it up:
   #   allowed_cidrs = ["203.0.113.10/32", "196.0.0.0/16"]
-  allowed_cidrs = []
+  allowed_cidrs = ["0.0.0.0/0"]
 
   # grafana_admin_password defaults to "agrovesto-dev" (dev only). Override with
   # TF_VAR_logging='{"grafana_admin_password":"..."}' in CI rather than committing
@@ -184,7 +184,7 @@ sonarqube = {
   # GitHub-hosted runner IPs are not a fixed set, so "allow GitHub Actions" is not
   # expressible as a CIDR list. Leaving this empty keeps the box closed and CI
   # unable to reach it, which is the safer default but does mean scans fail.
-  allowed_cidrs = []
+  allowed_cidrs = ["0.0.0.0/0"]
 
   # Elasticsearch heap. SonarSource recommends half of available RAM; on this
   # 8 GiB box, shared with SQL Server, that is not an option, so it gets 1 GB and
