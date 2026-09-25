@@ -25,6 +25,13 @@ along its supported path, which passes through each LTA release:
 Also note the **edition**. A Developer or Enterprise database cannot be downgraded
 to Community.
 
+**Agrovesto's case:** the old server runs
+`mc1arke/sonarqube-with-community-branch-plugin` 26.4.0.121862 with `postgres:15-alpine`.
+The dev host is pinned to the same image and tag (`sonarqube.image` in
+`dev/terraform.auto.tfvars`), so no schema upgrade runs and branch/PR analysis keeps
+working. A dump from PostgreSQL 15 restores into 17 without changes. Skip 4b. The `/setup`
+upgrade step only appears if the versions differ.
+
 ## 1. Deploy the postgres change
 
 Merge the branch into `dev`. The SSM refresh syncs the new compose file.

@@ -182,6 +182,13 @@ sonarqube = {
   # `ec2_public_ip` outputs are the two values it needs.
   subdomain = "sonar"
 
+  # Same image and version as the old server (sonar.agrovesto.com, 26.4 + the
+  # community branch plugin), so the restored database needs no schema upgrade
+  # and branch / PR analysis + PR decoration keep working. The plugin trails
+  # SonarQube releases: bump only to a tag that exists for
+  # mc1arke/sonarqube-with-community-branch-plugin.
+  image = "mc1arke/sonarqube-with-community-branch-plugin:26.4.0.121862-community"
+
   # Own PostgreSQL container instead of the shared SQL Server, so the old
   # server's pg_dump can be restored as-is (docs/sonarqube-migration.md).
   database_engine = "postgres"
