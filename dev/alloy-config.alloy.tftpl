@@ -21,13 +21,10 @@ logging {
   level = "warn"
 }
 
-// Serving on 0.0.0.0 is harmless: the port is published on 127.0.0.1 only and
-// the security group has no ingress for it. Prometheus scrapes it from inside
-// the docker network.
-http {
-  listen_address = "0.0.0.0"
-  listen_port    = ${metrics_port}
-}
+// Alloy's own HTTP server (UI + /metrics) is configured with the
+// --server.http.listen-addr flag in docker-compose, not in this file. Serving on
+// 0.0.0.0 is harmless: the port is published on 127.0.0.1 only and the security
+// group has no ingress for it. Prometheus scrapes it from the docker network.
 
 // -----------------------------------------------------------------------------
 // 1. Container logs
@@ -42,7 +39,7 @@ discovery.docker "host" {
 }
 
 discovery.relabel "containers" {
-  targets = discovery.docker.host.output
+  targets = discovery.docker.host.targets
 
   // agrovesto-wallet -> wallet, so a dashboard can group by `service`.
   rule {
