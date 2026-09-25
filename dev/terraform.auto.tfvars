@@ -182,6 +182,10 @@ sonarqube = {
   # `ec2_public_ip` outputs are the two values it needs.
   subdomain = "sonar"
 
+  # Own PostgreSQL container instead of the shared SQL Server, so the old
+  # server's pg_dump can be restored as-is (docs/sonarqube-migration.md).
+  database_engine = "postgres"
+
   # READ THIS BEFORE POINTING CI AT IT: allowed_cidrs = [] means the nginx vhost
   # answers 127.0.0.1 only, i.e. the UI is reachable through an SSH tunnel and
   # GitHub-hosted runners cannot reach it at all. To let the pipelines scan:

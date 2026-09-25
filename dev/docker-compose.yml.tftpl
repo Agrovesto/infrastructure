@@ -175,6 +175,30 @@ services:
   # cgroup — instead of letting the kernel OOM-kill SQL Server. Raise
   # instance_type before raising these numbers.
   # ─────────────────────────────────────────────────────────────────────────
+%{ if sonarqube.on_postgres ~}
+  # SonarQube's own PostgreSQL (sonarqube.database_engine = "postgres"). Data
+  # lives on the SonarQube EBS volume, so it survives an instance replacement.
+  # Not published on the host at all: only SonarQube reaches it, over the
+  # compose network. The image's entrypoint chowns the data dir itself.
+  sonarqube-db:
+    image: ${sonarqube.postgres_image}
+    container_name: agrovesto-sonarqube-db
+    environment:
+      POSTGRES_DB: "${sonarqube.database_name}"
+      POSTGRES_USER: "${sonarqube.database_username}"
+      POSTGRES_PASSWORD: "$${SONAR_DB_PASSWORD}"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ${sonarqube.data_dir}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${sonarqube.database_username} -d ${sonarqube.database_name}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 512M
+
+%{ endif ~}
   sonarqube:
     image: ${sonarqube.image}
     container_name: agrovesto-sonarqube
@@ -222,7 +246,11 @@ services:
       # Start order only. On the very first boot this still races the database
       # bootstrap that user_data runs after `docker compose up`, so SonarQube
       # exits and the restart policy brings it back once init-dbs.sql has landed.
+%{ if sonarqube.on_postgres ~}
+      - sonarqube-db
+%{ else ~}
       - mssql
+%{ endif ~}
     cpus: "${sonarqube.cpu_limit}"
     mem_limit: ${sonarqube.memory_limit_mb}M
 %{ endif ~}

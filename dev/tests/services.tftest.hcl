@@ -76,6 +76,21 @@ variables {
     }
   }
 
+  # Mirrors terraform.auto.tfvars except for the engine: most runs below pin the
+  # SQL Server path; "sonar_on_postgres" covers the postgres one.
+  sonarqube = {
+    subdomain       = "sonar"
+    database_engine = "mssql"
+    allowed_cidrs   = ["0.0.0.0/0"]
+    es_java_opts    = "-Xms512m -Xmx1g"
+    web_java_opts   = "-Xms256m -Xmx512m"
+    ce_java_opts    = "-Xms256m -Xmx512m"
+    memory_limit_mb = 3072
+    cpu_limit       = "1.00"
+    volume_size_gb  = 20
+    scheme          = "http"
+  }
+
   amplify_apps = {
     landing = {
       repository = "https://github.com/Agrovesto/nomaos-landingpage"
@@ -575,4 +590,29 @@ run "rejects_partial_grafana_github_credentials" {
   }
 
   expect_failures = [aws_instance.app]
+}
+run "sonar_on_postgres" {
+  command = plan
+
+  variables {
+    sonarqube = {
+      database_engine = "postgres"
+      allowed_cidrs   = ["0.0.0.0/0"]
+    }
+  }
+
+  assert {
+    condition     = local.sonar_jdbc_url == "jdbc:postgresql://sonarqube-db:5432/sonar"
+    error_message = "With database_engine = postgres SonarQube must use its own postgres container."
+  }
+
+  assert {
+    condition     = !contains(local.mssql_all_databases, "sonar") && !strcontains(local.init_sql, "COLLATE")
+    error_message = "The sonar database must not be created in SQL Server when SonarQube runs on postgres."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "sonarqube-db:") && strcontains(local.docker_compose, "POSTGRES_PASSWORD: \"$${SONAR_DB_PASSWORD}\"")
+    error_message = "The compose project must include the sonarqube-db service with the password from .env."
+  }
 }
