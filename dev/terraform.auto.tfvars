@@ -56,7 +56,7 @@ amplify_apps = {
 apis = {
   nomaos = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5001
+    host_port = 5000
     subdomain = "noma-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
   }
