@@ -212,8 +212,10 @@ services:
       SONAR_WEB_JAVA_OPTS: "${sonarqube.web_java_opts}"
       SONAR_CE_JAVA_OPTS: "${sonarqube.ce_java_opts}"
       SONAR_TELEMETRY_ENABLE: "false"
-      # Must match the public hostname or SonarQube builds wrong links in its
-      # UI and, more importantly, rejects OAuth redirects (GitHub login).
+      # Informational only: SonarQube has no sonar.web.baseurl property. The
+      # setting that actually drives links and the GitHub OAuth redirect_uri is
+      # sonar.core.serverBaseURL, written to the mounted sonar.properties by
+      # user_data (or Administration > General > Server base URL).
       SONAR_WEB_BASEURL: "${sonar_web_baseurl}"
     ports:
       - "127.0.0.1:${sonarqube.host_port}:9000"

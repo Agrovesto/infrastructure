@@ -258,6 +258,9 @@ def java_property(value: str) -> str:
 
 
 properties = {
+    # The public URL SonarQube builds its OAuth redirect_uri from. Without it,
+    # SonarQube sends GitHub http://localhost:9000/oauth2/callback/github.
+    "sonar.core.serverBaseURL": "${sonar_web_baseurl}",
     "sonar.auth.github.enabled": "true",
     "sonar.auth.github.clientId.secured": os.environ["SONAR_GITHUB_CLIENT_ID"],
     "sonar.auth.github.clientSecret.secured": os.environ["SONAR_GITHUB_CLIENT_SECRET"],

@@ -57,6 +57,7 @@ resource "aws_instance" "app" {
     redis_parameter = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
 
     sonarqube           = local.sonarqube_runtime
+    sonar_web_baseurl   = local.sonar_web_baseurl
     sonarqube_volume_id = var.sonarqube.enabled ? replace(aws_ebs_volume.sonarqube[0].id, "-", "") : ""
     sonarqube_parameter = var.sonarqube.enabled ? aws_ssm_parameter.sonarqube_db_password[0].name : ""
     sonarqube_github_parameters = local.sonarqube_github_sso_enabled ? {
