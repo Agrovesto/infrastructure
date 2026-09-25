@@ -54,6 +54,12 @@ amplify_apps = {
 # ASP.NET terms this is what goes into
 # ConnectionStrings:Redis / IConnectionMultiplexer.Connect("redis:6379").
 apis = {
+    nomaos = {
+    image     = "public.ecr.aws/nginx/nginx:alpine"
+    host_port = 5001
+    subdomain = "noma-api"
+    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+  }
   wallet = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5001
@@ -91,7 +97,7 @@ apis = {
 # requires and still lands in the nightly backup loop. Listing it here as well
 # would be harmless (the union is deduplicated) but would create the database
 # with the wrong collation if the two ever disagreed.
-mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
 
 # --- Redis (shared cache for the APIs) -----------------------------------------
 # Reachable from every API container as redis:6379 over the compose network; the

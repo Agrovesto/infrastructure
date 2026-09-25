@@ -62,10 +62,15 @@ variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
   instance_type     = "t3.large"
 
   apis = {
+    nomaos = {
+    image     = "public.ecr.aws/nginx/nginx:alpine"
+    host_port = 5000
+    subdomain = "dev-noma-api"
+    }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001

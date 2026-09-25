@@ -59,9 +59,15 @@ variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
 
   apis = {
+    nomaos = {
+      image     = "public.ecr.aws/nginx/nginx:alpine"
+      host_port = 5000
+      subdomain = "dev-noma-api"
+      env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
@@ -79,7 +85,6 @@ variables {
     }
   }
 }
-
 # -----------------------------------------------------------------------------
 # The SonarQube database: collation, snapshot isolation, and a scoped login
 # -----------------------------------------------------------------------------
@@ -141,11 +146,11 @@ run "sonar_database_idempotent" {
   command = plan
 
   variables {
-    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar"]
+    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar", "nomaos"]
   }
 
   assert {
-    condition     = length(local.mssql_all_databases) == 6 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
+    condition     = length(local.mssql_all_databases) == 7 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
     error_message = "Listing the sonar database in mssql_databases as well must not create it twice, or create it without the collation."
   }
 }
@@ -538,8 +543,8 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 5
-    error_message = "Disabling SonarQube removes its database from the bootstrap; the five application databases are untouched."
+    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 6
+    error_message = "Disabling SonarQube removes its database from the bootstrap; the six application databases are untouched."
   }
 
   assert {

@@ -62,9 +62,14 @@ variables {
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
 
   apis = {
+    nomaos = {
+      image     = "public.ecr.aws/nginx/nginx:alpine"
+      host_port = 5000
+      subdomain = "dev-noma-api"
+    }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
@@ -257,7 +262,7 @@ run "ecr" {
   command = plan
 
   assert {
-    condition     = length(aws_ecr_repository.apis) == 5
+    condition     = length(aws_ecr_repository.apis) == 6
     error_message = "One repository per API."
   }
 
@@ -277,7 +282,7 @@ run "ecr" {
   }
 
   assert {
-    condition     = length(aws_ecr_lifecycle_policy.apis) == 5
+    condition     = length(aws_ecr_lifecycle_policy.apis) == 6
     error_message = "Every repository needs a lifecycle policy."
   }
 }
@@ -369,12 +374,12 @@ run "dns_managed_by_dev" {
 
   # 5 APIs + mssql; plus sonarqube when enabled and exposed. Vault is deliberately not exposed via public DNS.
   assert {
-    condition     = length(aws_route53_record.a) == 6 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
+    condition     = length(aws_route53_record.a) == 7 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
     error_message = "Only the APIs, mssql, and optionally sonarqube get A records to the EC2 host."
   }
 
   assert {
-    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
+    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "dev-noma-api","mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
     error_message = "A record keys are the API subdomains and mssql, excluding Vault."
   }
 
