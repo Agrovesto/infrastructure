@@ -705,8 +705,8 @@ run "vault_oidc_staged" {
   command = plan
 
   variables {
-    vault = { subdomain = "dev-vault", oidc_enabled = true }
-    vault_oidc_restart_ack = true
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack     = true
     vault_github_client_id     = "test-client-id"
     vault_github_client_secret = "test-github-secret"
     vault_oidc_client_secret   = "test-oidc-secret"

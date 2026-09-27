@@ -205,7 +205,7 @@ locals {
     nonsensitive(var.vault_oidc_client_secret != ""),
   ]
   vault_oidc_credentials_valid = alltrue(local.vault_oidc_credentials_set)
-  tls_proxy_enabled = local.github_sso_proxy_enabled || var.vault.oidc_enabled
+  tls_proxy_enabled            = local.github_sso_proxy_enabled || var.vault.oidc_enabled
 
   # ---------------------------------------------------------------------------
   # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
@@ -287,7 +287,7 @@ locals {
   }
 
   caddyfile = local.tls_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
-    email   = local.github_sso_proxy.acme_email
+    email              = local.github_sso_proxy.acme_email
     domains            = local.github_sso_proxy.domains
     vault_oidc_enabled = var.vault.oidc_enabled
     vault_domain       = local.vault_fqdn_for_oidc
@@ -441,15 +441,15 @@ locals {
         content_type = "text/plain"
       }
       "scripts/configure-vault-oidc.sh" = {
-        content      = templatefile("${path.module}/configure-vault-oidc.sh", {
-          vault_fqdn = local.vault_fqdn_for_oidc
-          github_org = var.vault_github_organization
+        content = templatefile("${path.module}/configure-vault-oidc.sh", {
+          vault_fqdn  = local.vault_fqdn_for_oidc
+          github_org  = var.vault_github_organization
           github_team = var.vault_github_team_slug
         })
         content_type = "text/x-shellscript"
       }
       "scripts/refresh-vault-oidc.sh" = {
-        content      = templatefile("${path.module}/refresh-vault-oidc.sh.tftpl", {
+        content = templatefile("${path.module}/refresh-vault-oidc.sh.tftpl", {
           github_client_id_parameter     = aws_ssm_parameter.vault_github_client_id[0].name
           github_client_secret_parameter = aws_ssm_parameter.vault_github_client_secret[0].name
           oidc_secret_parameter          = aws_ssm_parameter.vault_oidc_client_secret[0].name
@@ -459,7 +459,7 @@ locals {
         content_type = "text/x-shellscript"
       }
       "vault/dex.yml" = {
-        content      = templatefile("${path.module}/dex.yml.tftpl", {
+        content = templatefile("${path.module}/dex.yml.tftpl", {
           fqdn = local.vault_fqdn_for_oidc
           org  = var.vault_github_organization
           team = var.vault_github_team_slug

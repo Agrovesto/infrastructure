@@ -44,7 +44,7 @@ resource "aws_instance" "app" {
     db_list            = join(" ", local.mssql_all_databases)
     host_config_bucket = local.host_config_bucket
 
-    vault             = var.vault
+    vault = var.vault
     vault_github_parameters = var.vault.oidc_enabled ? {
       client_id     = aws_ssm_parameter.vault_github_client_id[0].name
       client_secret = aws_ssm_parameter.vault_github_client_secret[0].name
@@ -205,7 +205,7 @@ resource "aws_ssm_association" "host_config_refresh" {
       "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
       "# Vault OAuth parameter versions: ${var.vault.oidc_enabled ? join(",", [tostring(aws_ssm_parameter.vault_github_client_id[0].version), tostring(aws_ssm_parameter.vault_github_client_secret[0].version), tostring(aws_ssm_parameter.vault_oidc_client_secret[0].version)]) : "disabled"}",
       "set -euo pipefail",
-    ], var.vault.oidc_enabled ? [
+      ], var.vault.oidc_enabled ? [
       # The existing systemd unit runs compose immediately after sync. Inject
       # SSM secrets and prepare Dex/Caddy state FIRST, then start the services.
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",

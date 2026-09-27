@@ -208,10 +208,10 @@ variable "mssql_subdomain" {
 
 variable "vault" {
   type = object({
-    image          = optional(string, "hashicorp/vault:1.15")
-    host_port      = optional(number, 8200)
-    subdomain      = optional(string, "vault")
-    oidc_enabled   = optional(bool, false) # opt-in: requires three OAuth credentials and a planned Vault restart
+    image        = optional(string, "hashicorp/vault:1.15")
+    host_port    = optional(number, 8200)
+    subdomain    = optional(string, "vault")
+    oidc_enabled = optional(bool, false) # opt-in: requires three OAuth credentials and a planned Vault restart
   })
   default = {
     image     = "hashicorp/vault:1.15"

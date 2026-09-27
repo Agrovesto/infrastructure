@@ -81,7 +81,7 @@ output "frontend_default_urls" {
 
 output "frontend_custom_domains" {
   description = "Configured hostnames, including reserved placeholders without DNS records or deployments."
-  value = { for k, v in var.amplify_apps : k => "${v.subdomain}.${var.domain_name}" }
+  value       = { for k, v in var.amplify_apps : k => "${v.subdomain}.${var.domain_name}" }
 }
 
 output "backend_domains" {
