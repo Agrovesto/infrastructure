@@ -641,12 +641,17 @@ run "sonar_on_postgres" {
 }
 
 # Provisioning the KMS prerequisite does not perform the seal migration.
-run "vault_kms_preparation_disabled_by_default" {
+# The module default is false, although terraform.auto.tfvars opts dev in.
+run "vault_kms_preparation_explicitly_disabled" {
   command = plan
+
+  variables {
+    prepare_vault_kms_auto_unseal = false
+  }
 
   assert {
     condition     = length(aws_kms_key.vault_unseal) == 0 && length(aws_kms_alias.vault_unseal) == 0 && output.vault_auto_unseal_key_arn == ""
-    error_message = "Default plans must not create a Vault KMS key."
+    error_message = "Plans with Vault KMS preparation disabled must not create a Vault KMS key."
   }
 }
 
