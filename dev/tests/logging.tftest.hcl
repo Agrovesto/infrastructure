@@ -397,12 +397,11 @@ run "nginx_allowlist" {
   }
 
   assert {
-    # There are two IP-gated vhosts now — Grafana and SonarQube — and they take
-    # the same fallback rule, so an explicit list has to remove the loopback line
-    # from both. Asserting on the whole file is what catches one of them being
-    # left on the 127.0.0.1 default by mistake.
-    condition     = !strcontains(local.nginx_conf, "allow 127.0.0.1;")
-    error_message = "An explicit list replaces the loopback fallback instead of adding to it."
+    # Grafana and SonarQube replace their loopback fallback with the explicit
+    # list. The one remaining loopback allow belongs to the separate, internal
+    # Vault vhost while OIDC is disabled.
+    condition     = length(regexall("allow 127\\.0\\.0\\.1;", local.nginx_conf)) == 1
+    error_message = "An explicit Grafana/SonarQube allowlist replaces their loopback fallback; only the internal Vault vhost keeps its loopback allow."
   }
 
   assert {

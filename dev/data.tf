@@ -97,6 +97,18 @@ data "aws_iam_policy_document" "ec2" {
     }
   }
 
+  # Direct AWS KMS calls by the Vault container using the EC2 instance profile.
+  # This is intentionally separate from the SSM-only DecryptHostPasswords grant;
+  # no static AWS credentials or Shamir shares are passed into Compose.
+  dynamic "statement" {
+    for_each = var.prepare_vault_kms_auto_unseal ? [1] : []
+    content {
+      sid       = "VaultKmsAutoUnseal"
+      actions   = ["kms:Encrypt", "kms:Decrypt", "kms:DescribeKey"]
+      resources = [aws_kms_key.vault_unseal[0].arn]
+    }
+  }
+
   # Docker login on the EC2 host (user_data) — GetAuthorizationToken has no
   # resource-level scoping by AWS design (covered by the document-level skips).
   statement {

@@ -1,5 +1,5 @@
 # =============================================================================
-# DEV — EC2 app host (nginx + docker compose: 5 APIs, Vault, SQL Server)
+# DEV — EC2 app host (nginx + docker compose: 7 APIs, Vault, SQL Server)
 #
 # Run with:  terraform -chdir=dev init && terraform -chdir=dev test
 # =============================================================================
@@ -128,7 +128,15 @@ run "instance" {
 
   assert {
     condition     = aws_instance.app.associate_public_ip_address == false
-    error_message = "The host uses an Elastic IP, not an auto-assigned public IP."
+    error_message = "Fresh hosts should use the Elastic IP rather than request an auto-assigned public IP."
+  }
+
+  assert {
+    condition = (
+      strcontains(file("${path.module}/ec2.tf"), "prevent_destroy = true") &&
+      strcontains(file("${path.module}/ec2.tf"), "ignore_changes = [ami, user_data, associate_public_ip_address]")
+    )
+    error_message = "The already-running root-backed Vault host must not be replaced to change its legacy public-IP flag."
   }
 
   assert {
