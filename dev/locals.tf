@@ -296,7 +296,7 @@ locals {
     # host with neither has no persistent volume of its own and falls back to
     # /data/vault/caddy on the root disk. The SSO cases keep their historical
     # paths so an existing ACME account/certificates are not orphaned.
-    data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : local.grafana_github_sso_enabled ? "${local.logging_root}/caddy" : var.logging.enabled ? "${local.logging_root}/caddy" : "/data/vault/caddy"
+    data_dir = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : local.grafana_github_sso_enabled ? "${local.logging_root}/caddy" : var.logging.enabled ? "${local.logging_root}/caddy" : "/data/vault/caddy"
     # The Vault host joins the edge only for Vault OIDC, where Dex serves at
     # its /dex path (the canonical issuer URL); the Vault UI itself stays
     # behind nginx's source-IP allow list until that same feature opens it.
