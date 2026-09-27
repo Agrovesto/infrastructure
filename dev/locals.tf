@@ -214,7 +214,8 @@ locals {
   ]
 
   # The TLS edge runs whenever something needs public HTTPS: GitHub SSO for the
-  # dev UIs, the Dex issuer host for Vault OIDC, or an opted-in API vhost.
+  # dev UIs, Vault OIDC (whose Dex login broker serves at the Vault host's
+  # /dex path), or an opted-in API vhost.
   tls_proxy_enabled = local.github_sso_proxy_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
 
   # ---------------------------------------------------------------------------
@@ -278,11 +279,12 @@ locals {
   })
 
   # Caddy is a narrow TLS edge in front of the existing nginx router. It serves
-  # the SSO-enabled UI hosts, the Dex issuer host and API vhosts that opted in
-  # with apis.<name>.tls_via_caddy; all source-IP checks remain in nginx, which
-  # restores the client address from Caddy's X-Forwarded-For header. Certificate
-  # state lives on one of the persistent service volumes, so an EC2 replacement
-  # does not repeatedly consume ACME issuance limits.
+  # the SSO-enabled UI hosts, the Vault OIDC host (Dex for Vault's GitHub login)
+  # and API vhosts that opted in with apis.<name>.tls_via_caddy; all source-IP
+  # checks remain in nginx, which restores the client address from Caddy's
+  # X-Forwarded-For header. Certificate state lives on one of the persistent
+  # service volumes, so an EC2 replacement does not repeatedly consume ACME
+  # issuance limits.
   github_sso_proxy = {
     enabled         = local.tls_proxy_enabled
     image           = "caddy:2.11.4-alpine"
@@ -295,25 +297,26 @@ locals {
     # /data/vault/caddy on the root disk. The SSO cases keep their historical
     # paths so an existing ACME account/certificates are not orphaned.
     data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : local.grafana_github_sso_enabled ? "${local.logging_root}/caddy" : var.logging.enabled ? "${local.logging_root}/caddy" : "/data/vault/caddy"
-    # The Vault host is on the edge whenever the edge runs: Dex answers at its
-    # /dex path (the canonical OIDC issuer URL) and nginx keeps the Vault UI
-    # itself behind its source-IP allow list until Vault OIDC opens it. The
-    # other UI hosts join only once their GitHub SSO is configured, and API
-    # vhosts only when they set apis.<name>.tls_via_caddy.
+    # The Vault host joins the edge only for Vault OIDC, where Dex serves at
+    # its /dex path (the canonical issuer URL); the Vault UI itself stays
+    # behind nginx's source-IP allow list until that same feature opens it.
+    # The other UI hosts join once their GitHub SSO is configured, and API
+    # vhosts when they set apis.<name>.tls_via_caddy.
     domains = compact(concat(
       [
         var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.github_sso_proxy_enabled ? local.sonar_fqdn : "",
         var.logging.enabled && var.logging.expose_via_nginx && local.github_sso_proxy_enabled ? local.grafana_fqdn : "",
-        local.vault_fqdn_for_oidc,
+        var.vault.oidc_enabled ? local.vault_fqdn_for_oidc : "",
       ],
       local.api_tls_domains,
     ))
   }
 
   caddyfile = local.tls_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
-    email        = local.github_sso_proxy.acme_email
-    domains      = local.github_sso_proxy.domains
-    vault_domain = local.vault_fqdn_for_oidc
+    email              = local.github_sso_proxy.acme_email
+    domains            = local.github_sso_proxy.domains
+    vault_oidc_enabled = var.vault.oidc_enabled
+    vault_domain       = local.vault_fqdn_for_oidc
   }) : ""
 
   loki_config = templatefile("${path.module}/loki-config.yml.tftpl", {

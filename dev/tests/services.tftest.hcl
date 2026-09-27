@@ -507,10 +507,11 @@ run "github_sso_uses_https_and_ssm_credentials" {
   }
 }
 
-# The TLS edge is not only for SSO callbacks: Dex always keeps its route at the
-# canonical OIDC issuer host, and any API vhost can opt into HTTPS with
-# apis.<name>.tls_via_caddy (the agx API does).
-run "caddy_edge_serves_dex_and_opted_in_apis" {
+# The TLS edge is not only for SSO callbacks: any API vhost can opt into HTTPS
+# with apis.<name>.tls_via_caddy (the agx API does). Dex belongs to the Vault
+# OIDC feature — "vault_oidc_staged" above pins its Caddy route — so without
+# Vault OIDC neither Dex nor the Vault host appears on the edge.
+run "caddy_edge_serves_opted_in_api_hosts" {
   command = plan
 
   variables {
@@ -536,13 +537,19 @@ run "caddy_edge_serves_dex_and_opted_in_apis" {
       local.tls_proxy_enabled,
       local.api_tls_domains == ["dev-agx-api.nomaos.com"],
       strcontains(local.caddyfile, "dev-agx-api.nomaos.com"),
-      strcontains(local.caddyfile, "reverse_proxy dex:5556"),
-      strcontains(local.caddyfile, "dev-vault.nomaos.com"),
       strcontains(local.docker_compose, "container_name: agrovesto-edge"),
       strcontains(local.docker_compose, "80:80"),
       strcontains(local.docker_compose, "443:443"),
     ])
-    error_message = "The Caddy TLS edge must serve the agx API over HTTPS and always carry the Dex route at the OIDC issuer host."
+    error_message = "The Caddy TLS edge must serve the agx API over HTTPS."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
+      !strcontains(local.caddyfile, "dev-vault.nomaos.com")
+    )
+    error_message = "Dex is Vault's login broker: its Caddy route ships with Vault OIDC (vault_oidc_enabled), not with the edge at large."
   }
 
   assert {
