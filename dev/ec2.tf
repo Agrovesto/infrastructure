@@ -13,6 +13,7 @@ resource "aws_instance" "app" {
   associate_public_ip_address = false
   key_name                    = var.key_name != "" ? var.key_name : null
 
+
   root_block_device {
     volume_size           = var.root_volume_size_gb
     volume_type           = "gp3"
@@ -87,6 +88,10 @@ resource "aws_instance" "app" {
   depends_on = [aws_s3_object.host_config, aws_iam_role_policy.ec2]
 
   lifecycle {
+    # Refuse any plan that would destroy or replace the dev host (key_name,
+    # subnet, a tainted instance...). To rebuild on purpose: set this to false,
+    # apply, then set it back to true.
+    prevent_destroy = true
     # A new Canonical AMI (most_recent = true) or any edit to the rendered
     # bootstrap would otherwise destroy and recreate the host on every apply.
     ignore_changes = [ami, user_data]

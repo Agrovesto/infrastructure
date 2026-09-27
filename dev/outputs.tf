@@ -141,8 +141,8 @@ output "sonarqube_access" {
     ssh_tunnel = local.sonarqube_nginx.enabled && length(var.sonarqube.allowed_cidrs) == 0 ? "ssh -N -L ${var.sonarqube.host_port}:127.0.0.1:${var.sonarqube.host_port} ubuntu@${local.ec2_public_ip}" : "(allow list is not empty; use the URL directly)"
     local_url  = "http://localhost:${var.sonarqube.host_port}  (first login is admin/admin and SonarQube forces a password change)"
     dns_record = "add \"${var.sonarqube.subdomain}\" = \"${local.ec2_public_ip}\" to extra_a_records in prod/terraform.auto.tfvars"
-    database   = "${var.sonarqube.database_name} on the on-host SQL Server, collation ${var.sonarqube.database_collation}, login ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)"
-    first_boot = "SonarQube starts before init-dbs.sql has run, fails to reach its database and is restarted by compose until the schema exists. Expect a few restarts and 2-5 minutes before the UI answers on a 1 GB heap."
+    database   = var.sonarqube.database_engine == "postgres" ? "${var.sonarqube.database_name} on the agrovesto-sonarqube-db PostgreSQL container (data in ${var.sonarqube.data_dir}/postgres), user ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)" : "${var.sonarqube.database_name} on the on-host SQL Server, collation ${var.sonarqube.database_collation}, login ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)"
+    first_boot = var.sonarqube.database_engine == "postgres" ? "SonarQube waits for sonarqube-db, then creates its schema. Expect 2-5 minutes before the UI answers on a 1 GB heap." : "SonarQube starts before init-dbs.sql has run, fails to reach its database and is restarted by compose until the schema exists. Expect a few restarts and 2-5 minutes before the UI answers on a 1 GB heap."
     scanner_ip = length(var.sonarqube.allowed_cidrs) == 0 ? "WARNING: sonarqube.allowed_cidrs is empty, so the nginx vhost answers 127.0.0.1 only and GitHub Actions runners are denied. Add your runner or NAT egress CIDR before pointing CI at this server." : "allowed: ${join(", ", var.sonarqube.allowed_cidrs)}"
   } : null
 }
@@ -151,7 +151,7 @@ output "sonarqube_authentication" {
   description = "Configured SonarQube login methods and GitHub App callback"
   value = var.sonarqube.enabled ? {
     github_enabled        = local.sonarqube_github_sso_enabled
-    github_callback_url   = "https://${local.sonar_fqdn}"
+    github_callback_url   = "https://${local.sonar_fqdn}/oauth2/callback/github"
     allowed_organizations = var.sonarqube_github_organizations
     github_team_roles = {
       "Agrovesto/Backend"        = "Reader"

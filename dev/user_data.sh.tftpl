@@ -10,6 +10,8 @@ curl -sSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_6
 unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
 systemctl enable --now docker
 usermod -aG docker ubuntu
+id ssm-user >/dev/null 2>&1 || useradd -m -s /bin/bash ssm-user
+usermod -aG docker ssm-user
 
 # Container logs are bounded at the daemon level: json-file with rotation keeps
 # ${logging.docker_log_max_files} x ${logging.docker_log_max_size} per container, so an app that
@@ -129,7 +131,7 @@ format_and_mount "${logging_root}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_St
 # files. uid 1000 is what the sonarqube image runs as, and Elasticsearch refuses
 # to run as root, so the mount has to be handed over before compose starts.
 format_and_mount "${sonarqube.data_dir}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${sonarqube_volume_id}" /dev/xvdh
-mkdir -p "${sonarqube.data_dir}"/{data,extensions,logs}
+mkdir -p "${sonarqube.data_dir}"/{data,logs}
 chown -R 1000:1000 "${sonarqube.data_dir}"
 %{ endif ~}
 %{ if sso_proxy.enabled ~}

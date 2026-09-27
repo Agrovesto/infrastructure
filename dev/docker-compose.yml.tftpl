@@ -90,12 +90,13 @@ services:
     cap_add:
       - IPC_LOCK
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: "$${VAULT_DEV_ROOT_TOKEN}"
-      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
       VAULT_ADDR: "http://127.0.0.1:8200"
     ports:
       - "127.0.0.1:${vault.host_port}:8200"
-    command: server -dev
+    command: server -config=/vault/config/vault.hcl
+    volumes:
+      - /data/vault/data:/vault/file
+      - /data/vault/config/vault.hcl:/vault/config/vault.hcl
     restart: unless-stopped
 %{ if redis.enabled ~}
 
@@ -220,13 +221,12 @@ services:
     ports:
       - "127.0.0.1:${sonarqube.host_port}:9000"
     volumes:
-      # data/ holds the Elasticsearch indices, extensions/ the installed plugins.
-      # Both on the dedicated volume (dev/sonarqube.tf), which is not
-      # delete_on_termination, so replacing the instance keeps the analyses.
-      # conf/ is deliberately not mounted: the image generates it, and a bind
-      # mount would pin an empty directory over the generated one.
+      # data/ holds the Elasticsearch indices. extensions/ is deliberately NOT
+      # mounted: the image ships the community branch plugin in
+      # /opt/sonarqube/extensions/plugins and its -javaagent points at that
+      # exact file, so a bind mount would hide it and the web server would not
+      # start. Plugins come from the image; change them by changing the image.
       - ${sonarqube.data_dir}/data:/opt/sonarqube/data
-      - ${sonarqube.data_dir}/extensions:/opt/sonarqube/extensions
       - ${sonarqube.data_dir}/logs:/opt/sonarqube/logs
 %{ if sonarqube.github_sso_enabled ~}
       # Generated from SSM SecureStrings at boot (never uploaded to the config
