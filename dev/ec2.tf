@@ -30,8 +30,8 @@ resource "aws_instance" "app" {
   # cloud-init runs this bootstrap only on first boot. It is deliberately NOT a
   # replacement trigger any more (see lifecycle.ignore_changes below): config
   # changes reach the running host through aws_ssm_association.host_config_refresh.
-  # To rebuild the host on purpose (e.g. after rotating SSO credentials or to
-  # pick up a newer Ubuntu AMI):  terraform apply -replace=aws_instance.app
+  # Never replace this root-backed Vault host as a routine config update:
+  # replacement would terminate the instance and delete its root EBS volume.
   user_data_replace_on_change = false
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     mssql_volume_id = replace(aws_ebs_volume.mssql.id, "-", "")
@@ -97,9 +97,12 @@ resource "aws_instance" "app" {
     # Keep the live host: Vault's /data/vault/data bind mount is confirmed on
     # the root EBS volume, which is delete_on_termination.
     prevent_destroy = true
-    # A new Canonical AMI (most_recent = true) or any edit to the rendered
-    # bootstrap would otherwise destroy and recreate the host on every apply.
-    ignore_changes = [ami, user_data]
+    # A new Canonical AMI or bootstrap edit must not replace this host. The
+    # adopted live instance reports associate_public_ip_address = true, while
+    # new instances should use only the Elastic IP (false above). That EC2
+    # attribute is ForceNew: changing the existing host to false would delete
+    # Vault's root volume. Retain its observed value without replacing it.
+    ignore_changes = [ami, user_data, associate_public_ip_address]
 
     precondition {
       condition     = !var.vault.oidc_enabled || var.vault_oidc_restart_ack
