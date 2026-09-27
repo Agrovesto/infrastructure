@@ -16,10 +16,11 @@ events {
 http {
   resolver 127.0.0.11 valid=10s ipv6=off;
 
-  # When GitHub SSO is configured, Caddy terminates TLS and forwards to this
-  # container over the private compose network. Trust proxy headers only from
-  # RFC1918 addresses so a direct internet client cannot spoof its source IP and
-  # bypass the Grafana/SonarQube allow lists below.
+  # When the Caddy TLS edge runs (GitHub SSO, the Dex issuer host, or an API
+  # vhost with apis.<name>.tls_via_caddy), Caddy terminates TLS and forwards to
+  # this container over the private compose network. Trust proxy headers only
+  # from RFC1918 addresses so a direct internet client cannot spoof its source
+  # IP and bypass the Grafana/SonarQube/Vault allow lists below.
   set_real_ip_from 10.0.0.0/8;
   set_real_ip_from 172.16.0.0/12;
   set_real_ip_from 192.168.0.0/16;
@@ -87,9 +88,10 @@ http {
 
 %{ endfor ~}
   # ── Vault: dev-mode secrets UI/API ──────────────────────────────────────────
-  # Before OIDC this remains internal even if DNS points here: do not send
-  # Vault tokens over public HTTP. With OIDC enabled, Caddy owns public 80/443
-  # and enforces HTTPS before proxying to nginx.
+  # The allow list below is what keeps this internal even when DNS (and the
+  # Caddy TLS edge, which always fronts this host to serve Dex at /dex) point
+  # here: do not send Vault tokens over public HTTP. With OIDC enabled, Caddy
+  # enforces HTTPS and this vhost deliberately opens up to browsers.
   server {
     listen 80;
     server_name ${vault.subdomain}.${domain};

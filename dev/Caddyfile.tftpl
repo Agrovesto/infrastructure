@@ -4,14 +4,16 @@
   email ${email}
   admin off
 
-  # Only the SSO hosts move to HTTPS. The other dev API vhosts retain their
-  # current HTTP behaviour through the catch-all below.
+  # Only the hosts in the HTTPS site below move to HTTPS: the SSO UIs, the Vault
+  # host (Dex serves at its /dex path) and API vhosts that opt in with
+  # apis.<name>.tls_via_caddy. The other dev API vhosts retain their current
+  # HTTP behaviour through the catch-all below.
   auto_https disable_redirects
 }
 
 :80 {
-  @sso_hosts host ${join(" ", domains)}
-  redir @sso_hosts https://{host}{uri} 308
+  @tls_hosts host ${join(" ", domains)}
+  redir @tls_hosts https://{host}{uri} 308
 
   reverse_proxy nginx:80
 }
@@ -24,7 +26,12 @@ ${join(", ", domains)} {
     Referrer-Policy "strict-origin-when-cross-origin"
   }
 
-%{ if vault_oidc_enabled ~}
+  # Dex (GitHub OAuth -> OIDC) is the one upstream proxied directly instead of
+  # through nginx: it has no nginx vhost and serves nothing but these paths. The
+  # route is a standing part of the TLS edge — it answers at the canonical
+  # issuer URL https://${vault_domain}/dex/ as soon as Dex is deployed (Vault
+  # OIDC enablement) and returns 502 on /dex alone until then. Everything else
+  # stays behind nginx, the application router and source-IP authorization edge.
   @dex {
     host ${vault_domain}
     path /dex /dex/*
@@ -35,8 +42,4 @@ ${join(", ", domains)} {
   handle {
     reverse_proxy nginx:80
   }
-%{ else ~}
-  # nginx remains the application router and source-IP authorization edge.
-  reverse_proxy nginx:80
-%{ endif ~}
 }

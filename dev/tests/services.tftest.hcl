@@ -507,6 +507,54 @@ run "github_sso_uses_https_and_ssm_credentials" {
   }
 }
 
+# The TLS edge is not only for SSO callbacks: Dex always keeps its route at the
+# canonical OIDC issuer host, and any API vhost can opt into HTTPS with
+# apis.<name>.tls_via_caddy (the agx API does).
+run "caddy_edge_serves_dex_and_opted_in_apis" {
+  command = plan
+
+  variables {
+    apis = {
+      wallet = {
+        image     = "public.ecr.aws/nginx/nginx:alpine"
+        host_port = 5001
+        subdomain = "dev-wallet-api"
+        env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      }
+      agx = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5006
+        subdomain     = "dev-agx-api"
+        env           = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+        tls_via_caddy = true
+      }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      local.tls_proxy_enabled,
+      local.api_tls_domains == ["dev-agx-api.nomaos.com"],
+      strcontains(local.caddyfile, "dev-agx-api.nomaos.com"),
+      strcontains(local.caddyfile, "reverse_proxy dex:5556"),
+      strcontains(local.caddyfile, "dev-vault.nomaos.com"),
+      strcontains(local.docker_compose, "container_name: agrovesto-edge"),
+      strcontains(local.docker_compose, "80:80"),
+      strcontains(local.docker_compose, "443:443"),
+    ])
+    error_message = "The Caddy TLS edge must serve the agx API over HTTPS and always carry the Dex route at the OIDC issuer host."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name dev-agx-api.nomaos.com;") &&
+      strcontains(local.nginx_conf, "proxy_pass http://agx:5006;") &&
+      !strcontains(local.caddyfile, "dev-wallet-api.nomaos.com")
+    )
+    error_message = "Caddy stays a narrow TLS edge: nginx keeps routing the API vhosts, and only opted-in hosts move to HTTPS."
+  }
+}
+
 run "dns_record" {
   command = plan
 
