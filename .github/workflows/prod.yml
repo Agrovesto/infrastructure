@@ -50,3 +50,6 @@ jobs:
       # credentials belong on this job rather than the prod application job.
       GRAFANA_GITHUB_CLIENT_ID: ${{ secrets.GRAFANA_GITHUB_CLIENT_ID }}
       GRAFANA_GITHUB_CLIENT_SECRET: ${{ secrets.GRAFANA_GITHUB_CLIENT_SECRET }}
+      VAULT_GITHUB_CLIENT_ID: ${{ secrets.VAULT_GITHUB_CLIENT_ID }}
+      VAULT_GITHUB_CLIENT_SECRET: ${{ secrets.VAULT_GITHUB_CLIENT_SECRET }}
+      VAULT_OIDC_CLIENT_SECRET: ${{ secrets.VAULT_OIDC_CLIENT_SECRET }}

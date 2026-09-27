@@ -60,6 +60,12 @@ on:
         required: false
       SONARQUBE_GITHUB_PRIVATE_KEY:
         required: false
+      VAULT_GITHUB_CLIENT_ID:
+        required: false
+      VAULT_GITHUB_CLIENT_SECRET:
+        required: false
+      VAULT_OIDC_CLIENT_SECRET:
+        required: false     
 
 permissions:
   contents: read
@@ -364,6 +370,9 @@ jobs:
           TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
           TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
           TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
+          TF_VAR_vault_github_client_id: ${{ secrets.VAULT_GITHUB_CLIENT_ID }}
+          TF_VAR_vault_github_client_secret: ${{ secrets.VAULT_GITHUB_CLIENT_SECRET }}
+          TF_VAR_vault_oidc_client_secret: ${{ secrets.VAULT_OIDC_CLIENT_SECRET }}
         run: |
           set +e
           terraform plan -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan > plan.log 2>&1
@@ -475,6 +484,9 @@ jobs:
           TF_VAR_sonarqube_github_client_secret: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
           TF_VAR_sonarqube_github_app_id: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
           TF_VAR_sonarqube_github_private_key: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
+          TF_VAR_vault_github_client_id: ${{ secrets.VAULT_GITHUB_CLIENT_ID }}
+          TF_VAR_vault_github_client_secret: ${{ secrets.VAULT_GITHUB_CLIENT_SECRET }}
+          TF_VAR_vault_oidc_client_secret: ${{ secrets.VAULT_OIDC_CLIENT_SECRET }}
         run: terraform plan -no-color -input=false -lock-timeout=5m -out=tfplan
       - name: terraform apply
         run: terraform apply -no-color -input=false -lock-timeout=5m tfplan
