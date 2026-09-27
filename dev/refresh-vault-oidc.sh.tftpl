@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Non-secret SSM association helper. Run on the existing EC2 host before compose
+# refresh so Dex/Caddy have writable state and .env has their credentials.
+set -euo pipefail
+mkdir -p /data/vault/dex "${caddy_dir}/data" "${caddy_dir}/config"
+chown -R 1001:1001 /data/vault/dex
+chmod 700 /data/vault/dex
+chown -R 1000:1000 "${caddy_dir}"
+chmod 700 "${caddy_dir}" "${caddy_dir}/data" "${caddy_dir}/config"
+
+python3 - <<'PY'
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+path = Path('/opt/agrovesto/compose/.env')
+if not path.is_file():
+    raise SystemExit('compose/.env missing; do not start Dex with empty credentials')
+
+params = {
+    'VAULT_GITHUB_CLIENT_ID': '${github_client_id_parameter}',
+    'VAULT_GITHUB_CLIENT_SECRET': '${github_client_secret_parameter}',
+    'VAULT_OIDC_CLIENT_SECRET': '${oidc_secret_parameter}',
+}
+values = {}
+for key, name in params.items():
+    values[key] = subprocess.check_output([
+        '/usr/local/bin/aws', 'ssm', 'get-parameter', '--with-decryption',
+        '--name', name, '--query', 'Parameter.Value', '--output', 'text',
+        '--region', '${aws_region}',
+    ], text=True).rstrip('\n')
+    if not values[key] or '\n' in values[key]:
+        raise SystemExit(f'{key} must be a non-empty single-line secret')
+
+lines = [line for line in path.read_text().splitlines()
+         if line.partition('=')[0] not in values]
+lines.extend(f'{key}={value}' for key, value in values.items())
+fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.env.')
+try:
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+PY

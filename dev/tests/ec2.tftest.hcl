@@ -1,5 +1,5 @@
 # =============================================================================
-# DEV — EC2 app host (nginx + docker compose: 5 APIs, Vault, SQL Server)
+# DEV — EC2 app host (nginx + docker compose: 7 APIs, Vault, SQL Server)
 #
 # Run with:  terraform -chdir=dev init && terraform -chdir=dev test
 # =============================================================================

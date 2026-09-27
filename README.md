@@ -5,7 +5,7 @@ Comprehensive technical documentation for the Agrovesto AWS infrastructure. This
 ## 📌 Project Overview
 
 Agrovesto infrastructure is split into three primary logical blocks:
-- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 5 APIs, SQL Server, Redis, SonarQube, Vault, and a local observability stack.
+- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 7 APIs, SQL Server, Redis, SonarQube, Vault, and a local observability stack.
 - **Prod (`prod/`)**: A production-grade ECS Fargate environment with RDS SQL Server, HashiCorp Vault, and authoritative DNS. Services export OpenTelemetry traces and metrics to the monitoring stack.
 - **Monitoring (`monitoring/`)**: An open-source observability stack (Prometheus, Loki, Tempo, Grafana) running in the Prod account to monitor production services without AWS-native costs.
 
@@ -42,12 +42,12 @@ Agrovesto infrastructure is split into three primary logical blocks:
 ### 🛠 Component Details
 
 #### 1. Compute
-- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 5 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 7 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
+- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 7 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 7 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
 - **Prod**: 5 ECS Fargate services (ASPNETCORE APIs) running on Graviton (ARM64) for better price-performance. Scaling is managed via Application Auto Scaling (min 1, max 4).
 - **Monitoring**: 5 always-on Fargate tasks (Prometheus, Loki, Tempo, Grafana, Edge) plus several scheduled batch jobs.
 
 #### 2. Databases (SQL Server)
-- **Dev**: SQL Server 2022 running as a container on the EC2 host. Six databases: the five services plus `sonar`, which is created with a `CS_AS` collation and `READ_COMMITTED_SNAPSHOT` because SonarQube requires both. Backups are synced to S3.
+- **Dev**: SQL Server 2022 runs as a container on the EC2 host for the six managed API databases, backed up to S3. The migrated `agx` database is not created by this stack; confirm separately whether it lives on this SQL host and needs inclusion in backups. SonarQube currently uses its own PostgreSQL container (the optional MSSQL path creates `sonar` with the required CS_AS collation and snapshot isolation).
 - **Prod**: RDS SQL Server **Express** (`db.t3.micro`).
     - **Note**: Express has a 10GB per-database cap and no Multi-AZ support.
     - **Scaling**: Upgrade path to Web/Standard on `db.m7i.large` when Multi-AZ or >10GB is required.
@@ -55,18 +55,21 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 #### 3. Caching & Code Quality (Dev)
 - **Redis**: `redis:6379` on the compose network for the APIs, published on the host's loopback only. Bounded at 256 MB with `allkeys-lru` eviction, because SQL Server shares the box and an unbounded cache is what takes the APIs down. No AUTH and no persistence by default; both are one flag away (`var.redis`).
-- **SonarQube**: Community Build on its own EBS volume, backed by the on-host SQL Server. This is the server CI pushes to via `SONAR_HOST_URL`. Served by nginx at `sonar.nomaos.com`, IP-gated the same way the Grafana vhost is.
+- **SonarQube**: Community Build on its own EBS volume, backed by its on-host PostgreSQL container. This is the server CI pushes to via `SONAR_HOST_URL`. Served by nginx at `sonar.nomaos.com`, IP-gated the same way the Grafana vhost is.
     - **Memory**: SonarSource asks for 4 GB; this host has 8 GiB and SQL Server is on it. Elasticsearch therefore runs on a 1 GB heap inside a 3 GB cgroup limit, so a heavy analysis kills SonarQube rather than the kernel OOM-killing the database. `t3.xlarge` is the fix if that starts happening.
     - **Kernel**: `vm.max_map_count=262144` is written to `/etc/sysctl.d` at boot — Elasticsearch fails a hard bootstrap check without it.
 
 #### 4. Secrets (HashiCorp Vault)
 - Both environments use HashiCorp Vault.
+- **Dev**: The latest dev Compose configuration runs the existing initialized Vault with **file storage at `/data/vault/data` on the EC2 root volume** and Shamir 3-of-5 seal; this branch follows that configuration. `dev-vault.nomaos.com` points to the EIP manually, but its nginx route stays internal until the opt-in Dex/OIDC + Caddy HTTPS setup is enabled. No storage migration or EC2 replacement is needed. Back up the root volume first: enabling OIDC requires a planned Vault restart (three Shamir shares before a seal migration, or verified KMS auto-unseal afterward). To avoid manual unsealing on future starts, the optional Terraform flag prepares a dedicated KMS key and IAM grants; an operator must then migrate the *existing* seal with three current shares. Neither step reinitializes Vault or moves its data. See the [auto-unseal runbook](docs/vault-auto-unseal.md) and [OIDC guide](docs/vault-github-login.md).
 - **Prod**: Fargate-based Vault with Raft storage on EFS and AWS KMS auto-unseal.
 - **Migration**: Services can source secrets from AWS Secrets Manager (bootstrap) or switch to Vault (`vault_secrets_enabled = true`).
 
 #### 5. Networking & DNS
 - **Prod** account is authoritative for the root domain `nomaos.com`.
 - **ALB**: Prod uses an internet-facing ALB with an ACM wildcard certificate.
+- **Dev agx API**: `agx` is an additional Compose service on port 5006, routed by nginx at `dev-agx-api.nomaos.com`, with its own ECR repository. The agx database was already migrated; this stack does not create a new one. Its image is still the placeholder nginx image; replace it with the real API image and add `dev-agx-api` to prod-managed `extra_a_records` to make the name resolve.
+- **Dev agx frontend**: `agx-frontend` is a manual Amplify placeholder on the `dev` branch. There is no source repository or deployed build yet, so auto-build and DNS publication for the reserved `dev-agx.nomaos.com` hostname are disabled. When the real frontend exists, set its `repository`, enable auto-build, set `publish_dns = true`, and add the CNAME in the prod-owned zone (or deploy artifacts manually).
 - **NAT**: A single NAT Gateway is used in Prod to balance cost and redundancy.
 - **Dev DNS**: Dev services are exposed via the Prod ALB or records in the Prod Route53 zone pointing to the Dev EIP.
 

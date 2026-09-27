@@ -213,7 +213,12 @@ mkdir -p /opt/agrovesto/{compose,scripts}
 SA_PW=$(aws ssm get-parameter --with-decryption --name "${mssql_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 {
 printf 'MSSQL_SA_PASSWORD=%s\n' "$SA_PW"
-printf 'VAULT_DEV_ROOT_TOKEN=%s\n' "$(openssl rand -hex 32)"
+%{ if vault.oidc_enabled ~}
+VAULT_GITHUB_ID=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+VAULT_GITHUB_SECRET=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+VAULT_OIDC_SECRET=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.oidc_secret}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'VAULT_GITHUB_CLIENT_ID=%s\nVAULT_GITHUB_CLIENT_SECRET=%s\nVAULT_OIDC_CLIENT_SECRET=%s\n' "$VAULT_GITHUB_ID" "$VAULT_GITHUB_SECRET" "$VAULT_OIDC_SECRET"
+%{ endif ~}
 printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\n' "${backup_bucket}" "${aws_region}"
 %{ if logging.enabled ~}
 GRAFANA_PW=$(aws ssm get-parameter --with-decryption --name "${grafana_parameter}" --query Parameter.Value --output text --region "${aws_region}")
@@ -280,7 +285,7 @@ PY
 chown 1000:1000 /opt/agrovesto/sonarqube/sonar-sso.properties
 chmod 600 /opt/agrovesto/sonarqube/sonar-sso.properties
 %{ endif ~}
-unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW \
+unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW VAULT_GITHUB_ID VAULT_GITHUB_SECRET VAULT_OIDC_SECRET \
   GRAFANA_GITHUB_CLIENT_ID GRAFANA_GITHUB_CLIENT_SECRET \
   SONAR_GITHUB_CLIENT_ID SONAR_GITHUB_CLIENT_SECRET SONAR_GITHUB_APP_ID SONAR_GITHUB_PRIVATE_KEY
 

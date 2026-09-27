@@ -72,6 +72,7 @@ output "frontend_default_domains" {
 }
 
 output "frontend_default_urls" {
+  description = "Amplify branch URLs; manual placeholders such as agx have no deployed page yet."
   value = {
     for k, v in aws_amplify_branch.this :
     k => "https://${v.branch_name}.${aws_amplify_app.this[k].default_domain}"
@@ -79,6 +80,7 @@ output "frontend_default_urls" {
 }
 
 output "frontend_custom_domains" {
+  description = "Configured hostnames, including reserved placeholders without DNS records or deployments."
   value = { for k, v in var.amplify_apps : k => "${v.subdomain}.${var.domain_name}" }
 }
 
@@ -89,6 +91,16 @@ output "backend_domains" {
 output "vault_url" {
   description = "Vault is local to the host; use SSH/SSM port forwarding to reach this loopback endpoint"
   value       = "http://127.0.0.1:${var.vault.host_port}"
+}
+
+output "vault_auto_unseal_key_arn" {
+  description = "Dedicated KMS key for a MANUAL Shamir-to-awskms seal migration. Empty until prepare_vault_kms_auto_unseal is enabled. Do not delete this key after migration."
+  value       = var.prepare_vault_kms_auto_unseal ? aws_kms_key.vault_unseal[0].arn : ""
+}
+
+output "vault_browser_login_url" {
+  description = "HTTPS browser login for the existing file-storage Vault (only after OIDC is enabled and verified)."
+  value       = var.vault.oidc_enabled ? "https://${local.vault_fqdn_for_oidc}/ui/vault/auth?with=oidc" : ""
 }
 
 output "ecr_repository_urls" {

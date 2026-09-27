@@ -54,6 +54,9 @@ services:
     restart: unless-stopped
     depends_on:
       - nginx
+%{ if vault.oidc_enabled ~}
+      - dex
+%{ endif ~}
     cpus: "${sso_proxy.cpu_limit}"
     mem_limit: ${sso_proxy.memory_limit_mb}M
 %{ endif ~}
@@ -97,7 +100,31 @@ services:
     volumes:
       - /data/vault/data:/vault/file
       - /data/vault/config/vault.hcl:/vault/config/vault.hcl
+%{ if vault.oidc_enabled ~}
+    # OIDC discovery may need a local route to Caddy instead of the EC2 EIP.
+    # Enabling this changes the Vault task and restarts it. Before a seal
+    # migration, 3 Shamir shares are needed; afterward verify KMS auto-unseal.
+    # Only enable after a backup and a maintenance window.
+    extra_hosts:
+      - "${vault.subdomain}.${domain}:host-gateway"
+%{ endif ~}
     restart: unless-stopped
+%{ if vault.oidc_enabled ~}
+
+  dex:
+    image: ghcr.io/dexidp/dex:v2.43.0
+    container_name: agrovesto-dex
+    command: dex serve /etc/dex/config.yml
+    environment:
+      GITHUB_CLIENT_ID: "$${VAULT_GITHUB_CLIENT_ID}"
+      GITHUB_CLIENT_SECRET: "$${VAULT_GITHUB_CLIENT_SECRET}"
+      VAULT_OIDC_CLIENT_SECRET: "$${VAULT_OIDC_CLIENT_SECRET}"
+    volumes:
+      - /opt/agrovesto/vault/dex.yml:/etc/dex/config.yml:ro
+      - /data/vault/dex:/data
+    restart: unless-stopped
+    mem_limit: 128M
+%{ endif ~}
 %{ if redis.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -170,7 +197,7 @@ services:
   #
   # The caps below are the whole argument about running this here. SonarSource's
   # own guidance is 4 GB of RAM for a small installation; this is a t3.large
-  # (8 GiB) that also runs SQL Server, five APIs, Vault and the logging stack.
+  # (8 GiB) that also runs SQL Server, seven APIs, Vault and the logging stack.
   # So Elasticsearch gets a 1 GB heap and the container is capped, which means a
   # heavy analysis makes *this* container slow — or gets it killed by its own
   # cgroup — instead of letting the kernel OOM-kill SQL Server. Raise

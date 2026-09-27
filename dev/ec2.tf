@@ -1,6 +1,6 @@
 # =============================================================================
 # EC2 app host — nginx reverse proxy + docker compose stack
-# (5 APIs, HashiCorp Vault, SQL Server 2022)
+# (7 APIs, HashiCorp Vault, SQL Server 2022)
 # =============================================================================
 
 resource "aws_instance" "app" {
@@ -12,7 +12,6 @@ resource "aws_instance" "app" {
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
   associate_public_ip_address = false
   key_name                    = var.key_name != "" ? var.key_name : null
-
 
   root_block_device {
     volume_size           = var.root_volume_size_gb
@@ -44,6 +43,13 @@ resource "aws_instance" "app" {
     # backup loop covers the same set init-dbs.sql does.
     db_list            = join(" ", local.mssql_all_databases)
     host_config_bucket = local.host_config_bucket
+
+    vault             = var.vault
+    vault_github_parameters = var.vault.oidc_enabled ? {
+      client_id     = aws_ssm_parameter.vault_github_client_id[0].name
+      client_secret = aws_ssm_parameter.vault_github_client_secret[0].name
+      oidc_secret   = aws_ssm_parameter.vault_oidc_client_secret[0].name
+    } : {}
 
     logging           = local.logging_runtime
     logging_root      = local.logging_root
@@ -88,13 +94,32 @@ resource "aws_instance" "app" {
   depends_on = [aws_s3_object.host_config, aws_iam_role_policy.ec2]
 
   lifecycle {
-    # Refuse any plan that would destroy or replace the dev host (key_name,
-    # subnet, a tainted instance...). To rebuild on purpose: set this to false,
-    # apply, then set it back to true.
+    # Keep the live host: Vault's /data/vault/data bind mount is confirmed on
+    # the root EBS volume, which is delete_on_termination.
     prevent_destroy = true
     # A new Canonical AMI (most_recent = true) or any edit to the rendered
     # bootstrap would otherwise destroy and recreate the host on every apply.
     ignore_changes = [ami, user_data]
+
+    precondition {
+      condition     = !var.vault.oidc_enabled || var.vault_oidc_restart_ack
+      error_message = "Enabling Vault OIDC restarts Vault on the EC2 root disk. Confirm a verified backup and current-seal restart plan (3 Shamir shares, or verified KMS auto-unseal) first (vault_oidc_restart_ack = true)."
+    }
+
+    precondition {
+      condition     = !var.vault.oidc_enabled || local.vault_oidc_credentials_valid
+      error_message = "Vault browser login requires GitHub OAuth ID/secret and a separate Dex OIDC client secret."
+    }
+
+    precondition {
+      condition     = !var.vault.oidc_enabled || can(regex("^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", var.vault_github_organization))
+      error_message = "vault_github_organization must be a single GitHub organization login."
+    }
+
+    precondition {
+      condition     = !var.vault.oidc_enabled || can(regex("^[a-z0-9]([a-z0-9-]{0,98}[a-z0-9])?$", var.vault_github_team_slug))
+      error_message = "vault_github_team_slug must be a GitHub team slug."
+    }
 
     precondition {
       condition     = local.sonarqube_github_configuration_valid
@@ -176,11 +201,17 @@ resource "aws_ssm_association" "host_config_refresh" {
   }
 
   parameters = {
-    commands = join("\n", [
+    commands = join("\n", concat([
       "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
+      "# Vault OAuth parameter versions: ${var.vault.oidc_enabled ? join(",", [tostring(aws_ssm_parameter.vault_github_client_id[0].version), tostring(aws_ssm_parameter.vault_github_client_secret[0].version), tostring(aws_ssm_parameter.vault_oidc_client_secret[0].version)]) : "disabled"}",
       "set -euo pipefail",
-      "systemctl start agrovesto-sync.service",
-    ])
+    ], var.vault.oidc_enabled ? [
+      # The existing systemd unit runs compose immediately after sync. Inject
+      # SSM secrets and prepare Dex/Caddy state FIRST, then start the services.
+      "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
+      "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh",
+      "docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans",
+    ] : ["systemctl start agrovesto-sync.service"]))
   }
 
   depends_on = [aws_s3_object.host_config]

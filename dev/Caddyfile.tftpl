@@ -24,7 +24,19 @@ ${join(", ", domains)} {
     Referrer-Policy "strict-origin-when-cross-origin"
   }
 
-  # nginx remains the only application router and source-IP authorization edge.
-  # Caddy supplies X-Forwarded-For/Host/Proto automatically.
+%{ if vault_oidc_enabled ~}
+  @dex {
+    host ${vault_domain}
+    path /dex /dex/*
+  }
+  handle @dex {
+    reverse_proxy dex:5556
+  }
+  handle {
+    reverse_proxy nginx:80
+  }
+%{ else ~}
+  # nginx remains the application router and source-IP authorization edge.
   reverse_proxy nginx:80
+%{ endif ~}
 }

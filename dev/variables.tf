@@ -208,15 +208,67 @@ variable "mssql_subdomain" {
 
 variable "vault" {
   type = object({
-    image     = optional(string, "hashicorp/vault:1.15")
-    host_port = optional(number, 8200)
-    subdomain = optional(string, "vault")
+    image          = optional(string, "hashicorp/vault:1.15")
+    host_port      = optional(number, 8200)
+    subdomain      = optional(string, "vault")
+    oidc_enabled   = optional(bool, false) # opt-in: requires three OAuth credentials and a planned Vault restart
   })
   default = {
     image     = "hashicorp/vault:1.15"
     host_port = 8200
     subdomain = "vault"
   }
+}
+
+# Prepare a dedicated AWS KMS key and grant the EC2 instance role permission
+# to use it. Does NOT change the running Vault configuration or restart Vault.
+# A one-time operator-led Shamir -> awskms seal migration is required; see
+# docs/vault-auto-unseal.md. Keep this off until backup/key custody is agreed.
+variable "prepare_vault_kms_auto_unseal" {
+  description = "Provision dedicated AWS KMS key and EC2 role grants for a manual Vault seal migration; does not enable the seal on the host"
+  type        = bool
+  default     = false
+}
+
+# GitHub browser login uses Dex (GitHub OAuth -> OIDC -> Vault), NOT the Vault
+# GitHub PAT auth method. Set these as CI secrets, never in tfvars or source.
+variable "vault_github_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "vault_github_client_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "vault_oidc_client_secret" {
+  description = "Independent random secret for the Vault <-> Dex OIDC client"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# An OIDC apply changes the live Vault service's Compose definition and will
+# restart it. The operator must verify a root-volume backup and the CURRENT
+# seal's restart procedure: three Shamir shares before migration, or a tested
+# KMS auto-unseal after migration (with the recovery shares still in custody).
+variable "vault_oidc_restart_ack" {
+  description = "Explicit acknowledgement of Vault restart, root-volume backup, and readiness to unseal under the current seal"
+  type        = bool
+  default     = false
+}
+
+variable "vault_github_organization" {
+  type    = string
+  default = "Agrovesto"
+}
+
+variable "vault_github_team_slug" {
+  description = "Only members of this GitHub team receive the scoped Vault KV operator policy"
+  type        = string
+  default     = "infrastructure"
 }
 
 # -----------------------------------------------------------------------------
@@ -295,7 +347,7 @@ variable "sonarqube" {
 
     Resource caps are small on purpose: SonarSource's own guidance is 4 GB of
     RAM for a small installation, and this host is a t3.large (8 GiB) that also
-    runs SQL Server, five APIs and the logging stack. See README for the
+    runs SQL Server, seven APIs and the logging stack. See README for the
     trade-off; raise instance_type before raising these numbers.
   EOT
 
@@ -519,13 +571,14 @@ variable "amplify_apps" {
   type = map(object({
     name                  = optional(string) # defaults to the map key; set to an adopted app's real name
     platform              = optional(string, "WEB")
-    repository            = string
+    repository            = optional(string) # null creates a manual Amplify placeholder until a repo is ready
     branch                = optional(string, "main")
     subdomain             = string
     framework             = optional(string, "React")
     build_spec            = optional(string)
     environment_variables = optional(map(string), {})
     enable_auto_build     = optional(bool, true)
+    publish_dns           = optional(bool, true) # keep unbuilt placeholders out of DNS
   }))
 }
 

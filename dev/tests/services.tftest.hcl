@@ -332,6 +332,29 @@ run "compose_persistence" {
 }
 
 # -----------------------------------------------------------------------------
+# nginx: Vault stays internal even when the API vhosts are publicly routable
+# -----------------------------------------------------------------------------
+
+run "vault_nginx_internal" {
+  command = plan
+
+  variables {
+    vault = { subdomain = "dev-vault" }
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name ${var.vault.subdomain}.${var.domain_name};") &&
+      strcontains(local.nginx_conf, "allow 127.0.0.1;\n    allow 172.16.0.0/12;\n    deny all;") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$vault_backend;") &&
+      strcontains(local.docker_compose, "127.0.0.1:${var.vault.host_port}:8200") &&
+      !contains(keys(local.a_records), var.vault.subdomain)
+    )
+    error_message = "Vault must be proxied through an internal-only nginx vhost, remain loopback-published, and have no public DNS."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # nginx: the sonar vhost, IP-gated like Grafana's
 # -----------------------------------------------------------------------------
 
@@ -615,4 +638,113 @@ run "sonar_on_postgres" {
     condition     = strcontains(local.docker_compose, "sonarqube-db:") && strcontains(local.docker_compose, "POSTGRES_PASSWORD: \"$${SONAR_DB_PASSWORD}\"")
     error_message = "The compose project must include the sonarqube-db service with the password from .env."
   }
+}
+
+# Provisioning the KMS prerequisite does not perform the seal migration.
+run "vault_kms_preparation_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_kms_key.vault_unseal) == 0 && length(aws_kms_alias.vault_unseal) == 0 && output.vault_auto_unseal_key_arn == ""
+    error_message = "Default plans must not create a Vault KMS key."
+  }
+}
+
+run "vault_kms_preparation_does_not_restart_vault" {
+  command = plan
+
+  variables {
+    prepare_vault_kms_auto_unseal = true
+  }
+
+  assert {
+    condition = (
+      length(aws_kms_key.vault_unseal) == 1 &&
+      length(aws_kms_alias.vault_unseal) == 1 &&
+      aws_kms_key.vault_unseal[0].enable_key_rotation &&
+      aws_kms_key.vault_unseal[0].deletion_window_in_days == 30
+    )
+    error_message = "The opt-in preparation creates one dedicated rotating KMS key and alias."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      !strcontains(local.docker_compose, "seal \"awskms\"") &&
+      !contains(keys(local.host_config_files), "vault/config/vault.hcl") &&
+      !strcontains(file("${path.module}/user_data.sh.tftpl"), "operator unseal -migrate")
+    )
+    error_message = "Preparing the key must not rewrite Vault config, restart Vault, or attempt a seal migration."
+  }
+}
+
+run "vault_existing_file_backend" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      strcontains(local.docker_compose, "/data/vault/config/vault.hcl:/vault/config/vault.hcl") &&
+      !strcontains(local.docker_compose, "server -dev") &&
+      !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID")
+    )
+    error_message = "Default Compose must preserve the initialized file-storage Vault from the latest dev branch."
+  }
+}
+
+# OIDC is opt-in on the initialized file-storage Vault, not a fresh Raft server.
+# Credential strings must never enter S3/user_data.
+run "vault_oidc_staged" {
+  command = plan
+
+  variables {
+    vault = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack = true
+    vault_github_client_id     = "test-client-id"
+    vault_github_client_secret = "test-github-secret"
+    vault_oidc_client_secret   = "test-oidc-secret"
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.vault_github_client_secret) == 1 &&
+      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      strcontains(local.docker_compose, "agrovesto-dex") &&
+      strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
+      strcontains(local.caddyfile, "dev-vault.nomaos.com") &&
+      strcontains(local.nginx_conf, "allow all;") &&
+      strcontains(aws_ssm_association.host_config_refresh.parameters["commands"], "scripts/refresh-vault-oidc.sh") &&
+      strcontains(local.host_config_files["scripts/refresh-vault-oidc.sh"].content, "VAULT_OIDC_CLIENT_SECRET")
+    )
+    error_message = "OIDC reuses the initialized file-storage Vault, with Dex, HTTPS and the Vault nginx route."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.docker_compose, "server -dev") &&
+      !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID") &&
+      !strcontains(local.docker_compose, "test-github-secret") &&
+      !strcontains(local.docker_compose, "test-oidc-secret") &&
+      !strcontains(local.host_config_files["vault/dex.yml"].content, "test-github-secret") &&
+      !strcontains(local.host_config_files["scripts/configure-vault-oidc.sh"].content, "test-oidc-secret")
+    )
+    error_message = "Existing Vault has no dev root token; secrets go to SSM and host .env, not S3."
+  }
+}
+
+run "vault_oidc_requires_backup_and_unseal_ack" {
+  command = plan
+
+  variables {
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_github_client_id     = "test-client-id"
+    vault_github_client_secret = "test-github-secret"
+    vault_oidc_client_secret   = "test-oidc-secret"
+    # vault_oidc_restart_ack remains false (the safe default).
+  }
+
+  expect_failures = [aws_instance.app]
 }
