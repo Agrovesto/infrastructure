@@ -107,6 +107,9 @@ locals {
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_private_key",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_id",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_secret",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_github_client_id",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_github_client_secret",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_oidc_client_secret",
   ]
 
   # ---------------------------------------------------------------------------
@@ -189,6 +192,21 @@ locals {
     }
   ]
 
+  # File-storage Vault remains internal; only the opt-in OIDC deployment
+  # allows requests from Caddy's public HTTPS edge to reach this vhost.
+  vault_nginx = {
+    subdomain    = var.vault.subdomain
+    oidc_enabled = var.vault.oidc_enabled
+  }
+  vault_fqdn_for_oidc = "${var.vault.subdomain}.${var.domain_name}"
+  vault_oidc_credentials_set = [
+    var.vault_github_client_id != "",
+    nonsensitive(var.vault_github_client_secret != ""),
+    nonsensitive(var.vault_oidc_client_secret != ""),
+  ]
+  vault_oidc_credentials_valid = alltrue(local.vault_oidc_credentials_set)
+  tls_proxy_enabled            = local.github_sso_proxy_enabled || var.vault.oidc_enabled
+
   # ---------------------------------------------------------------------------
   # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
   #
@@ -209,7 +227,8 @@ locals {
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
   logging_own_services = concat(
     ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
-    local.github_sso_proxy_enabled ? ["edge"] : [],
+    local.tls_proxy_enabled ? ["edge"] : [],
+    var.vault.oidc_enabled ? ["dex"] : [],
   )
 
   # nginx is always parsed as JSON (its access log format is), plus whatever the
@@ -254,21 +273,24 @@ locals {
   # Certificate state lives on one of the persistent service volumes, so an EC2
   # replacement does not repeatedly consume ACME issuance limits.
   github_sso_proxy = {
-    enabled         = local.github_sso_proxy_enabled
+    enabled         = local.tls_proxy_enabled
     image           = "caddy:2.11.4-alpine"
     acme_email      = "tech@agrovesto.com"
     cpu_limit       = "0.10"
     memory_limit_mb = 128
-    data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : "${local.logging_root}/caddy"
+    data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : local.grafana_github_sso_enabled ? "${local.logging_root}/caddy" : "/data/vault/caddy"
     domains = compact([
-      var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? local.sonar_fqdn : "",
-      var.logging.enabled && var.logging.expose_via_nginx ? local.grafana_fqdn : "",
+      var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.github_sso_proxy_enabled ? local.sonar_fqdn : "",
+      var.logging.enabled && var.logging.expose_via_nginx && local.github_sso_proxy_enabled ? local.grafana_fqdn : "",
+      var.vault.oidc_enabled ? local.vault_fqdn_for_oidc : "",
     ])
   }
 
-  caddyfile = local.github_sso_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
-    email   = local.github_sso_proxy.acme_email
-    domains = local.github_sso_proxy.domains
+  caddyfile = local.tls_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
+    email              = local.github_sso_proxy.acme_email
+    domains            = local.github_sso_proxy.domains
+    vault_oidc_enabled = var.vault.oidc_enabled
+    vault_domain       = local.vault_fqdn_for_oidc
   }) : ""
 
   loki_config = templatefile("${path.module}/loki-config.yml.tftpl", {
@@ -319,7 +341,8 @@ locals {
       ["nginx", "mssql", "vault"],
       var.redis.enabled ? ["redis"] : [],
       var.sonarqube.enabled ? ["sonarqube"] : [],
-      local.github_sso_proxy_enabled ? ["edge"] : [],
+      local.tls_proxy_enabled ? ["edge"] : [],
+      var.vault.oidc_enabled ? ["dex"] : [],
     )
   })
 
@@ -412,7 +435,39 @@ locals {
         content_type = "application/json"
       }
     } : {},
-    local.github_sso_proxy_enabled ? {
+    var.vault.oidc_enabled ? {
+      "vault/operator.hcl" = {
+        content      = file("${path.module}/vault-operator.hcl")
+        content_type = "text/plain"
+      }
+      "scripts/configure-vault-oidc.sh" = {
+        content = templatefile("${path.module}/configure-vault-oidc.sh", {
+          vault_fqdn  = local.vault_fqdn_for_oidc
+          github_org  = var.vault_github_organization
+          github_team = var.vault_github_team_slug
+        })
+        content_type = "text/x-shellscript"
+      }
+      "scripts/refresh-vault-oidc.sh" = {
+        content = templatefile("${path.module}/refresh-vault-oidc.sh.tftpl", {
+          github_client_id_parameter     = aws_ssm_parameter.vault_github_client_id[0].name
+          github_client_secret_parameter = aws_ssm_parameter.vault_github_client_secret[0].name
+          oidc_secret_parameter          = aws_ssm_parameter.vault_oidc_client_secret[0].name
+          aws_region                     = var.aws_region
+          caddy_dir                      = local.github_sso_proxy.data_dir
+        })
+        content_type = "text/x-shellscript"
+      }
+      "vault/dex.yml" = {
+        content = templatefile("${path.module}/dex.yml.tftpl", {
+          fqdn = local.vault_fqdn_for_oidc
+          org  = var.vault_github_organization
+          team = var.vault_github_team_slug
+        })
+        content_type = "text/yaml"
+      }
+    } : {},
+    local.tls_proxy_enabled ? {
       "edge/Caddyfile" = {
         content      = local.caddyfile
         content_type = "text/plain"
@@ -424,6 +479,7 @@ locals {
     apis              = var.apis
     mssql             = local.mssql
     vault             = var.vault
+    domain            = var.domain_name
     redis             = var.redis
     sonarqube         = local.sonarqube_runtime
     sonar_jdbc_url    = local.sonar_jdbc_url
@@ -439,6 +495,7 @@ locals {
     upstreams = local.nginx_upstreams
     grafana   = local.logging_grafana
     sonar     = local.sonarqube_nginx
+    vault     = local.vault_nginx
   })
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
@@ -468,7 +525,7 @@ locals {
       "  ALTER DATABASE [${var.sonarqube.database_name}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;",
       "GO",
       "-- A login scoped to this one database instead of `sa`, which would be",
-      "-- sysadmin over the server and owner of the five application databases.",
+      "-- sysadmin over the server and owner of the six managed application databases.",
       "IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'${var.sonarqube.database_username}')",
       "  CREATE LOGIN [${var.sonarqube.database_username}] WITH PASSWORD = N'$(sonar_db_password)', CHECK_POLICY = ON;",
       "GO",
@@ -518,6 +575,7 @@ locals {
     {
       for k, app in var.amplify_apps :
       app.subdomain => "${app.branch}.${aws_amplify_app.this[k].id}.amplifyapp.com"
+      if app.publish_dns
     },
     var.extra_cname_records
   )

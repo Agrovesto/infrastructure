@@ -1,0 +1,30 @@
+# This file is non-secret. Dex reads credentials from the container environment.
+issuer: https://${fqdn}/dex
+storage:
+  type: sqlite3
+  config:
+    file: /data/dex.db
+web:
+  http: 0.0.0.0:5556
+telemetry:
+  http: 0.0.0.0:5558
+connectors:
+  - type: github
+    id: github
+    name: GitHub
+    config:
+      clientID: $GITHUB_CLIENT_ID
+      clientSecret: $GITHUB_CLIENT_SECRET
+      redirectURI: https://${fqdn}/dex/callback
+      orgs:
+        - name: ${org}
+          teams:
+            - ${team}
+      teamNameField: slug
+staticClients:
+  - id: vault
+    name: Vault
+    secretEnv: VAULT_OIDC_CLIENT_SECRET
+    redirectURIs:
+      - https://${fqdn}/ui/vault/auth/oidc/oidc/callback
+      - http://localhost:8250/oidc/callback

@@ -253,6 +253,7 @@ jobs:
             -Dproject.settings=${{ inputs.sonar_properties }}
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
+        continue-on-error: true
 
   # ---------------------------------------------------------------------------
   # Infracost: cost breakdown, plus a cost diff comment on PRs

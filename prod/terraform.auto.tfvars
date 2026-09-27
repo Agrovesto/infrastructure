@@ -202,10 +202,12 @@ db_size_alarm_enabled = false
 # extra_a_records = {
 #   "dev-wallet-api"          = "<dev EC2 Elastic IP>"
 #   "dev-onboarding-api"      = "<dev EC2 Elastic IP>"
-#   "dev-input.api"           = "<dev EC2 Elastic IP>"
+#   "dev-input-api"           = "<dev EC2 Elastic IP>"
 #   "dev-moneval-api"         = "<dev EC2 Elastic IP>"
 #   "dev-serviceprovider-api" = "<dev EC2 Elastic IP>"
-#   "dev-vault"                = "<dev EC2 Elastic IP>"
+#   "dev-agx-api"             = "<dev EC2 Elastic IP>"
+#   # dev-vault is already pointed manually; keep dev-mode Vault tunnel-only.
+#   # Once persistent Vault + OIDC is migrated, manage DNS deliberately here if desired.
 #   # The dev logging stack's Grafana (nginx vhost on the dev host). Without this
 #   # record the UI is still reachable through the SSH tunnel printed by
 #   # `terraform -chdir=../dev output logging_access`.
@@ -219,6 +221,8 @@ db_size_alarm_enabled = false
 #   "sonar"                    = "<dev EC2 Elastic IP>"
 # }
 # extra_cname_records = {
+#   # Once the agx frontend has a real build and publish_dns=true in dev:
+#   # "dev-agx" = "dev.<agx Amplify default domain>"
 #   "landing.dev"    = "dev.<landing Amplify default domain>"
 #   "onboarding.dev" = "dev.<onboarding Amplify default domain>"
 # }

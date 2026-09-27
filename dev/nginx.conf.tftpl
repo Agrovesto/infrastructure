@@ -86,6 +86,39 @@ http {
   }
 
 %{ endfor ~}
+  # ── Vault: dev-mode secrets UI/API ──────────────────────────────────────────
+  # Before OIDC this remains internal even if DNS points here: do not send
+  # Vault tokens over public HTTP. With OIDC enabled, Caddy owns public 80/443
+  # and enforces HTTPS before proxying to nginx.
+  server {
+    listen 80;
+    server_name ${vault.subdomain}.${domain};
+
+%{ if vault.oidc_enabled ~}
+    # Caddy owns public 80/443 and enforces HTTPS for this host. This nginx
+    # server is reachable only on the private Compose network in OIDC mode.
+    allow all;
+%{ else ~}
+    allow 127.0.0.1;
+    allow 172.16.0.0/12;
+    deny all;
+%{ endif ~}
+
+    location / {
+      # Resolve at request time so a Vault container restart does not leave
+      # nginx pinned to a stale Docker IP.
+      set $vault_backend vault:8200;
+      proxy_pass http://$vault_backend;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+    }
+  }
+
 %{ if grafana.enabled ~}
   # ── Grafana: the logging UI ───────────────────────────────────────────────
   # Served here so there is one open port on the box, but gated by source IP:
