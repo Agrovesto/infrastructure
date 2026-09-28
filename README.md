@@ -47,7 +47,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 - **Monitoring**: 5 always-on Fargate tasks (Prometheus, Loki, Tempo, Grafana, Edge) plus several scheduled batch jobs.
 
 #### 2. Databases (SQL Server)
-- **Dev**: SQL Server 2022 runs as a container on the EC2 host for the six managed API databases, backed up to S3. The migrated `agx` database is not created by this stack; confirm separately whether it lives on this SQL host and needs inclusion in backups. SonarQube currently uses its own PostgreSQL container (the optional MSSQL path creates `sonar` with the required CS_AS collation and snapshot isolation).
+- **Dev**: SQL Server 2022 runs as a container on the EC2 host for the five managed API databases, backed up to S3. The migrated `agx` database is not created by this stack; confirm separately whether it lives on this SQL host and needs inclusion in backups. SonarQube currently uses its own PostgreSQL container (the optional MSSQL path creates `sonar` with the required CS_AS collation and snapshot isolation).
 - **Prod**: RDS SQL Server **Express** (`db.t3.micro`).
     - **Note**: Express has a 10GB per-database cap and no Multi-AZ support.
     - **Scaling**: Upgrade path to Web/Standard on `db.m7i.large` when Multi-AZ or >10GB is required.

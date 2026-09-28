@@ -581,7 +581,7 @@ locals {
       "  ALTER DATABASE [${var.sonarqube.database_name}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;",
       "GO",
       "-- A login scoped to this one database instead of `sa`, which would be",
-      "-- sysadmin over the server and owner of the six managed application databases.",
+      "-- sysadmin over the server and owner of the five managed application databases.",
       "IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'${var.sonarqube.database_username}')",
       "  CREATE LOGIN [${var.sonarqube.database_username}] WITH PASSWORD = N'$(sonar_db_password)', CHECK_POLICY = ON;",
       "GO",

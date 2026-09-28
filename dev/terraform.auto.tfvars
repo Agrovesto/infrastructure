@@ -111,7 +111,9 @@ apis = {
 # requires and still lands in the nightly backup loop. Listing it here as well
 # would be harmless (the union is deduplicated) but would create the database
 # with the wrong collation if the two ever disagreed.
-mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+# Removing a name stops managing its creation; it does not DROP a live database.
+# This list also feeds backup scripts generated during host bootstrap.
+mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
 # --- Redis (shared cache for the APIs) -----------------------------------------
 # Reachable from every API container as redis:6379 over the compose network; the
