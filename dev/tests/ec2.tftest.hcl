@@ -57,6 +57,7 @@ override_data {
 }
 
 variables {
+  ui_https_enabled = false
   vault              = { subdomain = "dev-vault", oidc_enabled = false }
   manage_fresh_vault = false
   import_existing = false

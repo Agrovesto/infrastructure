@@ -1,5 +1,20 @@
 # GitHub login for Grafana and SonarQube
 
+## HTTPS is independent of login
+
+The checked-in dev settings enable `ui_https_enabled = true`: exposed UI hosts
+are `https://sonar.nomaos.com` and `https://dev-grafana.nomaos.com`, whether or
+not GitHub SSO is configured. DNS must point to the dev EIP and inbound 80/443
+must be reachable. nginx IP allowlists still apply. A Caddy configuration hash
+in Compose triggers edge recreation on route changes (brief proxy interruption).
+
+For local Terraform applies, continue supplying the existing Grafana and
+SonarQube OAuth credentials as well as Vault credentials. GitHub Actions secrets
+are not automatically loaded locally. This HTTPS setting does not preserve or
+enable SSO when its credential variables are omitted: inspect the plan for
+unexpected SSM-parameter deletion or auth changes before applying.
+
+
 The infrastructure supports GitHub login without removing the local administrator
 accounts. GitHub login is for people using the web UIs; scanners still use
 `SONAR_TOKEN` and `SONAR_HOST_URL`.

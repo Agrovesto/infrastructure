@@ -919,3 +919,9 @@ variable "s3_access_log_retention_days" {
   type        = number
   default     = 90
 }
+# Transport security is independent of optional GitHub login credentials.
+variable "ui_https_enabled" {
+  description = "Serve exposed SonarQube and Grafana hosts through Caddy HTTPS even without OAuth credentials. Does not enable SSO or change nginx IP allowlists."
+  type        = bool
+  default     = false
+}

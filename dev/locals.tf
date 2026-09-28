@@ -80,6 +80,8 @@ locals {
   ))
 
   github_sso_proxy_enabled = local.sonarqube_github_sso_enabled || local.grafana_github_sso_enabled
+  ui_tls_enabled          = local.github_sso_proxy_enabled || var.ui_https_enabled
+  ui_tls_hosts_enabled    = local.ui_tls_enabled && ((var.sonarqube.enabled && var.sonarqube.expose_via_nginx) || (var.logging.enabled && var.logging.expose_via_nginx))
 
   sonarqube_github_parameter_names = {
     client_id     = "/${local.name}/sonarqube_github_client_id"
@@ -168,7 +170,7 @@ locals {
   # the canonical URL regardless of the legacy `sonarqube.scheme` value.
   # Once Caddy is running (any SSO enabled) it serves HTTPS for every exposed UI,
   # not only the SSO ones, so the public scheme follows the proxy.
-  sonar_public_scheme = local.github_sso_proxy_enabled && var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? "https" : var.sonarqube.scheme
+  sonar_public_scheme = local.ui_tls_enabled && var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? "https" : var.sonarqube.scheme
 
   # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
   # container's own address: SonarQube builds absolute links from it and compares
@@ -216,7 +218,7 @@ locals {
   # The TLS edge runs whenever something needs public HTTPS: GitHub SSO for the
   # dev UIs, Vault OIDC (whose Dex login broker serves at the Vault host's
   # /dex path), or an opted-in API vhost.
-  tls_proxy_enabled = local.github_sso_proxy_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
+  tls_proxy_enabled = local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
 
   # ---------------------------------------------------------------------------
   # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
@@ -268,7 +270,7 @@ locals {
   }
 
   grafana_fqdn          = "${var.logging.grafana_subdomain}.${var.domain_name}"
-  grafana_public_scheme = local.github_sso_proxy_enabled && var.logging.enabled && var.logging.expose_via_nginx ? "https" : "http"
+  grafana_public_scheme = local.ui_tls_enabled && var.logging.enabled && var.logging.expose_via_nginx ? "https" : "http"
 
   logging_runtime = merge(var.logging, {
     grafana_root_url             = "${local.grafana_public_scheme}://${local.grafana_fqdn}"
@@ -300,12 +302,12 @@ locals {
     # The Vault host joins the edge only for Vault OIDC, where Dex serves at
     # its /dex path (the canonical issuer URL); the Vault UI itself stays
     # behind nginx's source-IP allow list until that same feature opens it.
-    # The other UI hosts join once their GitHub SSO is configured, and API
+    # The UI hosts join when ui_https_enabled or GitHub SSO is configured; API
     # vhosts when they set apis.<name>.tls_via_caddy.
     domains = compact(concat(
       [
-        var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.github_sso_proxy_enabled ? local.sonar_fqdn : "",
-        var.logging.enabled && var.logging.expose_via_nginx && local.github_sso_proxy_enabled ? local.grafana_fqdn : "",
+        var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.ui_tls_enabled ? local.sonar_fqdn : "",
+        var.logging.enabled && var.logging.expose_via_nginx && local.ui_tls_enabled ? local.grafana_fqdn : "",
         var.vault.oidc_enabled ? local.vault_fqdn_for_oidc : "",
       ],
       local.api_tls_domains,
@@ -543,7 +545,9 @@ locals {
     backup_bucket     = aws_s3_bucket.backup.bucket
     logging           = local.logging_runtime
     logging_root      = local.logging_root
-    sso_proxy         = local.github_sso_proxy
+    sso_proxy = merge(local.github_sso_proxy, {
+      config_hash = sha256(local.caddyfile)
+    })
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {

@@ -54,6 +54,7 @@ override_data {
 }
 
 variables {
+  ui_https_enabled = false
   vault              = { subdomain = "dev-vault", oidc_enabled = false }
   manage_fresh_vault = false
   import_existing = false
@@ -827,4 +828,34 @@ run "vault_oidc_missing_credentials_fails_closed" {
     vault_oidc_client_secret   = ""
   }
   expect_failures = [aws_instance.app]
+}
+
+run "ui_https_without_oauth" {
+  command = plan
+  variables {
+    ui_https_enabled = true
+    sonarqube = { enabled = true, expose_via_nginx = true }
+    logging = { enabled = true, expose_via_nginx = true, grafana_subdomain = "dev-grafana" }
+    grafana_github_client_id = ""
+    grafana_github_client_secret = ""
+    sonarqube_github_client_id = ""
+    sonarqube_github_client_secret = ""
+    sonarqube_github_app_id = ""
+    sonarqube_github_private_key = ""
+  }
+  assert {
+    condition = (
+      local.tls_proxy_enabled &&
+      !local.grafana_github_sso_enabled && !local.sonarqube_github_sso_enabled &&
+      contains(local.github_sso_proxy.domains, "sonar.nomaos.com") &&
+      contains(local.github_sso_proxy.domains, "dev-grafana.nomaos.com") &&
+      local.sonar_web_baseurl == "https://sonar.nomaos.com" &&
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com"
+    )
+    error_message = "UI HTTPS must not depend on optional OAuth credentials."
+  }
+  assert {
+    condition = yamldecode(local.docker_compose).services.edge.labels["com.agrovesto.caddy-config-sha256"] == sha256(local.caddyfile)
+    error_message = "Caddy must be recreated when its rendered config changes."
+  }
 }

@@ -9,6 +9,10 @@ domain_name = "nomaos.com"
 # ...and creates no Route53 zone/records of its own.
 manage_dns = false
 
+# Keep UI HTTPS routes stable even on local applies without OAuth credentials.
+# GitHub SSO still requires its own credential variables on every apply.
+ui_https_enabled = true
+
 # Prepare the KMS key/role grants and opt into fresh dedicated-volume setup.
 # manage_fresh_vault delivers config and starts Vault; initialization stays manual.
 # Never enable fresh setup as an automatic migration of existing Vault data.
@@ -150,10 +154,11 @@ ecr_images_to_keep       = 3         # tagged images retained per repo
 # Prometheus/cAdvisor/node-exporter carry the metrics. No CloudWatch, no AWS
 # ingestion or per-query charges.
 #
-# Grafana is served by nginx at dev-logs.nomaos.com. The prod stack owns DNS, so
+# Grafana is served by nginx at dev-grafana.nomaos.com. The prod stack owns DNS, so
 # add the A record there (see the extra_a_records block in
 # prod/terraform.auto.tfvars) or leave it tunnel-only.
 logging = {
+  grafana_subdomain = "dev-grafana"
   # Short and cheap on purpose: retention is the whole cost of a log store, and
   # the volume below is what it has to fit in (Loki chunks + Prometheus TSDB +
   # Grafana's sqlite share it).
@@ -172,7 +177,7 @@ logging = {
   # something better here - the file is public like the rest of this repo.
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
-  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
+  # Its callback is https://dev-grafana.nomaos.com/login/github; setup is in
   # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
   # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
   # admin remains available for break-glass use.
@@ -233,9 +238,8 @@ sonarqube = {
   # and no part of the login name.
   # database_password = "..."
 
-  # Local-login-only deployments retain HTTP. Supplying the four
-  # SONARQUBE_GITHUB_* repository secrets adds a Caddy TLS edge, changes the
-  # canonical URL to https://sonar.nomaos.com, and enables GitHub App login.
+  # ui_https_enabled keeps https://sonar.nomaos.com active independently of SSO.
+  # Supplying the four SONARQUBE_GITHUB_* credentials enables GitHub App login.
   # GitHub team membership sync is enabled; run the shipped permission bootstrap
   # once with a separate SonarQube admin token (docs/github-sso.md).
   # Caddy's certificate data survives on the SonarQube EBS volume.

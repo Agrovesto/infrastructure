@@ -46,6 +46,10 @@ services:
   edge:
     image: ${sso_proxy.image}
     container_name: agrovesto-edge
+    # Caddy admin API is disabled. Recreate the edge when its config changes,
+    # since updating a bind-mounted file alone does not reload running Caddy.
+    labels:
+      com.agrovesto.caddy-config-sha256: "${sso_proxy.config_hash}"
     ports:
       - "80:80"
       - "443:443"
