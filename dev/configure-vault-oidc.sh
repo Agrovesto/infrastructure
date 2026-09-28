@@ -66,12 +66,15 @@ PY
 
 vault policy write dev-vault-operator - </opt/agrovesto/vault/operator.hcl
 accessor=$(vault auth list -format=json | python3 -c 'import sys,json; print(json.load(sys.stdin)["oidc/"]["accessor"])')
-# Create the external group once; subsequent runs update its policy, not its ID.
-group_id=$(vault read -format=json identity/group/name/dev-vault-github-operators 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["id"])') || true
-if [ -z "$group_id" ]; then
-  group_id=$(vault write -format=json identity/group name=dev-vault-github-operators type=external policies=dev-vault-operator | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["id"])')
+# Upsert by name: Vault creates a missing group or updates the existing one.
+# Do not suppress read/permission failures or parse an expected empty 404 body.
+vault write identity/group/name/dev-vault-github-operators type=external policies=dev-vault-operator >/dev/null
+group_json=$(vault read -format=json identity/group/name/dev-vault-github-operators)
+group_id=$(printf '%s' "$group_json" | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["id"])')
+alias_id=$(printf '%s' "$group_json" | python3 -c 'import sys,json; print((json.load(sys.stdin)["data"].get("alias") or {}).get("id", ""))')
+if [ -n "$alias_id" ]; then
+  vault write identity/group-alias/id/"$alias_id" name="${github_org}:${github_team}" mount_accessor="$accessor" canonical_id="$group_id" >/dev/null
 else
-  vault write identity/group/id/"$group_id" name=dev-vault-github-operators type=external policies=dev-vault-operator >/dev/null
+  vault write identity/group-alias name="${github_org}:${github_team}" mount_accessor="$accessor" canonical_id="$group_id" >/dev/null
 fi
-vault write identity/group-alias name="${github_org}:${github_team}" mount_accessor="$accessor" canonical_id="$group_id" >/dev/null
 printf '%s\n' 'OIDC configured. Test a team member login and verify policy dev-vault-operator before revoking the bootstrap root token.'
