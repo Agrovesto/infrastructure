@@ -260,7 +260,7 @@ variable "vault_oidc_client_secret" {
 # seal's restart procedure: three Shamir shares before migration, or a tested
 # KMS auto-unseal after migration (with the recovery shares still in custody).
 variable "vault_oidc_restart_ack" {
-  description = "Explicit acknowledgement of Vault restart, root-volume backup, and readiness to unseal under the current seal"
+  description = "Explicit acknowledgement of Vault restart, verified storage backup (or fresh empty setup), and readiness to unseal under the current seal"
   type        = bool
   default     = false
 }
@@ -918,4 +918,10 @@ variable "s3_access_log_retention_days" {
   description = "Days to keep S3 server access logs for the dev buckets"
   type        = number
   default     = 90
+}
+# Transport security is independent of optional GitHub login credentials.
+variable "ui_https_enabled" {
+  description = "Serve exposed SonarQube and Grafana hosts through Caddy HTTPS even without OAuth credentials. Does not enable SSO or change nginx IP allowlists."
+  type        = bool
+  default     = false
 }

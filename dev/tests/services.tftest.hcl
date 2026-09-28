@@ -54,12 +54,15 @@ override_data {
 }
 
 variables {
-  import_existing = false
+  ui_https_enabled   = false
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
   apis = {
     nomaos = {
@@ -161,11 +164,11 @@ run "sonar_database_idempotent" {
   command = plan
 
   variables {
-    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar", "nomaos"]
+    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar"]
   }
 
   assert {
-    condition     = length(local.mssql_all_databases) == 7 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
+    condition     = length(local.mssql_all_databases) == 6 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
     error_message = "Listing the sonar database in mssql_databases as well must not create it twice, or create it without the collation."
   }
 }
@@ -636,8 +639,8 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 6
-    error_message = "Disabling SonarQube removes its database from the bootstrap; the six application databases are untouched."
+    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 5
+    error_message = "Disabling SonarQube removes its database from the bootstrap; the five application databases are untouched."
   }
 
   assert {
@@ -729,8 +732,8 @@ run "vault_kms_preparation_does_not_restart_vault" {
 
   assert {
     condition = (
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       !strcontains(local.docker_compose, "seal \"awskms\"") &&
       !contains(keys(local.host_config_files), "vault/config/vault.hcl") &&
       !strcontains(file("${path.module}/user_data.sh.tftpl"), "operator unseal -migrate")
@@ -744,9 +747,9 @@ run "vault_existing_file_backend" {
 
   assert {
     condition = (
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
-      strcontains(local.docker_compose, "/data/vault/config/vault.hcl:/vault/config/vault.hcl") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
+      (strcontains(local.docker_compose, "source: /data/vault/config/vault.hcl") && strcontains(local.docker_compose, "target: /vault/config/vault.hcl")) &&
       !strcontains(local.docker_compose, "server -dev") &&
       !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID")
     )
@@ -770,12 +773,16 @@ run "vault_oidc_staged" {
   assert {
     condition = (
       length(aws_ssm_parameter.vault_github_client_secret) == 1 &&
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       strcontains(local.docker_compose, "agrovesto-dex") &&
       strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
       strcontains(local.caddyfile, "dev-vault.nomaos.com") &&
+      output.vault_browser_login_url == "https://dev-vault.nomaos.com/ui/vault/auth?with=oidc" &&
       strcontains(local.nginx_conf, "allow all;") &&
+      strcontains(local.nginx_conf, "limit_except GET { deny all; }") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "issuer: https://dev-vault.nomaos.com/dex") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "redirectURI: https://dev-vault.nomaos.com/dex/callback") &&
       # The association's commands depend on S3 object etags and are unknown
       # during a mocked plan; check the selected command's source instead.
       strcontains(file("${path.module}/ec2.tf"), "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh") &&
@@ -805,8 +812,51 @@ run "vault_oidc_requires_backup_and_unseal_ack" {
     vault_github_client_id     = "test-client-id"
     vault_github_client_secret = "test-github-secret"
     vault_oidc_client_secret   = "test-oidc-secret"
-    # vault_oidc_restart_ack remains false (the safe default).
+    # Override TF_VAR_vault_oidc_restart_ack from an operator's local shell.
+    vault_oidc_restart_ack = false
   }
 
   expect_failures = [aws_instance.app]
+}
+
+run "vault_oidc_missing_credentials_fails_closed" {
+  command = plan
+  variables {
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack     = true
+    vault_github_client_id     = ""
+    vault_github_client_secret = ""
+    vault_oidc_client_secret   = ""
+  }
+  expect_failures = [aws_instance.app]
+}
+
+run "ui_https_without_oauth" {
+  command = plan
+  variables {
+    ui_https_enabled               = true
+    sonarqube                      = { enabled = true, expose_via_nginx = true }
+    logging                        = { enabled = true, expose_via_nginx = true, grafana_subdomain = "dev-grafana" }
+    grafana_github_client_id       = ""
+    grafana_github_client_secret   = ""
+    sonarqube_github_client_id     = ""
+    sonarqube_github_client_secret = ""
+    sonarqube_github_app_id        = ""
+    sonarqube_github_private_key   = ""
+  }
+  assert {
+    condition = (
+      local.tls_proxy_enabled &&
+      !local.grafana_github_sso_enabled && !local.sonarqube_github_sso_enabled &&
+      contains(local.github_sso_proxy.domains, "sonar.nomaos.com") &&
+      contains(local.github_sso_proxy.domains, "dev-grafana.nomaos.com") &&
+      local.sonar_web_baseurl == "https://sonar.nomaos.com" &&
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com"
+    )
+    error_message = "UI HTTPS must not depend on optional OAuth credentials."
+  }
+  assert {
+    condition     = yamldecode(local.docker_compose).services.edge.labels["com.agrovesto.caddy-config-sha256"] == sha256(local.caddyfile)
+    error_message = "Caddy must be recreated when its rendered config changes."
+  }
 }

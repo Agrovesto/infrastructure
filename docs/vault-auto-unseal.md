@@ -1,5 +1,9 @@
 # Dev Vault: prepare AWS KMS auto-unseal (manual seal migration)
 
+> **Fresh rebuilt instance:** use [Terraform-managed fresh Vault](vault-fresh-setup.md).
+> The root-disk/Shamir instructions below describe the previous installation, not
+> the new dedicated-volume setup. Never use fresh setup to migrate existing data.
+
 The live EC2 Vault 1.15.6 is **already initialized** with file storage at `/data/vault/data` on the EC2 **root disk** and a Shamir seal (5 shares, threshold 3). Its Compose service reads `/data/vault/config/vault.hcl` from the same host. **Do not initialize it again, replace EC2, or switch storage backends.** The latest dev stack has `aws_instance.app.prevent_destroy = true`; that does not replace a real backup of the root volume.
 
 Auto-unseal is a *seal migration*, not a cron job that stores the Shamir shares on the server. The Terraform variable `prepare_vault_kms_auto_unseal` defaults to `false`; `dev/terraform.auto.tfvars` now explicitly sets it to `true` to **prepare** a dedicated AWS KMS key and alias and grant the EC2 instance role `kms:Encrypt`, `kms:Decrypt`, and `kms:DescribeKey` on that key **only when an approved plan is applied**. Changing the file has not deployed anything. It does **not** modify `vault.hcl`, restart Vault, apply the new seal, or run the migration. Vault uses the instance role through IMDSv2 (the instance already allows two metadata hops); do not configure long-lived AWS credentials in the container.
