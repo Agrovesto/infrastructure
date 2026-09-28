@@ -195,8 +195,9 @@ resource "aws_eip_association" "app" {
 # it re-syncs /opt/agrovesto from S3 and runs `docker compose up -d`, which only
 # recreates the containers whose definition actually changed.
 resource "aws_ssm_association" "host_config_refresh" {
-  name             = "AWS-RunShellScript"
-  association_name = "${local.name}-host-config-refresh"
+  name                     = "AWS-RunShellScript"
+  association_name         = "${local.name}-host-config-refresh"
+  wait_for_success_timeout = "15m"
 
   targets {
     key    = "InstanceIds"
@@ -208,7 +209,11 @@ resource "aws_ssm_association" "host_config_refresh" {
       "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
       "# Vault OAuth parameter versions: ${var.vault.oidc_enabled ? join(",", [tostring(aws_ssm_parameter.vault_github_client_id[0].version), tostring(aws_ssm_parameter.vault_github_client_secret[0].version), tostring(aws_ssm_parameter.vault_oidc_client_secret[0].version)]) : "disabled"}",
       "set -euo pipefail",
-      ], var.vault.oidc_enabled ? [
+      ], var.manage_fresh_vault ? [
+      "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
+      "bash /opt/agrovesto/scripts/prepare-vault.sh",
+      "systemctl start agrovesto-sync.service",
+      ] : var.vault.oidc_enabled ? [
       # The existing systemd unit runs compose immediately after sync. Inject
       # SSM secrets and prepare Dex/Caddy state FIRST, then start the services.
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
@@ -217,5 +222,5 @@ resource "aws_ssm_association" "host_config_refresh" {
     ] : ["systemctl start agrovesto-sync.service"]))
   }
 
-  depends_on = [aws_s3_object.host_config]
+  depends_on = [aws_s3_object.host_config, aws_volume_attachment.vault, aws_iam_role_policy.ec2]
 }

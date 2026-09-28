@@ -61,7 +61,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 #### 4. Secrets (HashiCorp Vault)
 - Both environments use HashiCorp Vault.
-- **Dev**: The latest dev Compose configuration runs the existing initialized Vault with **file storage at `/data/vault/data` on the EC2 root volume** and Shamir 3-of-5 seal; this branch follows that configuration. `dev-vault.nomaos.com` points to the EIP manually, but its nginx route stays internal until the opt-in Dex/OIDC + Caddy HTTPS setup is enabled. No storage migration or EC2 replacement is needed. Back up the root volume first: enabling OIDC requires a planned Vault restart (three Shamir shares before a seal migration, or verified KMS auto-unseal afterward). To avoid manual unsealing on future starts, the optional Terraform flag prepares a dedicated KMS key and IAM grants; an operator must then migrate the *existing* seal with three current shares. Neither step reinitializes Vault or moves its data. See the [auto-unseal runbook](docs/vault-auto-unseal.md) and [OIDC guide](docs/vault-github-login.md).
+- **Dev**: After the instance rebuild, the checked-in configuration opts into a fresh Vault with a protected, encrypted dedicated EBS volume, KMS auto-unseal configuration and daily crash-consistent snapshots. Terraform/SSM prepares the host but never initializes Vault or captures recovery keys. Apply and verify before initializing; see the [fresh setup and recovery runbook](docs/vault-fresh-setup.md). Existing root-disk installations must not enable this as a migration.
 - **Prod**: Fargate-based Vault with Raft storage on EFS and AWS KMS auto-unseal.
 - **Migration**: Services can source secrets from AWS Secrets Manager (bootstrap) or switch to Vault (`vault_secrets_enabled = true`).
 

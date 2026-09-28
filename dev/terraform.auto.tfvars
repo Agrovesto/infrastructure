@@ -9,6 +9,13 @@ domain_name = "nomaos.com"
 # ...and creates no Route53 zone/records of its own.
 manage_dns = false
 
+# Prepare the KMS key/role grants and opt into fresh dedicated-volume setup.
+# manage_fresh_vault delivers config and starts Vault; initialization stays manual.
+# Never enable fresh setup as an automatic migration of existing Vault data.
+# Keep both enabled for the lifetime of this Vault installation.
+prepare_vault_kms_auto_unseal = true
+manage_fresh_vault           = true
+
 # --- App host ------------------------------------------------------------------
 # t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL
 # Server + Redis + SonarQube + the logging stack below, all in one docker compose

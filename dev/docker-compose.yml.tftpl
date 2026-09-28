@@ -100,8 +100,16 @@ services:
       - "127.0.0.1:${vault.host_port}:8200"
     command: server -config=/vault/config/vault.hcl
     volumes:
-      - /data/vault/data:/vault/file
-      - /data/vault/config/vault.hcl:/vault/config/vault.hcl
+      - type: bind
+        source: /data/vault/data
+        target: /vault/file
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /data/vault/config/vault.hcl
+        target: /vault/config/vault.hcl
+        bind:
+          create_host_path: false
 %{ if vault.oidc_enabled ~}
     # OIDC discovery may need a local route to Caddy instead of the EC2 EIP.
     # Enabling this changes the Vault task and restarts it. Before a seal

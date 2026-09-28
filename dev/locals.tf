@@ -403,6 +403,36 @@ locals {
   host_config_bucket = "${local.name}-host-config"
 
   host_config_files = merge(
+    var.manage_fresh_vault ? {
+      "vault/managed-vault.hcl" = {
+        content_type = "text/plain"
+        content      = <<-HCL
+          ui = true
+          disable_mlock = true
+          storage "file" {
+            path = "/vault/file"
+          }
+          listener "tcp" {
+            address = "0.0.0.0:8200"
+            tls_disable = true
+          }
+          seal "awskms" {
+            region = "${var.aws_region}"
+            kms_key_id = "${aws_kms_key.vault_unseal[0].arn}"
+          }
+        HCL
+      }
+      "scripts/prepare-vault.sh" = {
+        content_type = "text/x-shellscript"
+        content      = templatefile("${path.module}/prepare-vault.sh.tftpl", {
+          volume_serial = replace(aws_ebs_volume.vault[0].id, "-", "")
+          image         = var.vault.image
+          bucket        = local.host_config_bucket
+          region        = var.aws_region
+          oidc_exec     = var.vault.oidc_enabled ? "ExecStart=/bin/bash /opt/agrovesto/scripts/refresh-vault-oidc.sh\n" : ""
+        })
+      }
+    } : {},
     {
       "compose/docker-compose.yml" = {
         content      = local.docker_compose
