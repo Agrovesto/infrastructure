@@ -96,9 +96,10 @@ variables {
       subdomain = "dev-serviceprovider-api"
     }
     agx = {
-      image     = "public.ecr.aws/nginx/nginx:alpine"
-      host_port = 5006
-      subdomain = "dev-agx-api"
+      image         = "public.ecr.aws/nginx/nginx:alpine"
+      host_port     = 5006
+      subdomain     = "dev-agx-api"
+      tls_via_caddy = true
     }
   }
 
@@ -289,9 +290,10 @@ run "ecr" {
       strcontains(local.docker_compose, "127.0.0.1:5006:5006") &&
       strcontains(local.nginx_conf, "server_name dev-agx-api.nomaos.com;") &&
       strcontains(local.nginx_conf, "proxy_pass http://agx:5006;") &&
+      strcontains(local.caddyfile, "dev-agx-api.nomaos.com") &&
       !contains(local.mssql_all_databases, "agx")
     )
-    error_message = "The agx API is routed by nginx, loopback-published by Compose, and does not create a database over the migrated agx database."
+    error_message = "The agx API is routed by nginx, loopback-published by Compose, served over HTTPS at the Caddy edge, and does not create a database over the migrated agx database."
   }
 
   assert {

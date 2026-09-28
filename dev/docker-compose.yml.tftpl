@@ -38,9 +38,11 @@ services:
 %{ endif ~}
 %{ if sso_proxy.enabled ~}
 
-  # TLS edge for the GitHub OAuth callbacks. Caddy manages public certificates
-  # automatically and forwards to nginx, which remains the application router
-  # and source-IP authorization edge. Certificate state is on persistent EBS.
+  # TLS edge for the GitHub OAuth callbacks, Vault OIDC's Dex issuer (/dex) and
+  # API vhosts that opted into HTTPS (apis.<name>.tls_via_caddy). Caddy manages
+  # public certificates automatically and forwards to nginx, which remains the
+  # application router and source-IP authorization edge. Certificate state is
+  # on persistent EBS.
   edge:
     image: ${sso_proxy.image}
     container_name: agrovesto-edge
