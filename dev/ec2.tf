@@ -195,9 +195,9 @@ resource "aws_eip_association" "app" {
 # it re-syncs /opt/agrovesto from S3 and runs `docker compose up -d`, which only
 # recreates the containers whose definition actually changed.
 resource "aws_ssm_association" "host_config_refresh" {
-  name                     = "AWS-RunShellScript"
-  association_name         = "${local.name}-host-config-refresh"
-  wait_for_success_timeout = "15m"
+  name                             = "AWS-RunShellScript"
+  association_name                 = "${local.name}-host-config-refresh"
+  wait_for_success_timeout_seconds = 900
 
   targets {
     key    = "InstanceIds"

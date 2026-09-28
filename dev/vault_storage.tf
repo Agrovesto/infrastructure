@@ -50,7 +50,7 @@ resource "aws_iam_role_policy_attachment" "vault_snapshots" {
 
 resource "aws_dlm_lifecycle_policy" "vault" {
   count              = var.manage_fresh_vault ? 1 : 0
-  description        = "Daily crash-consistent Vault volume snapshots; retain 14"
+  description        = "Daily crash-consistent Vault volume snapshots - retain 14"
   execution_role_arn = aws_iam_role.vault_snapshots[0].arn
   state              = "ENABLED"
   policy_details {

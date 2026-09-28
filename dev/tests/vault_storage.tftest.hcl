@@ -144,3 +144,19 @@ run "managed_fresh_vault" {
     error_message = "Vault snapshot schedule must be enabled."
   }
 }
+
+run "vault_provider_constraints" {
+  command = plan
+  variables {
+    manage_fresh_vault            = true
+    prepare_vault_kms_auto_unseal = true
+  }
+  assert {
+    condition     = aws_ssm_association.host_config_refresh.wait_for_success_timeout_seconds == 900
+    error_message = "SSM association timeout must use provider-supported seconds."
+  }
+  assert {
+    condition     = can(regex("^[0-9A-Za-z _-]+$", aws_dlm_lifecycle_policy.vault[0].description))
+    error_message = "DLM descriptions may contain only alphanumerics, spaces, underscores and hyphens."
+  }
+}
