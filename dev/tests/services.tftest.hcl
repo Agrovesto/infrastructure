@@ -812,7 +812,8 @@ run "vault_oidc_requires_backup_and_unseal_ack" {
     vault_github_client_id     = "test-client-id"
     vault_github_client_secret = "test-github-secret"
     vault_oidc_client_secret   = "test-oidc-secret"
-    # vault_oidc_restart_ack remains false (the safe default).
+    # Override TF_VAR_vault_oidc_restart_ack from an operator's local shell.
+    vault_oidc_restart_ack = false
   }
 
   expect_failures = [aws_instance.app]
