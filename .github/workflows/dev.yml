@@ -25,8 +25,8 @@ jobs:
       environment: dev
       sonar_properties: sonar-project-dev.properties
       #  Repository variable set by an operator after backup/restart checks.
-      vault_oidc_restart_ack: ${{ vars.DEV_VAULT_OIDC_RESTART_ACK == 'true' }}
-    secrets:
+      vault_oidc_restart_ack: ${{ VAULT_OIDC_RESTART_ACK == 'true' }}
+    secrets: 
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_DEV }}
       TF_VAR_MSSQL_SA_PASSWORD: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD_DEV }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -38,6 +38,6 @@ jobs:
       SONARQUBE_GITHUB_CLIENT_SECRET: ${{ secrets.SONARQUBE_GITHUB_CLIENT_SECRET }}
       SONARQUBE_GITHUB_APP_ID: ${{ secrets.SONARQUBE_GITHUB_APP_ID }}
       SONARQUBE_GITHUB_PRIVATE_KEY: ${{ secrets.SONARQUBE_GITHUB_PRIVATE_KEY }}
-      VAULT_GITHUB_CLIENT_ID: ${{ secrets.DEV_VAULT_GITHUB_CLIENT_ID }}
-      VAULT_GITHUB_CLIENT_SECRET: ${{ secrets.DEV_VAULT_GITHUB_CLIENT_SECRET }}
-      VAULT_OIDC_CLIENT_SECRET: ${{ secrets.DEV_VAULT_OIDC_CLIENT_SECRET }}
+      VAULT_GITHUB_CLIENT_ID: ${{ secrets.VAULT_GITHUB_CLIENT_ID }}
+      VAULT_GITHUB_CLIENT_SECRET: ${{ secrets.VAULT_GITHUB_CLIENT_SECRET }}
+      VAULT_OIDC_CLIENT_SECRET: ${{ secrets.VAULT_OIDC_CLIENT_SECRET }}
