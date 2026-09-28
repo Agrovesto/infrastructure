@@ -119,6 +119,13 @@ variables {
 
 run "managed_fresh_vault" {
   command = apply
+  assert {
+    condition = (
+      startswith(aws_ssm_association.host_config_refresh.parameters["commands"], "bash <<'AGROVESTO_HOST_REFRESH_BASH'\n") &&
+      endswith(aws_ssm_association.host_config_refresh.parameters["commands"], "\nAGROVESTO_HOST_REFRESH_BASH")
+    )
+    error_message = "SSM must explicitly run Bash rather than pass pipefail to /bin/sh."
+  }
   variables {
     manage_fresh_vault            = true
     prepare_vault_kms_auto_unseal = true

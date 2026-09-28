@@ -205,7 +205,10 @@ resource "aws_ssm_association" "host_config_refresh" {
   }
 
   parameters = {
+    # AWS-RunShellScript may execute this payload with /bin/sh (dash on Ubuntu).
+    # Explicitly invoke Bash; a quoted heredoc also prevents outer-shell expansion.
     commands = join("\n", concat([
+      "bash <<'AGROVESTO_HOST_REFRESH_BASH'",
       "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
       "# Vault OAuth parameter versions: ${var.vault.oidc_enabled ? join(",", [tostring(aws_ssm_parameter.vault_github_client_id[0].version), tostring(aws_ssm_parameter.vault_github_client_secret[0].version), tostring(aws_ssm_parameter.vault_oidc_client_secret[0].version)]) : "disabled"}",
       "set -euo pipefail",
@@ -219,7 +222,9 @@ resource "aws_ssm_association" "host_config_refresh" {
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
       "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh",
       "docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans",
-    ] : ["systemctl start agrovesto-sync.service"]))
+      ] : ["systemctl start agrovesto-sync.service"],
+      ["AGROVESTO_HOST_REFRESH_BASH"],
+    ))
   }
 
   depends_on = [aws_s3_object.host_config, aws_volume_attachment.vault, aws_iam_role_policy.ec2]
