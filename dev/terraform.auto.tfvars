@@ -10,7 +10,7 @@ domain_name = "nomaos.com"
 manage_dns = false
 
 # --- App host ------------------------------------------------------------------
-# t3.large (2 vCPU / 8 GiB): the box runs nginx + 7 API containers + Vault + SQL
+# t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL
 # Server + Redis + SonarQube + the logging stack below, all in one docker compose
 # project. Rough budget at the caps set in this file: SQL Server ~2 GiB, logging
 # ~1.3 GiB, SonarQube up to 3 GiB, Redis ~0.4 GiB, leaving ~1.3 GiB for the five
@@ -35,16 +35,6 @@ amplify_apps = {
     branch     = "dev"
     subdomain  = "onboarding-dev"
     framework  = "React"
-  }
-  # Manual placeholder: no GitHub repository or deploy yet. Connect the real
-  # source, enable auto builds and publish DNS only when the frontend is ready.
-  agx = {
-    name              = "agx-frontend"
-    branch            = "dev"
-    subdomain         = "dev-agx"
-    framework         = "React"
-    enable_auto_build = false
-    publish_dns       = false
   }
   # Adopted: dfvk5chhp2iln / branch staging
   landing = {
@@ -100,16 +90,6 @@ apis = {
     subdomain = "dev-serviceprovider-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
   }
-  agx = {
-    # Placeholder until the agx-api image is pushed to agrovesto-dev-agx ECR.
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5006
-    subdomain = "dev-agx-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5006", REDIS_HOST = "redis", REDIS_PORT = "6379" }
-    # The agx API joins the Caddy TLS edge: https://dev-agx-api.nomaos.com, with
-    # a 308 from plain HTTP and nginx still routing the vhost underneath.
-    tls_via_caddy = true
-  }
 }
 
 # `sonar` is deliberately NOT in this list: it is added automatically by
@@ -117,34 +97,7 @@ apis = {
 # requires and still lands in the nightly backup loop. Listing it here as well
 # would be harmless (the union is deduplicated) but would create the database
 # with the wrong collation if the two ever disagreed.
-# agx is intentionally absent: its existing database was migrated already. If
-# it lives on this host, add it to the backup set explicitly after confirming the
-# exact DB name (this list also runs CREATE DATABASE IF MISSING at boot).
 mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
-
-# The latest dev Compose config matches the initialized file-storage Vault:
-# /data/vault/data -> /vault/file, Shamir seal (3-of-5). This branch keeps the
-# same backend/mount. findmnt confirms /data/vault/data is on the EC2 root EBS
-# volume (delete_on_termination). DNS for dev-vault.nomaos.com points to the EIP
-# manually, but nginx stays internal-only until OIDC + HTTPS is enabled (the
-# opt-in Dex/Vault OIDC feature). Verify a root-volume backup and have three
-# Shamir shares ready: enabling OIDC adds a host-gateway mapping, which triggers
-# a controlled Vault container restart.
-# An OIDC plan also requires the explicit vault_oidc_restart_ack variable.
-# See docs/vault-github-login.md. Do NOT replace the EC2 instance.
-# Auto-unseal preparation is ON: this provisions only the dedicated KMS key
-# and EC2 role grant when an approved Terraform plan is applied. It does NOT
-# edit the live Vault configuration or restart/unseal Vault. Before applying,
-# confirm the plan contains no unrelated changes; backup and three existing
-# Shamir shares are required for the later, operator-led seal migration.
-# Never turn this off after migration: retain the key with the Vault data.
-# See docs/vault-auto-unseal.md. Do not paste any shares into chat or Terraform.
-prepare_vault_kms_auto_unseal = true
-
-vault = {
-  subdomain = "dev-vault"
-  # oidc_enabled = true # only after credentials, backup and maintenance window
-}
 
 # --- Redis (shared cache for the APIs) -----------------------------------------
 # Reachable from every API container as redis:6379 over the compose network; the
@@ -181,7 +134,7 @@ ecr_images_to_keep       = 3         # tagged images retained per repo
 # Prometheus/cAdvisor/node-exporter carry the metrics. No CloudWatch, no AWS
 # ingestion or per-query charges.
 #
-# Grafana is served by nginx at dev-grafana.nomaos.com. The prod stack owns DNS, so
+# Grafana is served by nginx at dev-logs.nomaos.com. The prod stack owns DNS, so
 # add the A record there (see the extra_a_records block in
 # prod/terraform.auto.tfvars) or leave it tunnel-only.
 logging = {
@@ -203,7 +156,7 @@ logging = {
   # something better here - the file is public like the rest of this repo.
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
-  # Its callback is https://dev-grafana.nomaos.com/login/github; setup is in
+  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
   # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
   # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
   # admin remains available for break-glass use.
@@ -228,17 +181,6 @@ sonarqube = {
   # prod/terraform.auto.tfvars has the line to copy, and the `sonarqube_fqdn` and
   # `ec2_public_ip` outputs are the two values it needs.
   subdomain = "sonar"
-
-  # Same image and version as the old server (sonar.agrovesto.com, 26.4 + the
-  # community branch plugin), so the restored database needs no schema upgrade
-  # and branch / PR analysis + PR decoration keep working. The plugin trails
-  # SonarQube releases: bump only to a tag that exists for
-  # mc1arke/sonarqube-with-community-branch-plugin.
-  image = "mc1arke/sonarqube-with-community-branch-plugin:26.4.0.121862-community"
-
-  # Own PostgreSQL container instead of the shared SQL Server, so the old
-  # server's pg_dump can be restored as-is (docs/sonarqube-migration.md).
-  database_engine = "postgres"
 
   # READ THIS BEFORE POINTING CI AT IT: allowed_cidrs = [] means the nginx vhost
   # answers 127.0.0.1 only, i.e. the UI is reachable through an SSH tunnel and
