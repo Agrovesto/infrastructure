@@ -424,7 +424,7 @@ locals {
       }
       "scripts/prepare-vault.sh" = {
         content_type = "text/x-shellscript"
-        content      = templatefile("${path.module}/prepare-vault.sh.tftpl", {
+        content = templatefile("${path.module}/prepare-vault.sh.tftpl", {
           volume_serial = replace(aws_ebs_volume.vault[0].id, "-", "")
           image         = var.vault.image
           bucket        = local.host_config_bucket

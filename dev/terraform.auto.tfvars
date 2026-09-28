@@ -14,7 +14,7 @@ manage_dns = false
 # Never enable fresh setup as an automatic migration of existing Vault data.
 # Keep both enabled for the lifetime of this Vault installation.
 prepare_vault_kms_auto_unseal = true
-manage_fresh_vault           = true
+manage_fresh_vault            = true
 
 # --- App host ------------------------------------------------------------------
 # t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL

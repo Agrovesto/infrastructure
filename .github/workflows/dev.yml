@@ -24,6 +24,8 @@ jobs:
       stack: dev
       environment: dev
       sonar_properties: sonar-project-dev.properties
+      #  Repository variable set by an operator after backup/restart checks.
+      vault_oidc_restart_ack: ${{ vars.DEV_VAULT_OIDC_RESTART_ACK == 'true' }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_DEV }}
       TF_VAR_MSSQL_SA_PASSWORD: ${{ secrets.TF_VAR_MSSQL_SA_PASSWORD_DEV }}
