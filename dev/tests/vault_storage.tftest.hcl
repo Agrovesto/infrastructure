@@ -57,10 +57,10 @@ override_data {
 }
 
 variables {
-  ui_https_enabled = false
+  ui_https_enabled   = false
   vault              = { subdomain = "dev-vault", oidc_enabled = false }
   manage_fresh_vault = false
-  import_existing = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"

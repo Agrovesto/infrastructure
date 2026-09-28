@@ -80,8 +80,8 @@ locals {
   ))
 
   github_sso_proxy_enabled = local.sonarqube_github_sso_enabled || local.grafana_github_sso_enabled
-  ui_tls_enabled          = local.github_sso_proxy_enabled || var.ui_https_enabled
-  ui_tls_hosts_enabled    = local.ui_tls_enabled && ((var.sonarqube.enabled && var.sonarqube.expose_via_nginx) || (var.logging.enabled && var.logging.expose_via_nginx))
+  ui_tls_enabled           = local.github_sso_proxy_enabled || var.ui_https_enabled
+  ui_tls_hosts_enabled     = local.ui_tls_enabled && ((var.sonarqube.enabled && var.sonarqube.expose_via_nginx) || (var.logging.enabled && var.logging.expose_via_nginx))
 
   sonarqube_github_parameter_names = {
     client_id     = "/${local.name}/sonarqube_github_client_id"
