@@ -33,6 +33,12 @@ Do not enable fresh setup on an initialized root-backed Vault.
 - Schedules daily DLM snapshots at 19:00 UTC, retaining 14 snapshots. These add AWS
   volume/snapshot charges. They are **crash-consistent, not application-consistent**.
 
+The Compose command is `server` only. HashiCorp's image entrypoint automatically
+adds `-config=/vault/config`, which includes the mounted `vault.hcl`. Do not add
+`-config=/vault/config/vault.hcl` as well: the duplicate load produces
+`more than one enabled seal found`. Repair the Compose command and recreate the
+container, not the KMS key or stored seal configuration.
+
 Terraform never initializes Vault, stores recovery shares/root tokens, or calls
 unseal. It does not automatically migrate a seal, copy old data, or approve config
 changes. The config mount remains writable for compatibility with the image's root

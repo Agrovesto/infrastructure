@@ -98,7 +98,9 @@ services:
       VAULT_ADDR: "http://127.0.0.1:8200"
     ports:
       - "127.0.0.1:${vault.host_port}:8200"
-    command: server -config=/vault/config/vault.hcl
+    # The official image adds -config=/vault/config for the server subcommand.
+    # Passing the file again loads its KMS seal twice and prevents startup.
+    command: server
     volumes:
       - type: bind
         source: /data/vault/data

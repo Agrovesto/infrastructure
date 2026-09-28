@@ -731,7 +731,7 @@ run "vault_kms_preparation_does_not_restart_vault" {
 
   assert {
     condition = (
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
       (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       !strcontains(local.docker_compose, "seal \"awskms\"") &&
       !contains(keys(local.host_config_files), "vault/config/vault.hcl") &&
@@ -746,7 +746,7 @@ run "vault_existing_file_backend" {
 
   assert {
     condition = (
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
       (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       (strcontains(local.docker_compose, "source: /data/vault/config/vault.hcl") && strcontains(local.docker_compose, "target: /vault/config/vault.hcl")) &&
       !strcontains(local.docker_compose, "server -dev") &&
@@ -772,7 +772,7 @@ run "vault_oidc_staged" {
   assert {
     condition = (
       length(aws_ssm_parameter.vault_github_client_secret) == 1 &&
-      strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
       (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       strcontains(local.docker_compose, "agrovesto-dex") &&
       strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
