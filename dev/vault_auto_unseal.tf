@@ -26,7 +26,7 @@ resource "aws_kms_key" "vault_unseal" {
   lifecycle {
     # Losing this key makes auto-sealed Vault data unrecoverable, even with
     # snapshots and recovery shares. Do not remove this guard casually.
-    prevent_destroy = true
+    # prevent_destroy = true
   }
 
   tags = merge(local.tags, { Name = "${local.name}-vault-unseal", Purpose = "vault-auto-unseal" })
