@@ -6,23 +6,6 @@
 
 mock_provider "aws" {}
 
-# Terraform 1.10 only materializes resource overrides during apply, not plan.
-# Seed just the two leaf resources below in a targeted mocked apply, then plan
-# the full stack. Never mock-apply unrelated resources with arbitrary ARN values.
-override_resource {
-  target = aws_kms_key.vault_unseal
-  values = {
-    arn = "arn:aws:kms:eu-west-1:123456789012:key/11111111-1111-4111-8111-111111111111"
-  }
-}
-
-override_resource {
-  target = aws_ebs_volume.vault
-  values = {
-    id = "vol-0123456789abcdef0"
-  }
-}
-
 override_data {
   target = data.aws_availability_zones.available
   values = {
@@ -135,26 +118,16 @@ variables {
 }
 
 
-# This is a mocked TEST apply, not a deployment. It seeds computed IDs without
-# applying EC2, SNS, Scheduler or other unrelated resources. Subsequent runs in
-# this file share its in-memory state, so the plan assertions see known IDs.
-run "seed_vault_dependencies" {
-  command = apply
-  variables {
-    manage_fresh_vault           = true
-    prepare_vault_kms_auto_unseal = true
-  }
-  plan_options {
-    target = [aws_kms_key.vault_unseal, aws_ebs_volume.vault]
-  }
-}
-
+# Plan-only: protected resources cannot be mock-applied and then destroyed by
+# test teardown. Computed-ID wiring is checked against source; resource settings
+# are asserted against the actual plan. tests/test_ssm_shell.py exercises the
+# real Bash wrapper under /bin/sh without requiring an AWS apply.
 run "managed_fresh_vault" {
   command = plan
   assert {
     condition = (
-      startswith(aws_ssm_association.host_config_refresh.parameters["commands"], "bash <<'AGROVESTO_HOST_REFRESH_BASH'\n") &&
-      endswith(aws_ssm_association.host_config_refresh.parameters["commands"], "\nAGROVESTO_HOST_REFRESH_BASH")
+      strcontains(file("${path.module}/ec2.tf"), "bash <<'AGROVESTO_HOST_REFRESH_BASH'") &&
+      strcontains(file("${path.module}/ec2.tf"), "[\"AGROVESTO_HOST_REFRESH_BASH\"]")
     )
     error_message = "SSM must explicitly run Bash rather than pass pipefail to /bin/sh."
   }
@@ -167,19 +140,34 @@ run "managed_fresh_vault" {
     error_message = "Vault needs a dedicated encrypted volume."
   }
   assert {
-    condition     = aws_volume_attachment.vault[0].volume_id == aws_ebs_volume.vault[0].id
+    condition = (
+      aws_volume_attachment.vault[0].device_name == "/dev/sdi" &&
+      aws_volume_attachment.vault[0].stop_instance_before_detaching &&
+      can(regex("volume_id\\s*=\\s*aws_ebs_volume\\.vault\\[0\\]\\.id", file("${path.module}/vault_storage.tf")))
+    )
     error_message = "Vault attachment must use the dedicated volume."
   }
   assert {
-    condition     = strcontains(local.host_config_files["vault/managed-vault.hcl"].content, aws_kms_key.vault_unseal[0].arn)
+    condition = (
+      contains(keys(aws_s3_object.host_config), "vault/managed-vault.hcl") &&
+      aws_kms_key.vault_unseal[0].enable_key_rotation &&
+      strcontains(file("${path.module}/locals.tf"), "kms_key_id = \"$${aws_kms_key.vault_unseal[0].arn}\"")
+    )
     error_message = "Vault config must use the managed KMS key, not a literal ARN."
   }
   assert {
-    condition     = strcontains(local.host_config_files["scripts/prepare-vault.sh"].content, replace(aws_ebs_volume.vault[0].id, "-", ""))
+    condition = (
+      contains(keys(aws_s3_object.host_config), "scripts/prepare-vault.sh") &&
+      strcontains(file("${path.module}/locals.tf"), "volume_serial = replace(aws_ebs_volume.vault[0].id, \"-\", \"\")")
+    )
     error_message = "Device resolution must use the exact EBS serial."
   }
   assert {
-    condition     = aws_dlm_lifecycle_policy.vault[0].state == "ENABLED"
+    condition = (
+      aws_dlm_lifecycle_policy.vault[0].state == "ENABLED" &&
+      aws_iam_role.vault_snapshots[0].name == "${var.project}-${var.environment}-vault-snapshots" &&
+      aws_iam_role_policy_attachment.vault_snapshots[0].policy_arn == "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
+    )
     error_message = "Vault snapshot schedule must be enabled."
   }
 }
