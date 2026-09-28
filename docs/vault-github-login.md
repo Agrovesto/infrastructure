@@ -61,8 +61,9 @@ an SSM Run Command or Terraform provisioner.
 
 Use a private administrative channel that is approved for privileged operations.
 Do not paste an admin token in chat, CI, Terraform, or shell command arguments. The
-script needs host permissions to read root-only `/opt/agrovesto/compose/.env` and
-access Docker. Merely being logged in as `ssm-user` does not grant those permissions.
+script requires Docker access and reads the active Dex client secret through a
+captured Docker-inspect pipe. It does not read or loosen permissions on the
+root-only Compose `.env`. Docker membership is privileged host access.
 
 In an authorized shell with tracing disabled:
 

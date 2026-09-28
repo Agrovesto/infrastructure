@@ -4,18 +4,24 @@
 # never put an admin token in Terraform, S3, .env, shell history or CI.
 set -euo pipefail
 : "$${VAULT_TOKEN:?Set VAULT_TOKEN in the current shell for one-time bootstrap}"
-cd /opt/agrovesto/compose
-# Read ONLY the OIDC client secret from the root-only Compose .env without
-# evaluating it as shell code (other application passwords can contain metacharacters).
-VAULT_OIDC_CLIENT_SECRET=$(python3 - <<'PYCODE'
-from pathlib import Path
-for line in Path(".env").read_text().splitlines():
-    if line.startswith("VAULT_OIDC_CLIENT_SECRET="):
-        print(line.partition("=")[2])
+# Docker access is already privileged. Read ONLY the active Dex client secret
+# into a captured pipe, without opening or relaxing the host's root-only .env.
+# No shell/printenv is required inside the Dex image. Never run with tracing.
+set +x
+VAULT_OIDC_CLIENT_SECRET=$(docker inspect agrovesto-dex | python3 -c '
+import json, sys
+container = json.load(sys.stdin)[0]
+if not container.get("State", {}).get("Running"):
+    raise SystemExit("Dex must be running before OIDC bootstrap")
+for entry in container["Config"].get("Env", []):
+    name, _, value = entry.partition("=")
+    if name == "VAULT_OIDC_CLIENT_SECRET" and value:
+        sys.stdout.write(value)
         break
-PYCODE
-)
-: "$${VAULT_OIDC_CLIENT_SECRET:?missing Dex client secret in .env}"
+else:
+    raise SystemExit("Dex OIDC client secret is missing")
+')
+: "$${VAULT_OIDC_CLIENT_SECRET:?missing Dex client secret}"
 export VAULT_OIDC_CLIENT_SECRET VAULT_TOKEN
 
 vault() { docker exec -i -e VAULT_TOKEN agrovesto-vault vault "$@"; }

@@ -12,13 +12,17 @@ class OidcBootstrapSafety(unittest.TestCase):
     def run_bootstrap(self, sealed, auth_error):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
-            (path / '.env').write_text('VAULT_OIDC_CLIENT_SECRET=test-fixture-only\n')
+            # Intentionally no host .env: Docker membership must suffice.
             script = (ROOT / 'dev/configure-vault-oidc.sh').read_text()
             script = script.replace('$${', '${')
             for key, value in dict(vault_fqdn='dev-vault.nomaos.com',
                                    github_org='Agrovesto', github_team='infrastructure').items():
                 script = script.replace('${' + key + '}', value)
-            script = script.replace('cd /opt/agrovesto/compose', f'cd {folder}')
+            docker_mock = """docker() {
+  printf '%s' '[{"State":{"Running":true},"Config":{"Env":["VAULT_OIDC_CLIENT_SECRET=test-fixture-only"]}}]'
+}
+"""
+            script = script.replace('set -euo pipefail', 'set -euo pipefail\n' + docker_mock)
             original = 'vault() { docker exec -i -e VAULT_TOKEN agrovesto-vault vault "$@"; }'
             mock = '''vault() {
   printf '%s\\n' "$*" >> calls
@@ -31,9 +35,10 @@ class OidcBootstrapSafety(unittest.TestCase):
             self.assertIn(original, script)
             script = script.replace(original, mock)
             result = subprocess.run(['bash'], input=script, text=True, capture_output=True,
-                                    env={**os.environ, 'VAULT_TOKEN': 'test-fixture-only'})
+                                    cwd=folder, env={**os.environ, 'VAULT_TOKEN': 'test-fixture-only'})
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn('UNEXPECTED_MUTATION', result.stdout)
+            self.assertNotIn('test-fixture-only', result.stdout + result.stderr)
             return (path / 'calls').read_text()
 
     def test_sealed_vault_is_not_configured(self):
