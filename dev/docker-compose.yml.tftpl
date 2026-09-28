@@ -96,7 +96,7 @@ services:
       VAULT_ADDR: "http://127.0.0.1:8200"
     ports:
       - "127.0.0.1:${vault.host_port}:8200"
-    command: server -config=/vault/config/vault.hcl
+    command: server
     volumes:
       - /data/vault/data:/vault/file
       - /data/vault/config/vault.hcl:/vault/config/vault.hcl
