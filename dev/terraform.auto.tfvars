@@ -106,6 +106,9 @@ apis = {
     host_port = 5006
     subdomain = "dev-agx-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5006", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    # The agx API joins the Caddy TLS edge: https://dev-agx-api.nomaos.com, with
+    # a 308 from plain HTTP and nginx still routing the vhost underneath.
+    tls_via_caddy = true
   }
 }
 
@@ -123,9 +126,10 @@ mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"
 # /data/vault/data -> /vault/file, Shamir seal (3-of-5). This branch keeps the
 # same backend/mount. findmnt confirms /data/vault/data is on the EC2 root EBS
 # volume (delete_on_termination). DNS for dev-vault.nomaos.com points to the EIP
-# manually, but nginx stays internal-only until OIDC + HTTPS is enabled. Verify
-# a root-volume backup and have three Shamir shares ready: enabling OIDC adds a
-# host-gateway mapping, which triggers a controlled Vault container restart.
+# manually, but nginx stays internal-only until OIDC + HTTPS is enabled (the
+# opt-in Dex/Vault OIDC feature). Verify a root-volume backup and have three
+# Shamir shares ready: enabling OIDC adds a host-gateway mapping, which triggers
+# a controlled Vault container restart.
 # An OIDC plan also requires the explicit vault_oidc_restart_ack variable.
 # See docs/vault-github-login.md. Do NOT replace the EC2 instance.
 # Auto-unseal preparation is ON: this provisions only the dedicated KMS key
