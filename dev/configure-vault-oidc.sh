@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run on the dev host AFTER persistent Vault has been initialized and the
-# migrated data verified. Requires a temporary VAULT_TOKEN (operator-supplied);
+# initialization/unsealing verified. Requires a temporary VAULT_TOKEN (operator-supplied);
 # never put an admin token in Terraform, S3, .env, shell history or CI.
 set -euo pipefail
 : "$${VAULT_TOKEN:?Set VAULT_TOKEN in the current shell for one-time bootstrap}"
@@ -16,11 +16,15 @@ for line in Path(".env").read_text().splitlines():
 PYCODE
 )
 : "$${VAULT_OIDC_CLIENT_SECRET:?missing Dex client secret in .env}"
-export VAULT_OIDC_CLIENT_SECRET
+export VAULT_OIDC_CLIENT_SECRET VAULT_TOKEN
 
-vault() { docker exec -i -e VAULT_TOKEN="$VAULT_TOKEN" agrovesto-vault vault "$@"; }
+vault() { docker exec -i -e VAULT_TOKEN agrovesto-vault vault "$@"; }
 
-if ! vault auth list -format=json | python3 -c 'import sys,json; sys.exit("oidc/" not in json.load(sys.stdin))'; then
+# Refuse bootstrap until initialization and KMS unsealing are complete.
+vault status -format=json | python3 -c 'import json,sys; s=json.load(sys.stdin); sys.exit(not(s["initialized"] and not s["sealed"]))'
+# Do not mistake connectivity/authorization errors for a missing auth mount.
+auth_mounts=$(vault auth list -format=json)
+if ! printf '%s' "$auth_mounts" | python3 -c 'import sys,json; sys.exit("oidc/" not in json.load(sys.stdin))'; then
   vault auth enable oidc
 fi
 vault auth tune -listing-visibility=unauth oidc

@@ -105,6 +105,16 @@ http {
     deny all;
 %{ endif ~}
 
+    # Initialization is a private, one-time operator action through Docker/SSM.
+    # Never allow someone on the public HTTPS endpoint to initialize fresh Vault.
+    location ~ ^/v1/sys/init/?$ {
+      limit_except GET { deny all; }
+      set $vault_backend vault:8200;
+      proxy_pass http://$vault_backend;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    }
+
     location / {
       # Resolve at request time so a Vault container restart does not leave
       # nginx pinned to a stale Docker IP.

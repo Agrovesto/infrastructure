@@ -48,6 +48,8 @@ override_data {
 }
 
 variables {
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
   import_existing = false
 
   ami_id            = "ami-0123456789abcdef0"

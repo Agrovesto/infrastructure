@@ -106,7 +106,7 @@ resource "aws_instance" "app" {
 
     precondition {
       condition     = !var.vault.oidc_enabled || var.vault_oidc_restart_ack
-      error_message = "Enabling Vault OIDC restarts Vault on the EC2 root disk. Confirm a verified backup and current-seal restart plan (3 Shamir shares, or verified KMS auto-unseal) first (vault_oidc_restart_ack = true)."
+      error_message = "Enabling Vault OIDC can restart Vault. Confirm a verified storage backup (or fresh empty setup) and current-seal restart plan (Shamir shares or KMS auto-unseal) first (vault_oidc_restart_ack = true)."
     }
 
     precondition {

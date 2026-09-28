@@ -260,7 +260,7 @@ variable "vault_oidc_client_secret" {
 # seal's restart procedure: three Shamir shares before migration, or a tested
 # KMS auto-unseal after migration (with the recovery shares still in custody).
 variable "vault_oidc_restart_ack" {
-  description = "Explicit acknowledgement of Vault restart, root-volume backup, and readiness to unseal under the current seal"
+  description = "Explicit acknowledgement of Vault restart, verified storage backup (or fresh empty setup), and readiness to unseal under the current seal"
   type        = bool
   default     = false
 }

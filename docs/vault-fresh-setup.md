@@ -40,6 +40,10 @@ entrypoint; keep administrative access restricted.
 
 ## Deploy
 
+The checked-in domain/OIDC configuration also requires the credentials and explicit
+restart approval in the [GitHub login guide](vault-github-login.md). Missing these
+prerequisites deliberately blocks plans.
+
 Keep Vault stopped for first setup. Run from the infrastructure checkout:
 
 ```bash

@@ -1,26 +1,96 @@
-# Dev Vault: GitHub browser login (OIDC)
+# Dev Vault HTTPS and GitHub login
 
-> **Fresh rebuilt instance:** use [Terraform-managed fresh Vault](vault-fresh-setup.md).
-> The root-disk/Shamir instructions below describe the previous installation, not
-> the new dedicated-volume setup. Never use fresh setup to migrate existing data.
+The checked-in dev settings enable `vault.subdomain = "dev-vault"` and
+`vault.oidc_enabled = true`. These configure **https://dev-vault.nomaos.com** through
+Caddy → nginx → Vault, with Dex at `/dex`. This is configuration, not evidence of a
+successful deployment. nginx rejects public initialization writes (`/v1/sys/init`);
+initialize only through the private operator path. Initialize fresh Vault using the [fresh setup runbook](vault-fresh-setup.md)
+first; do not use the historical Shamir migration procedure for a new installation.
 
-**The latest `dev` branch (commit `4dd4627`) already describes the live Vault.** On EC2, Vault 1.15.6 is initialized and unsealed with the **file** backend and a **Shamir 3-of-5 seal**. Compose starts it with `server -config=/vault/config/vault.hcl`, binding `/data/vault/data:/vault/file` and `/data/vault/config/vault.hcl:/vault/config/vault.hcl`. Inspection confirms the container belongs to `/opt/agrovesto/compose/docker-compose.yml` on `compose_default`. This branch now follows that configuration: OIDC does **not** create another Vault volume, switch to Raft, initialize Vault, or replace EC2. The separate opt-in [auto-unseal runbook](vault-auto-unseal.md) stages a KMS key and describes a manual *seal-only* migration of this same installation. `aws_instance.app` has `prevent_destroy = true`.
+## Required operator setup before merging/applying
 
-**Confirmed storage risk:** `findmnt -T /data/vault/data` resolves to `/dev/nvme0n1p1` mounted at `/` (ext4). Vault's data is on the **EC2 root EBS volume**, which Terraform configures with `delete_on_termination = true`. `prevent_destroy` blocks Terraform-driven instance destruction but does not protect against a manual termination or loss of the root disk. **Do not run `vault operator init` or `terraform apply -replace=aws_instance.app`.** Before OIDC, arrange and verify a backup of the root EBS volume and a recovery procedure. A snapshot with the instance stopped avoids copying live Vault files inconsistently; after restarting, authorized operators must unseal Vault. An OIDC-enabled Compose change also restarts Vault, requiring **three unseal shares again** while it uses Shamir; after the separate KMS migration, first verify that a restart auto-unseals. Keep the shares (recovery shares after migration) in offline break-glass custody, never in Terraform, S3, CI or chat. The separate `prod/` ECS+EFS Vault is unrelated to this EC2 installation.
+1. Compare `terraform -chdir=dev output -raw ec2_public_ip` with public DNS for
+   `dev-vault.nomaos.com`. DNS resolved to `108.129.68.122` during preparation, but
+   it must match the current dev EIP. The prod account owns DNS; this PR does not
+   overwrite/adopt the manually managed record. Permit inbound 80/443 for Caddy
+   ACME/HTTPS. Never expose Vault's HTTP port 8200 publicly.
+2. Register a **dedicated GitHub OAuth App** (not the Grafana app):
+   - Homepage: `https://dev-vault.nomaos.com`
+   - Authorization callback: `https://dev-vault.nomaos.com/dex/callback`
+   - Allow the app under organization OAuth restrictions, if applicable.
+3. Under this repository's **Settings → Secrets and variables → Actions**, store
+   these **repository secrets**, not plaintext variables:
+   - `DEV_VAULT_GITHUB_CLIENT_ID`: the OAuth App client ID.
+   - `DEV_VAULT_GITHUB_CLIENT_SECRET`: its client secret.
+   - `DEV_VAULT_OIDC_CLIENT_SECRET`: an independent random secret generated locally
+     (for example `openssl rand -hex 32`). Preserve it across future deployments.
+   Never paste values in chat or commit them. The dev caller already forwards these
+   to the reusable workflow; plan/apply steps pass them to Terraform, which stores
+   them in encrypted SSM SecureStrings. Terraform state and saved plans also contain
+   them and must be restricted. Secret metadata could not be verified from this
+   session because GitHub returned HTTP 403.
+4. Confirm a verified backup and KMS restart readiness for initialized Vault, or
+   confirm this is the approved empty fresh setup. Then set repository **variable**
+   `DEV_VAULT_OIDC_RESTART_ACK` to `true`. It defaults to false in CI: the plan fails
+   closed without operator approval. Reassess this standing acknowledgement before
+   later restart-causing changes; resetting it to false blocks subsequent plans.
+5. Review PR #32 and a complete Terraform plan. No EC2 replacement or destruction
+   of existing KMS/storage is expected. Apply only after review. SSM prepares mounted
+   storage, retrieves OAuth credentials into root-only `.env`, then starts Compose.
 
-Vault's built-in GitHub authentication uses personal access tokens rather than browser OAuth. Browser login needs a new GitHub OAuth App → Dex → Vault OIDC. [Vault GitHub auth](https://developer.hashicorp.com/vault/docs/auth/github), [Dex GitHub connector](https://dexidp.io/docs/connectors/github/), [Vault OIDC auth](https://developer.hashicorp.com/vault/tutorials/auth-methods/oidc-auth).
+Local runs need the corresponding environment variables from your secure secret
+manager: `TF_VAR_vault_github_client_id`, `TF_VAR_vault_github_client_secret`,
+`TF_VAR_vault_oidc_client_secret`, plus `TF_VAR_vault_oidc_restart_ack=true` after
+approval. Do not put secret assignments in shell history. GitHub Actions secrets
+are not automatically available to a local Terraform command.
 
-## Credentials
+## Verify HTTPS before configuring auth
 
-1. Create a **new GitHub OAuth App** (Grafana's OAuth App has a different callback). Homepage: `https://dev-vault.nomaos.com`; callback: `https://dev-vault.nomaos.com/dex/callback`. Keep the GitHub client ID and secret in an approved secret store.
-2. Generate a separate Vault↔Dex shared OIDC client secret yourself with `openssl rand -hex 32`, and store it securely. It is **not** the GitHub client secret. Do not paste any of these values in chat or commit them.
-3. When deliberately planning/applying OIDC, supply `TF_VAR_vault_github_client_id`, `TF_VAR_vault_github_client_secret`, and `TF_VAR_vault_oidc_client_secret` in the operator's Terraform environment. Terraform stores them in KMS-encrypted SSM SecureStrings; the existing host's SSM association retrieves them into a root-only Compose `.env` file before starting Dex. Terraform state and saved plan files still contain secrets: restrict access. The unchanged GitHub Actions workflows **do not** supply these values, so do not commit an enabled OIDC flag to an auto-deploying branch without an approved CI secret-injection path.
+From a client browser/network:
 
-## Controlled enablement
+```bash
+curl --fail --show-error https://dev-vault.nomaos.com/dex/.well-known/openid-configuration
+```
 
-1. Verify `dev-vault.nomaos.com` resolves to the dev EIP and ports 80/443 are reachable. Review `dev/vault-operator.hcl` against the existing secret mounts; the draft Dex connector accepts only `Agrovesto/infrastructure`, and the group receives scoped `kv/*` permissions—not the root policy.
-2. In a maintenance window with a **verified root-volume backup and the current seal's recovery/unseal procedure ready** (three Shamir shares, or tested KMS auto-unseal after migration), set `oidc_enabled = true` in the existing `vault` object in `dev/terraform.auto.tfvars` (do not change its storage path or seal config). Set `TF_VAR_vault_oidc_restart_ack=true` **only after** these safeguards are ready; the Terraform precondition rejects OIDC plans otherwise. Review `terraform -chdir=dev plan` carefully: it should add Dex/SSM/Caddy config, not destroy or replace EC2 or Vault storage. An OIDC-only Compose `extra_hosts` change **will restart the Vault container**. On Shamir, authorized operators must unseal it; after a verified KMS migration, it should auto-unseal. The source Vault file data remains at `/data/vault/data` on the root disk.
-3. After applying the approved plan, check Caddy's trusted HTTPS certificate and `https://dev-vault.nomaos.com/dex/.well-known/openid-configuration`. Do not disable TLS verification. The Vault container's local host-gateway mapping lets it resolve the public issuer without relying on EIP hairpin routing.
-4. On the host, use a temporary **privileged Vault token** to run `sudo -E bash /opt/agrovesto/scripts/configure-vault-oidc.sh` after reviewing its role/policy and group claim. The script configures OIDC on the **already initialized** Vault; it does not initialize or migrate storage. Do not put the token in command history, `.env`, CI, or Terraform. Test `https://dev-vault.nomaos.com/ui/vault/auth?with=oidc` as an authorized team member, verify KV access and that a non-member is denied. Retain a separate break-glass Vault access procedure.
+Expect issuer `https://dev-vault.nomaos.com/dex`, with a valid certificate (do not
+use `curl -k`). On the host, inspect Caddy/Dex logs and confirm Vault is initialized
+and unsealed. Initializing an empty Vault remains a private manual operation, never
+an SSM Run Command or Terraform provisioner.
 
-`agx-api` is routed on port 5006 but Terraform does not create its already-migrated database. Confirm separately where that database lives and whether backups cover it.
+## One-time Vault OIDC bootstrap AFTER initialization
+
+Use a private administrative channel that is approved for privileged operations.
+Do not paste an admin token in chat, CI, Terraform, or shell command arguments. The
+script needs host permissions to read root-only `/opt/agrovesto/compose/.env` and
+access Docker. Merely being logged in as `ssm-user` does not grant those permissions.
+
+In an authorized shell with tracing disabled:
+
+```bash
+set +x
+read -rsp 'Temporary Vault admin token: ' VAULT_TOKEN; printf '\n'
+export VAULT_TOKEN
+bash /opt/agrovesto/scripts/configure-vault-oidc.sh
+unset VAULT_TOKEN
+```
+
+The script refuses sealed/uninitialized Vault, configures OIDC and binds the
+`Agrovesto:infrastructure` GitHub team to `dev-vault-operator`. Docker inherits the
+token via environment rather than a token-bearing command-line argument. Privileged
+host administrators can still inspect process environments: secure this host.
+
+The Vault role's callback is
+`https://dev-vault.nomaos.com/ui/vault/auth/oidc/oidc/callback` (distinct from the
+GitHub OAuth App's Dex callback). The role also supports the loopback CLI callback.
+
+Open **https://dev-vault.nomaos.com/ui/vault/auth?with=oidc** and test an authorized
+team member. Verify unauthorized users cannot obtain the operator policy. The
+operator policy is scoped to `kv/data/*` and `kv/metadata/*`; it does not grant root
+or general auth/system administration. On a fresh Vault, an administrator must
+separately enable the KV v2 engine at `kv/` if desired; bootstrap does not overwrite
+or create application secrets. Configure application policies/auth separately.
+
+Only after testing login and break-glass recovery should you revoke the initial
+root token. Keep recovery shares and the KMS key secure. The API/UI remains a public
+TLS endpoint requiring Vault authentication; GitHub login is an auth method, not a
+blanket reverse-proxy gate on every Vault API route.

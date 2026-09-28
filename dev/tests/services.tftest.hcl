@@ -54,6 +54,8 @@ override_data {
 }
 
 variables {
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
   import_existing = false
 
   ami_id            = "ami-0123456789abcdef0"
@@ -730,7 +732,7 @@ run "vault_kms_preparation_does_not_restart_vault" {
   assert {
     condition = (
       strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       !strcontains(local.docker_compose, "seal \"awskms\"") &&
       !contains(keys(local.host_config_files), "vault/config/vault.hcl") &&
       !strcontains(file("${path.module}/user_data.sh.tftpl"), "operator unseal -migrate")
@@ -745,8 +747,8 @@ run "vault_existing_file_backend" {
   assert {
     condition = (
       strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
-      strcontains(local.docker_compose, "/data/vault/config/vault.hcl:/vault/config/vault.hcl") &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
+      (strcontains(local.docker_compose, "source: /data/vault/config/vault.hcl") && strcontains(local.docker_compose, "target: /vault/config/vault.hcl")) &&
       !strcontains(local.docker_compose, "server -dev") &&
       !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID")
     )
@@ -771,11 +773,15 @@ run "vault_oidc_staged" {
     condition = (
       length(aws_ssm_parameter.vault_github_client_secret) == 1 &&
       strcontains(local.docker_compose, "server -config=/vault/config/vault.hcl") &&
-      strcontains(local.docker_compose, "/data/vault/data:/vault/file") &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
       strcontains(local.docker_compose, "agrovesto-dex") &&
       strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
       strcontains(local.caddyfile, "dev-vault.nomaos.com") &&
+      output.vault_browser_login_url == "https://dev-vault.nomaos.com/ui/vault/auth?with=oidc" &&
       strcontains(local.nginx_conf, "allow all;") &&
+      strcontains(local.nginx_conf, "limit_except GET { deny all; }") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "issuer: https://dev-vault.nomaos.com/dex") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "redirectURI: https://dev-vault.nomaos.com/dex/callback") &&
       # The association's commands depend on S3 object etags and are unknown
       # during a mocked plan; check the selected command's source instead.
       strcontains(file("${path.module}/ec2.tf"), "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh") &&
@@ -808,5 +814,17 @@ run "vault_oidc_requires_backup_and_unseal_ack" {
     # vault_oidc_restart_ack remains false (the safe default).
   }
 
+  expect_failures = [aws_instance.app]
+}
+
+run "vault_oidc_missing_credentials_fails_closed" {
+  command = plan
+  variables {
+    vault                     = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack     = true
+    vault_github_client_id     = ""
+    vault_github_client_secret = ""
+    vault_oidc_client_secret   = ""
+  }
   expect_failures = [aws_instance.app]
 }

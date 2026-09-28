@@ -16,6 +16,13 @@ manage_dns = false
 prepare_vault_kms_auto_unseal = true
 manage_fresh_vault            = true
 
+# Public HTTPS + GitHub browser login. Supply the three DEV_VAULT_* secrets
+# and explicitly acknowledge restart readiness; missing prerequisites fail plans.
+vault = {
+  subdomain    = "dev-vault"
+  oidc_enabled = true
+}
+
 # --- App host ------------------------------------------------------------------
 # t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL
 # Server + Redis + SonarQube + the logging stack below, all in one docker compose
