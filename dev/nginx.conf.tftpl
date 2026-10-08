@@ -79,26 +79,29 @@ http {
 %{ endfor ~}
   # ── Nomaos API — blue/green deployment ─────────────────────────────────────
   # Terraform owns the vhost.
-  # deploy.sh owns which blue/green slot is active.
+  # deploy.sh owns which blue/green slot is active by rewriting:
+  # /opt/nomaos/nginx/upstreams/nomaos_api.conf
   #
-  # /etc/nginx/nomaos-active.conf must contain:
+  # The generated upstream is included dynamically:
   #
-  #   upstream nomaos_active {
+  #   upstream nomaos_api {
   #       server nomaos-api-blue:5007;
   #   }
   #
-  # or, when green is active:
+  # or:
   #
-  #   upstream nomaos_active {
+  #   upstream nomaos_api {
   #       server nomaos-api-green:5008;
   #   }
   #
-  include /etc/nginx/nomaos-active.conf;
+  include /etc/nginx/upstreams/*.conf;
+
   server {
     listen 80;
     server_name dev-api-test.nomaos.com;
+
     location / {
-      proxy_pass http://nomaos_active;
+      proxy_pass http://nomaos_api;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
