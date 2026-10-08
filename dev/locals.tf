@@ -447,7 +447,7 @@ locals {
       "nginx/nomaos-active.conf" = {
         content      = local.nomaos_active_conf
         content_type = "text/plain"
-}
+      }
       "scripts/init-dbs.sql" = {
         content      = local.init_sql
         content_type = "text/plain"

@@ -81,7 +81,7 @@ resource "aws_instance" "app" {
         tostring(aws_ssm_parameter.grafana_github_client_secret[0].version),
       ] : [],
     )
-  })
+  }))
 
   depends_on = [
     aws_s3_object.host_config,
@@ -133,7 +133,7 @@ resource "aws_instance" "app" {
     }
 
     precondition {
-      condition     = !alltrue(local.sonarqube_github_credentials_set) || (
+      condition = !alltrue(local.sonarqube_github_credentials_set) || (
         var.sonarqube.enabled &&
         var.sonarqube.expose_via_nginx &&
         length(var.sonarqube.allowed_cidrs) > 0
@@ -142,7 +142,7 @@ resource "aws_instance" "app" {
     }
 
     precondition {
-      condition     = !alltrue(local.grafana_github_credentials_set) || (
+      condition = !alltrue(local.grafana_github_credentials_set) || (
         var.logging.enabled &&
         var.logging.expose_via_nginx &&
         length(var.logging.allowed_cidrs) > 0
