@@ -220,6 +220,23 @@ run "service_passwords" {
   }
 
   assert {
+    condition = (
+      aws_ssm_parameter.mssql_sa_password.name == "/${local.name}/mssql_sa_password" &&
+      aws_ssm_parameter.mssql_sa_password.type == "SecureString"
+    )
+    error_message = "SQL Server's sa password is a SecureString under this stack's path, read at boot instead of being rendered into user data."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.grafana_admin_password) == 1 &&
+      aws_ssm_parameter.grafana_admin_password[0].name == "/${local.name}/grafana_admin_password" &&
+      aws_ssm_parameter.grafana_admin_password[0].type == "SecureString"
+    )
+    error_message = "With logging on, Grafana's admin password is stored the same way and appended to compose/.env by the bootstrap."
+  }
+
+  assert {
     condition     = aws_kms_key.host_passwords.enable_key_rotation == true
     error_message = "Host passwords KMS key has key rotation enabled."
   }
@@ -399,6 +416,42 @@ run "nginx_vhost" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# nginx: the Nomaos API blue/green vhost and the slot file it includes
+#
+# Terraform owns the vhost and ships the default slot (blue); the deploy
+# pipeline owns /etc/nginx/nomaos-active.conf and rewrites it to flip slots.
+# What has to hold here is the wiring: the include, the vhost, the object in the
+# config bucket, and the bind mount that puts the file where the include looks.
+# -----------------------------------------------------------------------------
+
+run "nomaos_blue_green_vhost" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "include /etc/nginx/nomaos-active.conf;") &&
+      strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://nomaos_active;")
+    )
+    error_message = "The blue/green vhost must include the slot file and proxy to the upstream it defines, so flipping a slot is a file rewrite plus a reload."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nomaos_active_conf, "upstream nomaos_active {") &&
+      strcontains(local.nomaos_active_conf, "server nomaos-api-blue:5007;") &&
+      aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf
+    )
+    error_message = "The default slot (blue, port 5007) ships as nginx/nomaos-active.conf: the object the host syncs to the path nginx includes."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "/opt/agrovesto/nginx/nomaos-active.conf:/etc/nginx/nomaos-active.conf:ro")
+    error_message = "The nginx container must bind-mount the synced slot file, or the include has nothing to read."
+  }
+}
+
 run "github_sso_uses_https_and_ssm_credentials" {
   command = plan
 
@@ -481,11 +534,11 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 14 &&
+      length(aws_s3_object.host_config) == 15 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script."
+    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the four always-needed and nine logging objects (15 total)."
   }
 
   assert {
@@ -789,6 +842,22 @@ run "vault_oidc_staged" {
       strcontains(local.host_config_files["scripts/refresh-vault-oidc.sh"].content, "VAULT_OIDC_CLIENT_SECRET")
     )
     error_message = "OIDC reuses the initialized file-storage Vault, with Dex, HTTPS and the Vault nginx route."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.vault_github_client_id) == 1 &&
+      length(aws_ssm_parameter.vault_oidc_client_secret) == 1 &&
+      alltrue([
+        for p in [
+          aws_ssm_parameter.vault_github_client_id[0],
+          aws_ssm_parameter.vault_github_client_secret[0],
+          aws_ssm_parameter.vault_oidc_client_secret[0],
+        ] :
+        p.type == "SecureString" && startswith(p.name, "/${local.name}/vault_")
+      ])
+    )
+    error_message = "Each Vault OIDC credential is its own SecureString under this stack's path; the host pulls them from SSM at boot."
   }
 
   assert {

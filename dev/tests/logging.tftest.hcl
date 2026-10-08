@@ -114,8 +114,8 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 12
-    error_message = "Ten rendered files ship to the host: compose, nginx.conf, init-dbs.sql, then loki, alloy, prometheus, 2x grafana provisioning and 2x dashboards."
+    condition     = length(aws_s3_object.host_config) == 13
+    error_message = "Thirteen rendered files ship to the host: the four always-needed (compose, nginx.conf, nomaos-active.conf, init-dbs.sql), then loki, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
   }
 
   assert {
@@ -133,6 +133,7 @@ run "logging_stack_resources" {
     condition = (
       aws_s3_object.host_config["compose/docker-compose.yml"].content == local.docker_compose &&
       aws_s3_object.host_config["nginx/nginx.conf"].content == local.nginx_conf &&
+      aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf &&
       aws_s3_object.host_config["logging/loki/config.yml"].content == local.loki_config
     )
     error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
@@ -514,11 +515,18 @@ run "disabled" {
     error_message = "Nothing is provisioned for logging when it is switched off - including the volume."
   }
 
-  # The bucket itself does NOT go away with the logging stack: compose and
-  # nginx.conf come from it on every boot, logging or not.
+  # The bucket itself does NOT go away with the logging stack: compose,
+  # nginx.conf, the Nomaos blue/green slot file and init-dbs.sql come from it on
+  # every boot, logging or not.
   assert {
-    condition     = length(aws_s3_object.host_config) == 3
-    error_message = "With logging off the bucket keeps exactly the three always-needed files (compose, nginx.conf, init-dbs.sql)."
+    condition = (
+      length(aws_s3_object.host_config) == 4 &&
+      alltrue([
+        for k in ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos-active.conf", "scripts/init-dbs.sql"] :
+        contains(keys(aws_s3_object.host_config), k)
+      ])
+    )
+    error_message = "With logging off the bucket keeps exactly the four always-needed files (compose, nginx.conf, nomaos-active.conf, init-dbs.sql)."
   }
 
   assert {
