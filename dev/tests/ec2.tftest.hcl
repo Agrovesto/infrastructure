@@ -137,7 +137,9 @@ run "instance" {
   assert {
     condition = (
       strcontains(file("${path.module}/ec2.tf"), "prevent_destroy = true") &&
-      strcontains(file("${path.module}/ec2.tf"), "ignore_changes = [ami, user_data, associate_public_ip_address]")
+      # Tolerate terraform fmt reflowing the list across lines: what matters is
+      # the three retained attributes, not the layout.
+      can(regex("ignore_changes\\s*=\\s*\\[\\s*ami,\\s*user_data,\\s*associate_public_ip_address,?\\s*\\]", file("${path.module}/ec2.tf")))
     )
     error_message = "The already-running root-backed Vault host must not be replaced to change its legacy public-IP flag."
   }

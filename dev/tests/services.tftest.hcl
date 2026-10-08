@@ -399,6 +399,42 @@ run "nginx_vhost" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# nginx: the Nomaos API blue/green vhost and the slot file it includes
+#
+# Terraform owns the vhost and ships the default slot (blue); the deploy
+# pipeline owns /etc/nginx/nomaos-active.conf and rewrites it to flip slots.
+# What has to hold here is the wiring: the include, the vhost, the object in the
+# config bucket, and the bind mount that puts the file where the include looks.
+# -----------------------------------------------------------------------------
+
+run "nomaos_blue_green_vhost" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "include /etc/nginx/nomaos-active.conf;") &&
+      strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://nomaos_active;")
+    )
+    error_message = "The blue/green vhost must include the slot file and proxy to the upstream it defines, so flipping a slot is a file rewrite plus a reload."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nomaos_active_conf, "upstream nomaos_active {") &&
+      strcontains(local.nomaos_active_conf, "server nomaos-api-blue:5007;") &&
+      aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf
+    )
+    error_message = "The default slot (blue, port 5007) ships as nginx/nomaos-active.conf: the object the host syncs to the path nginx includes."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "/opt/agrovesto/nginx/nomaos-active.conf:/etc/nginx/nomaos-active.conf:ro")
+    error_message = "The nginx container must bind-mount the synced slot file, or the include has nothing to read."
+  }
+}
+
 run "github_sso_uses_https_and_ssm_credentials" {
   command = plan
 
@@ -481,11 +517,11 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 14 &&
+      length(aws_s3_object.host_config) == 15 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script."
+    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the four always-needed and nine logging objects (15 total)."
   }
 
   assert {
