@@ -137,7 +137,9 @@ run "instance" {
   assert {
     condition = (
       strcontains(file("${path.module}/ec2.tf"), "prevent_destroy = true") &&
-      strcontains(file("${path.module}/ec2.tf"), "ignore_changes = [ami, user_data, associate_public_ip_address]")
+      # Tolerate terraform fmt reflowing the list across lines: what matters is
+      # the three retained attributes, not the layout.
+      can(regex("ignore_changes\\s*=\\s*\\[\\s*ami,\\s*user_data,\\s*associate_public_ip_address,?\\s*\\]", file("${path.module}/ec2.tf")))
     )
     error_message = "The already-running root-backed Vault host must not be replaced to change its legacy public-IP flag."
   }
@@ -145,6 +147,24 @@ run "instance" {
   assert {
     condition     = [for m in aws_instance.app.metadata_options : m.http_tokens] == ["required"]
     error_message = "IMDSv2 must be required."
+  }
+
+  # The bootstrap is ~18 KB of shell before interpolation, and EC2 caps user data
+  # at 16 KB: unzipped, the plan dies with "expected length of user_data to be in
+  # the range (0 - 16384)" (run #139). gzip keeps it at ~8 KB.
+  #
+  # aws_instance.app.user_data itself cannot be asserted on — it interpolates the
+  # data volume's id, which is unknown during a mocked plan — so the template
+  # stands in for the rendered script: its placeholders are about as long as the
+  # values they interpolate.
+  assert {
+    condition     = length(base64gzip(file("${path.module}/user_data.sh.tftpl"))) <= 16384
+    error_message = "The bootstrap must fit inside EC2's 16 KB user data cap once gzipped; it is over the cap raw."
+  }
+
+  assert {
+    condition     = can(regex("(?:user_data|user_data_base64)\\s*=\\s*base64gzip\\(\\s*templatefile\\(", file("${path.module}/ec2.tf")))
+    error_message = "ec2.tf must pass the rendered bootstrap through base64gzip; handing user_data the raw template fails the plan at 16 KB."
   }
 
   assert {
