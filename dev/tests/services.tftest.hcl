@@ -220,6 +220,23 @@ run "service_passwords" {
   }
 
   assert {
+    condition = (
+      aws_ssm_parameter.mssql_sa_password.name == "/${local.name}/mssql_sa_password" &&
+      aws_ssm_parameter.mssql_sa_password.type == "SecureString"
+    )
+    error_message = "SQL Server's sa password is a SecureString under this stack's path, read at boot instead of being rendered into user data."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.grafana_admin_password) == 1 &&
+      aws_ssm_parameter.grafana_admin_password[0].name == "/${local.name}/grafana_admin_password" &&
+      aws_ssm_parameter.grafana_admin_password[0].type == "SecureString"
+    )
+    error_message = "With logging on, Grafana's admin password is stored the same way and appended to compose/.env by the bootstrap."
+  }
+
+  assert {
     condition     = aws_kms_key.host_passwords.enable_key_rotation == true
     error_message = "Host passwords KMS key has key rotation enabled."
   }
@@ -825,6 +842,22 @@ run "vault_oidc_staged" {
       strcontains(local.host_config_files["scripts/refresh-vault-oidc.sh"].content, "VAULT_OIDC_CLIENT_SECRET")
     )
     error_message = "OIDC reuses the initialized file-storage Vault, with Dex, HTTPS and the Vault nginx route."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.vault_github_client_id) == 1 &&
+      length(aws_ssm_parameter.vault_oidc_client_secret) == 1 &&
+      alltrue([
+        for p in [
+          aws_ssm_parameter.vault_github_client_id[0],
+          aws_ssm_parameter.vault_github_client_secret[0],
+          aws_ssm_parameter.vault_oidc_client_secret[0],
+        ] :
+        p.type == "SecureString" && startswith(p.name, "/${local.name}/vault_")
+      ])
+    )
+    error_message = "Each Vault OIDC credential is its own SecureString under this stack's path; the host pulls them from SSM at boot."
   }
 
   assert {
