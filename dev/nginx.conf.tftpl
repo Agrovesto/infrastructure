@@ -78,30 +78,30 @@ http {
   }
 %{ endfor ~}
   # ── Nomaos API — blue/green deployment ─────────────────────────────────────
-  # Terraform owns the vhost.
-  # deploy.sh owns which blue/green slot is active by rewriting:
-  # /opt/nomaos/nginx/upstreams/nomaos_api.conf
+  # Terraform owns the vhost and ships the default slot (blue) as
+  # nginx/nomaos-active.conf in the config bucket; the boot sync lays it out at
+  # /opt/agrovesto/nginx/nomaos-active.conf and the compose file bind-mounts it
+  # read-only at the path the include below reads.
+  # deploy.sh owns which blue/green slot is active by rewriting that file:
   #
-  # The generated upstream is included dynamically:
-  #
-  #   upstream nomaos_api {
+  #   upstream nomaos_active {
   #       server nomaos-api-blue:5007;
   #   }
   #
   # or:
   #
-  #   upstream nomaos_api {
+  #   upstream nomaos_active {
   #       server nomaos-api-green:5008;
   #   }
   #
-  include /etc/nginx/upstreams/*.conf;
+  include /etc/nginx/nomaos-active.conf;
 
   server {
     listen 80;
-    server_name dev-api-test.nomaos.com;
+    server_name dev-api-test.${domain};
 
     location / {
-      proxy_pass http://nomaos_api;
+      proxy_pass http://nomaos_active;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
