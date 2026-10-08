@@ -33,6 +33,25 @@ resource "aws_instance" "app" {
   # Never replace this root-backed Vault host as a routine config update:
   # replacement would terminate the instance and delete its root EBS volume.
   user_data_replace_on_change = false
+
+  user_data = base64gzip(templatefile("${path.module}/user_data.sh.tftpl", {
+    mssql_device    = var.mssql_volume_device
+    sa_password     = var.mssql.sa_password
+    backup_bucket   = var.backup_bucket
+    aws_region      = var.aws_region
+    docker_compose  = local.docker_compose
+    nginx_conf      = local.nginx_conf
+    init_sql        = local.init_sql
+    db_list         = join(" ", var.mssql.databases)
+  }))
+
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  tags = merge(var.tags, { Name = "${var.name}-app-host" })
+}
+
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     mssql_volume_id = replace(aws_ebs_volume.mssql.id, "-", "")
     mssql_parameter = aws_ssm_parameter.mssql_sa_password.name

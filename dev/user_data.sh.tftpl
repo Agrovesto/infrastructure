@@ -318,7 +318,7 @@ cat >/opt/agrovesto/scripts/backup-mssql.sh <<'BKP'
 set -euo pipefail
 source /opt/agrovesto/compose/.env
 STAMP=$(date +%Y%m%d-%H%M)
-mkdir -p /data/mssql/backups
+mkdir -p /data/mssql/backup
 mkdir -p /data/mssql/backup
 # Backup each DB via sqlcmd inside the mssql container
 for db in ${db_list}; do
