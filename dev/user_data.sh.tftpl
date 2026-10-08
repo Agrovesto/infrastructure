@@ -319,7 +319,6 @@ set -euo pipefail
 source /opt/agrovesto/compose/.env
 STAMP=$(date +%Y%m%d-%H%M)
 mkdir -p /data/mssql/backup
-mkdir -p /data/mssql/backup
 # Backup each DB via sqlcmd inside the mssql container
 for db in ${db_list}; do
   docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \

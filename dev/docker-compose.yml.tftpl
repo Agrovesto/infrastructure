@@ -23,6 +23,7 @@ services:
 %{ endif ~}
     volumes:
       - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /opt/agrovesto/nginx/nomaos-active.conf:/etc/nginx/nomaos-active.conf:ro
     restart: unless-stopped
     depends_on:
 %{ for name, api in apis ~}

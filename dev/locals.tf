@@ -444,6 +444,10 @@ locals {
         content      = local.nginx_conf
         content_type = "text/plain"
       }
+      "nginx/nomaos-active.conf" = {
+        content      = local.nomaos_active_conf
+        content_type = "text/plain"
+}
       "scripts/init-dbs.sql" = {
         content      = local.init_sql
         content_type = "text/plain"
@@ -557,6 +561,12 @@ locals {
     sonar     = local.sonarqube_nginx
     vault     = local.vault_nginx
   })
+
+  nomaos_active_conf = <<-NGINX
+    upstream nomaos_active {
+      server nomaos-api-blue:5007;
+    }
+  NGINX
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
   #
