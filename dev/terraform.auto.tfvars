@@ -77,36 +77,67 @@ apis = {
     host_port = 5000
     subdomain = "noma-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    # Blue/green slots, managed by the app repo's deploy.sh (--app nomaos-api).
+    blue_green = {
+      subdomain  = "dev-api-test"
+      blue_port  = 5007
+      green_port = 5008
+    }
   }
   wallet = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5001
     subdomain = "dev-wallet-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      subdomain  = "dev-wallet-api-test"
+      blue_port  = 5009
+      green_port = 5010
+    }
   }
   onboarding = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5002
     subdomain = "dev-onboarding-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      subdomain  = "dev-onboarding-api-test"
+      blue_port  = 5011
+      green_port = 5012
+    }
   }
   input = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5003
     subdomain = "dev-input-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      subdomain  = "dev-input-api-test"
+      blue_port  = 5013
+      green_port = 5014
+    }
   }
   moneval = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5004
     subdomain = "dev-moneval-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      subdomain  = "dev-moneval-api-test"
+      blue_port  = 5015
+      green_port = 5016
+    }
   }
   serviceprovider = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5005
     subdomain = "dev-serviceprovider-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      subdomain  = "dev-serviceprovider-api-test"
+      blue_port  = 5017
+      green_port = 5018
+    }
   }
 }
 

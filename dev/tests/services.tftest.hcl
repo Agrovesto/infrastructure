@@ -70,12 +70,22 @@ variables {
       host_port = 5000
       subdomain = "dev-noma-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      blue_green = {
+        subdomain  = "dev-api-test"
+        blue_port  = 5007
+        green_port = 5008
+      }
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
       subdomain = "dev-wallet-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      blue_green = {
+        subdomain  = "dev-wallet-api-test"
+        blue_port  = 5009
+        green_port = 5010
+      }
     }
   }
 
@@ -417,22 +427,28 @@ run "nginx_vhost" {
 }
 
 # -----------------------------------------------------------------------------
-# nginx: the Nomaos API blue/green vhost and the slot file it includes
+# nginx: the NomaOS API blue/green vhosts and the slot files they include
 #
-# Terraform owns the vhost and ships the default slot (blue); the deploy
-# pipeline owns /etc/nginx/upstreams and rewrites it to flip slots.
-# What has to hold here is the wiring: the include, the vhost, the object in the
-# config bucket, and the bind mount that puts the file where the include looks.
+# Terraform owns the vhosts and ships the default slot (blue) per API; the
+# deploy pipeline owns /etc/nginx/upstreams and rewrites each file to flip
+# slots. What has to hold here is the wiring: the include, one vhost and one
+# shipped slot file per opted-in API, and the bind mount that puts the files
+# where the wildcard include reads them.
 # -----------------------------------------------------------------------------
 
 run "nomaos_blue_green_vhost" {
   command = plan
 
   assert {
+    condition     = length(local.blue_green_apis) == 2
+    error_message = "The fixture opts in nomaos and wallet; both must be picked up as blue/green APIs."
+  }
+
+  assert {
     condition = (
       strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
       strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
-      strcontains(local.nginx_conf, "proxy_pass http://$nomaos_api_backend;")
+      strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", "nomaos_api"))
     )
     error_message = "The blue/green vhost must include the upstream directory and proxy to the slot through the map variable, so DNS is resolved at request time."
   }
@@ -444,12 +460,30 @@ run "nomaos_blue_green_vhost" {
 
   assert {
     condition = (
-      strcontains(local.nomaos_active_conf, "map '' $nomaos_api_backend {") &&
-      strcontains(local.nomaos_active_conf, "default nomaos-api-blue:5007;") &&
-      local.host_config_files["nginx/nomaos-active.conf"].content == local.nomaos_active_conf &&
-      aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"], "map '' $nomaos_api_backend {") &&
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"], "default nomaos-api-blue:5007;") &&
+      local.host_config_files["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"] &&
+      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"]
     )
-    error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos-active.conf with the expected backend."
+    error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos_api-active.conf with the expected backend."
+  }
+
+  # Every opted-in API needs its vhost, its backend variable and its own
+  # shipped slot file — the nomaos asserts above pin the concrete nomaos
+  # values; this one proves the pattern generalised to all of them.
+  assert {
+    condition = alltrue([
+      for bg in local.blue_green_apis :
+      strcontains(local.nginx_conf, "server_name ${bg.subdomain}.${var.domain_name};") &&
+      strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", bg.upstream_name)) &&
+      aws_s3_object.host_config["nginx/${bg.upstream_name}-active.conf"].content == local.blue_green_slot_confs["nginx/${bg.upstream_name}-active.conf"]
+    ])
+    error_message = "Every blue/green API must have its vhost, its backend variable and its shipped default slot file."
+  }
+
+  assert {
+    condition = strcontains(local.blue_green_slot_confs["nginx/wallet_api-active.conf"], "default wallet-api-blue:5009;")
+    error_message = "Each API's slot file must name its own containers and its own port pair — the pairs never overlap."
   }
 
   assert {

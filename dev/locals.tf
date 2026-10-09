@@ -444,15 +444,13 @@ locals {
         content      = local.nginx_conf
         content_type = "text/plain"
       }
-      "nginx/nomaos-active.conf" = {
-        content      = local.nomaos_active_conf
-        content_type = "text/plain"
-      }
       "scripts/init-dbs.sql" = {
         content      = local.init_sql
         content_type = "text/plain"
       }
     },
+    # One default (blue) slot file per blue/green API.
+    local.blue_green_slot_confs,
     local.sonarqube_github_sso_enabled ? {
       "scripts/configure-sonarqube-team-permissions.sh" = {
         content      = file("${path.module}/configure-sonarqube-team-permissions.sh")
@@ -555,27 +553,46 @@ locals {
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {
-    domain    = var.domain_name
-    upstreams = local.nginx_upstreams
-    grafana   = local.logging_grafana
-    sonar     = local.sonarqube_nginx
-    vault     = local.vault_nginx
+    domain          = var.domain_name
+    upstreams       = local.nginx_upstreams
+    grafana         = local.logging_grafana
+    sonar           = local.sonarqube_nginx
+    vault           = local.vault_nginx
+    blue_green_apis = local.blue_green_apis
   })
 
-  # The default active slot (blue), uploaded as nginx/nomaos-active.conf in the
-  # config bucket. Boot copies it to /opt/nomaos/nginx/upstreams/nomaos_api.conf
-  # only while that file is absent, so a slot flip by the deploy pipeline
-  # survives every reboot and an instance replacement falls back to this
-  # default. Note neither slot exists until the pipeline's first deploy — blue
-  # is the convention, not a compose service. With the map-over-empty-string
-  # form (instead of a static upstream block) nginx resolves the slot hostname
-  # at request time, so even that first-deploy gap only 502s the vhost — see
-  # the Nomaos section in nginx.conf.tftpl.
-  nomaos_active_conf = <<-NGINX
-    map '' $nomaos_api_backend {
-      default nomaos-api-blue:5007;
-    }
-  NGINX
+  # ── NomaOS blue/green deployments ──────────────────────────────────────────
+  #
+  # Every API in var.apis that sets blue_green gets a deployment vhost of its
+  # own plus a default (blue) slot file. The deploy pipeline in the app repo
+  # runs deploy.sh --app <key>-api, which derives UPSTREAM_NAME <key>_api and
+  # owns /opt/nomaos/nginx/upstreams/<upstream_name>.conf from then on. Boot
+  # seeds that file from the objects below only while it is absent, so a slot
+  # flip survives every reboot and an instance replacement falls back to blue.
+  # Note neither slot exists until the pipeline's first deploy — blue is the
+  # convention, not a compose service. The map-over-empty-string form (instead
+  # of a static upstream block) is what lets nginx resolve the slot hostname at
+  # request time, so a missing slot only 502s its vhost — see the Nomaos
+  # section in nginx.conf.tftpl and docs/blue-green-deployments.md.
+  blue_green_apis = [
+    for k in sort(keys(var.apis)) : {
+      key           = k
+      app_name      = "${k}-api"                      # deploy.sh --app value
+      upstream_name = "${replace(k, "-", "_")}_api"   # deploy.sh UPSTREAM_NAME
+      subdomain     = var.apis[k].blue_green.subdomain
+      blue_port     = var.apis[k].blue_green.blue_port
+      green_port    = var.apis[k].blue_green.green_port
+    } if var.apis[k].blue_green != null
+  ]
+
+  blue_green_slot_confs = {
+    for bg in local.blue_green_apis :
+    "nginx/${bg.upstream_name}-active.conf" => <<-NGINX
+      map '' $${bg.upstream_name}_backend {
+        default ${bg.key}-api-blue:${bg.blue_port};
+      }
+      NGINX
+  }
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
   #

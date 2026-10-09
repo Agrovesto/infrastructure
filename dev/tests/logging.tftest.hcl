@@ -63,11 +63,21 @@ variables {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5000
       subdomain = "noma-wallet-api"
+      blue_green = {
+        subdomain  = "dev-api-test"
+        blue_port  = 5007
+        green_port = 5008
+      }
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
       subdomain = "dev-wallet-api"
+      blue_green = {
+        subdomain  = "dev-wallet-api-test"
+        blue_port  = 5009
+        green_port = 5010
+      }
     }
     onboarding = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
@@ -114,8 +124,8 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 13
-    error_message = "Thirteen rendered files ship to the host: the four always-needed (compose, nginx.conf, nomaos-active.conf, init-dbs.sql), then loki, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
+    condition     = length(aws_s3_object.host_config) == 14
+    error_message = "Fourteen rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
   }
 
   assert {
@@ -133,7 +143,7 @@ run "logging_stack_resources" {
     condition = (
       aws_s3_object.host_config["compose/docker-compose.yml"].content == local.docker_compose &&
       aws_s3_object.host_config["nginx/nginx.conf"].content == local.nginx_conf &&
-      aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf &&
+      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"] &&
       aws_s3_object.host_config["logging/loki/config.yml"].content == local.loki_config
     )
     error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
@@ -516,17 +526,17 @@ run "disabled" {
   }
 
   # The bucket itself does NOT go away with the logging stack: compose,
-  # nginx.conf, the Nomaos blue/green slot file and init-dbs.sql come from it on
-  # every boot, logging or not.
+  # nginx.conf, the per-API blue/green slot files and init-dbs.sql come from it
+  # on every boot, logging or not.
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 4 &&
+      length(aws_s3_object.host_config) == 5 &&
       alltrue([
-        for k in ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos-active.conf", "scripts/init-dbs.sql"] :
+        for k in ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos_api-active.conf", "nginx/wallet_api-active.conf", "scripts/init-dbs.sql"] :
         contains(keys(aws_s3_object.host_config), k)
       ])
     )
-    error_message = "With logging off the bucket keeps exactly the four always-needed files (compose, nginx.conf, nomaos-active.conf, init-dbs.sql)."
+    error_message = "With logging off the bucket keeps exactly the five always-needed files (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql)."
   }
 
   assert {
