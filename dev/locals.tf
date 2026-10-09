@@ -562,9 +562,16 @@ locals {
     vault     = local.vault_nginx
   })
 
+  # The default active slot (blue), uploaded as nginx/nomaos-active.conf in the
+  # config bucket. Boot copies it to /opt/nomaos/nginx/upstreams/nomaos_api.conf
+  # only while that file is absent, so a slot flip by the deploy pipeline
+  # survives every reboot; replacing the instance falls back to blue, which is
+  # the only slot guaranteed to exist on a fresh host. The map-over-empty-string
+  # form (instead of a static upstream block) is what lets nginx.conf resolve
+  # the slot hostname at request time — see the Nomaos section there.
   nomaos_active_conf = <<-NGINX
-    upstream nomaos_api {
-      server nomaos-api-blue:5007;
+    map '' $nomaos_api_backend {
+      default nomaos-api-blue:5007;
     }
   NGINX
 

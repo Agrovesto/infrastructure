@@ -78,22 +78,27 @@ http {
   }
 %{ endfor ~}
   # ── Nomaos API — blue/green deployment ─────────────────────────────────────
-  # Terraform owns the vhost and ships the default slot (blue) as
-  # nginx/nomaos-active.conf in the config bucket; the boot sync lays it out at
-  # /opt/nomaos/nginx/upstreams/nomaos.conf and the compose file bind-mounts it
-  # read-only at the path the include below reads.
-  # deploy.sh owns : /opt/nomaos/nginx/upstreams/nomaos_api.conf
-  # include /etc/nginx/upstreams/*.conf;
-  #   upstream nomaos_active {
-  #       server nomaos-api-blue:5007;
+  # Terraform ships the default slot (blue) as nginx/nomaos-active.conf in the
+  # config bucket. Boot copies it to /opt/nomaos/nginx/upstreams/nomaos_api.conf
+  # when that file does not exist yet (see user_data.sh.tftpl), and the compose
+  # file bind-mounts the directory at the path the include below reads. The
+  # deploy pipeline owns the file from then on: rewriting its default target
+  # flips slots, followed by an nginx reload.
+  #
+  # The file must express the active slot as a single map over the empty string:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-blue:5007;
   #   }
-  #
-  # or:
-  #
-  #   upstream nomaos_active {
-  #       server nomaos-api-green:5008;
+  # or, with green active:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-green:5008;
   #   }
-  #
+  # The proxy_pass directives in the vhost below use the variable, so Docker's
+  # DNS (the resolver at the top of this file) resolves the slot hostname at
+  # request time and caches it for 10s. A slot container that is down or absent
+  # then only 502s this vhost; a static `upstream` block would instead make
+  # nginx resolve the name once at start-up and exit with "host not found in
+  # upstream" — taking the whole edge down, as every missing slot would.
   include /etc/nginx/upstreams/*.conf;
 
   server {
@@ -105,8 +110,11 @@ http {
       return 200 "edge-ok\n"; 
     }
 
+    # $nomaos_api_backend comes from the included slot file above; with a
+    # variable in proxy_pass nginx resolves it per request (resolver above)
+    # instead of at start-up, so a missing slot is 502, not a crash.
     location /health { 
-      proxy_pass http://nomaos_api; 
+      proxy_pass http://$nomaos_api_backend; 
       proxy_connect_timeout 5s; 
       proxy_read_timeout 10s; 
       proxy_http_version 1.1; 
@@ -118,7 +126,7 @@ http {
     }
 
     location / {
-      proxy_pass http://nomaos_api;
+      proxy_pass http://$nomaos_api_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;

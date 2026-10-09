@@ -432,19 +432,24 @@ run "nomaos_blue_green_vhost" {
     condition = (
       strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
       strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
-      strcontains(local.nginx_conf, "proxy_pass http://nomaos_api;")
+      strcontains(local.nginx_conf, "proxy_pass http://$nomaos_api_backend;")
     )
-    error_message = "The blue/green vhost must include the upstream directory and proxy to the defined Nomaos upstream."
+    error_message = "The blue/green vhost must include the upstream directory and proxy to the slot through the map variable, so DNS is resolved at request time."
+  }
+
+  assert {
+    condition     = strcontains(local.nginx_conf, "resolver 127.0.0.11")
+    error_message = "Resolving the slot at request time requires Docker's embedded DNS resolver in nginx.conf; without it the variable proxy_pass cannot resolve."
   }
 
   assert {
     condition = (
-      strcontains(local.nomaos_active_conf, "upstream nomaos_api {") &&
-      strcontains(local.nomaos_active_conf, "server nomaos-api-blue:5007;") &&
+      strcontains(local.nomaos_active_conf, "map '' $nomaos_api_backend {") &&
+      strcontains(local.nomaos_active_conf, "default nomaos-api-blue:5007;") &&
       local.host_config_files["nginx/nomaos-active.conf"].content == local.nomaos_active_conf &&
       aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf
     )
-    error_message = "The default blue upstream must be rendered and uploaded under nginx/nomaos-active.conf with the expected upstream name and backend."
+    error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos-active.conf with the expected backend."
   }
 
   assert {
