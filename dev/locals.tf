@@ -563,7 +563,7 @@ locals {
   })
 
   nomaos_active_conf = <<-NGINX
-    upstream nomaos_active {
+    upstream nomaos_api {
       server nomaos-api-blue:5007;
     }
   NGINX

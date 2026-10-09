@@ -420,7 +420,7 @@ run "nginx_vhost" {
 # nginx: the Nomaos API blue/green vhost and the slot file it includes
 #
 # Terraform owns the vhost and ships the default slot (blue); the deploy
-# pipeline owns /etc/nginx/nomaos-active.conf and rewrites it to flip slots.
+# pipeline owns /etc/nginx/upstreams and rewrites it to flip slots.
 # What has to hold here is the wiring: the include, the vhost, the object in the
 # config bucket, and the bind mount that puts the file where the include looks.
 # -----------------------------------------------------------------------------
@@ -430,25 +430,29 @@ run "nomaos_blue_green_vhost" {
 
   assert {
     condition = (
-      strcontains(local.nginx_conf, "include /etc/nginx/nomaos-active.conf;") &&
+      strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
       strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
-      strcontains(local.nginx_conf, "proxy_pass http://nomaos_active;")
+      strcontains(local.nginx_conf, "proxy_pass http://nomaos_api;")
     )
-    error_message = "The blue/green vhost must include the slot file and proxy to the upstream it defines, so flipping a slot is a file rewrite plus a reload."
+    error_message = "The blue/green vhost must include the upstream directory and proxy to the defined Nomaos upstream."
   }
 
   assert {
     condition = (
-      strcontains(local.nomaos_active_conf, "upstream nomaos_active {") &&
+      strcontains(local.nomaos_active_conf, "upstream nomaos_api {") &&
       strcontains(local.nomaos_active_conf, "server nomaos-api-blue:5007;") &&
+      local.host_config_files["nginx/nomaos-active.conf"].content == local.nomaos_active_conf &&
       aws_s3_object.host_config["nginx/nomaos-active.conf"].content == local.nomaos_active_conf
     )
-    error_message = "The default slot (blue, port 5007) ships as nginx/nomaos-active.conf: the object the host syncs to the path nginx includes."
+    error_message = "The default blue upstream must be rendered and uploaded under nginx/nomaos-active.conf with the expected upstream name and backend."
   }
 
   assert {
-    condition     = strcontains(local.docker_compose, "/opt/agrovesto/nginx/nomaos-active.conf:/etc/nginx/nomaos-active.conf:ro")
-    error_message = "The nginx container must bind-mount the synced slot file, or the include has nothing to read."
+    condition = strcontains(
+      local.docker_compose,
+      "/opt/nomaos/nginx/upstreams:/etc/nginx/upstreams"
+    )
+    error_message = "The nginx container must mount the Nomaos upstream directory at the path used by the wildcard include."
   }
 }
 

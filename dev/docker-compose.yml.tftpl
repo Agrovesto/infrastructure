@@ -22,10 +22,10 @@ services:
       - "80:80"
 %{ endif ~}
     volumes:
-      - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf
       # Blue/green slot: Terraform ships the default (blue), the deploy
       # pipeline rewrites the host file to flip slots, then reloads nginx.
-      - /opt/agrovesto/nginx/nomaos-active.conf:/etc/nginx/nomaos-active.conf:ro
+      - /opt/nomaos/nginx/upstreams:/etc/nginx/upstreams
     restart: unless-stopped
     depends_on:
 %{ for name, api in apis ~}

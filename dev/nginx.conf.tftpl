@@ -80,10 +80,10 @@ http {
   # ── Nomaos API — blue/green deployment ─────────────────────────────────────
   # Terraform owns the vhost and ships the default slot (blue) as
   # nginx/nomaos-active.conf in the config bucket; the boot sync lays it out at
-  # /opt/agrovesto/nginx/nomaos-active.conf and the compose file bind-mounts it
+  # /opt/nomaos/nginx/upstreams/nomaos.conf and the compose file bind-mounts it
   # read-only at the path the include below reads.
-  # deploy.sh owns which blue/green slot is active by rewriting that file:
-  #
+  # deploy.sh owns : /opt/nomaos/nginx/upstreams/nomaos_api.conf
+  # include /etc/nginx/upstreams/*.conf;
   #   upstream nomaos_active {
   #       server nomaos-api-blue:5007;
   #   }
@@ -94,19 +94,37 @@ http {
   #       server nomaos-api-green:5008;
   #   }
   #
-  include /etc/nginx/nomaos-active.conf;
+  include /etc/nginx/upstreams/*.conf;
 
   server {
     listen 80;
     server_name dev-api-test.${domain};
+    
+    location = /__edge_health { 
+      access_log off;
+      return 200 "edge-ok\n"; 
+    }
+
+    location /health { 
+      proxy_pass http://nomaos_api; 
+      proxy_connect_timeout 5s; 
+      proxy_read_timeout 10s; 
+      proxy_http_version 1.1; 
+      proxy_set_header Host $host; 
+      proxy_set_header X-Real-IP $remote_addr; 
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
+      proxy_set_header X-Forwarded-Proto $forwarded_proto; 
+      proxy_set_header X-Forwarded-Host $host; 
+    }
 
     location / {
-      proxy_pass http://nomaos_active;
+      proxy_pass http://nomaos_api;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header X-Forwarded-Host $host;
     }
   }
   # ── Vault: dev-mode secrets UI/API ──────────────────────────────────────────
