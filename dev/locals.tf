@@ -186,12 +186,15 @@ locals {
     github_synchronize_groups = var.sonarqube_github_synchronize_groups
   })
 
+  # Direct vhosts exist only for APIs NOT on blue/green: an opted-in API's
+  # vhost is rendered by the blue/green loop below (same subdomain, routed to
+  # the active slot instead of the compose service).
   nginx_upstreams = [
     for k, api in var.apis : {
       name      = k
       subdomain = api.subdomain
       port      = api.host_port
-    }
+    } if api.blue_green == null
   ]
 
   # File-storage Vault remains internal; only the opt-in OIDC deployment
@@ -444,15 +447,13 @@ locals {
         content      = local.nginx_conf
         content_type = "text/plain"
       }
-      "nginx/nomaos-active.conf" = {
-        content      = local.nomaos_active_conf
-        content_type = "text/plain"
-      }
       "scripts/init-dbs.sql" = {
         content      = local.init_sql
         content_type = "text/plain"
       }
     },
+    # One default (blue) slot file per blue/green API.
+    local.blue_green_slot_confs,
     local.sonarqube_github_sso_enabled ? {
       "scripts/configure-sonarqube-team-permissions.sh" = {
         content      = file("${path.module}/configure-sonarqube-team-permissions.sh")
@@ -555,18 +556,49 @@ locals {
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {
-    domain    = var.domain_name
-    upstreams = local.nginx_upstreams
-    grafana   = local.logging_grafana
-    sonar     = local.sonarqube_nginx
-    vault     = local.vault_nginx
+    domain          = var.domain_name
+    upstreams       = local.nginx_upstreams
+    grafana         = local.logging_grafana
+    sonar           = local.sonarqube_nginx
+    vault           = local.vault_nginx
+    blue_green_apis = local.blue_green_apis
   })
 
-  nomaos_active_conf = <<-NGINX
-    upstream nomaos_api {
-      server nomaos-api-blue:5007;
-    }
-  NGINX
+  # ── NomaOS blue/green deployments ──────────────────────────────────────────
+  #
+  # Every API in var.apis that sets blue_green serves its deploys on its OWN
+  # hostname — the vhost nginx already had — instead of spinning up a separate
+  # deployment subdomain, so no DNS changes are needed beyond what the direct
+  # vhosts already required. The deploy pipeline in the app repo runs
+  # deploy.sh --app <key>-api, which derives UPSTREAM_NAME <key>_api and owns
+  # /opt/nomaos/nginx/upstreams/<upstream_name>.conf from then on. Boot seeds
+  # that file from the objects below only while it is absent, so a slot flip
+  # survives every reboot and an instance replacement falls back to blue. Note
+  # neither slot exists until the pipeline's first deploy — blue is the
+  # convention, not a compose service, and until that first deploy the vhost
+  # 502s (the compose placeholder no longer answers for this name). The
+  # map-over-empty-string form (instead of a static upstream block) is what
+  # keeps that gap from taking nginx down — see the Nomaos section in
+  # nginx.conf.tftpl and docs/blue-green-deployments.md.
+  blue_green_apis = [
+    for k in sort(keys(var.apis)) : {
+      key           = k
+      app_name      = "${k}-api"                      # deploy.sh --app value
+      upstream_name = "${replace(k, "-", "_")}_api"   # deploy.sh UPSTREAM_NAME
+      subdomain     = var.apis[k].subdomain           # the API's own hostname
+      blue_port     = var.apis[k].blue_green.blue_port
+      green_port    = var.apis[k].blue_green.green_port
+    } if var.apis[k].blue_green != null
+  ]
+
+  blue_green_slot_confs = {
+    for bg in local.blue_green_apis :
+    "nginx/${bg.upstream_name}-active.conf" => <<-NGINX
+      map '' $${bg.upstream_name}_backend {
+        default ${bg.key}-api-blue:${bg.blue_port};
+      }
+      NGINX
+  }
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
   #

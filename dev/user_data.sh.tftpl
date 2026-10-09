@@ -166,6 +166,18 @@ chown -R 999:999 "${redis.data_dir}"
 # -----------------------------------------------------------------------------
 mkdir -p /opt/agrovesto
 aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}" --only-show-errors
+
+# Blue/green slot files for the NomaOS APIs (one per API with a blue_green
+# block in terraform.auto.tfvars): ship Terraform's default (blue) only while
+# the deploy pipeline has not laid down its own, so a slot flip survives every
+# reboot while an instance replacement falls back to blue. nginx includes
+# whatever sits in this directory (dev/nginx.conf.tftpl).
+mkdir -p /opt/nomaos/nginx/upstreams
+for f in /opt/agrovesto/nginx/*-active.conf; do
+  [ -e "$f" ] || continue
+  slot="/opt/nomaos/nginx/upstreams/$(basename "$f" -active.conf).conf"
+  test -f "$slot" || cp "$f" "$slot"
+done
 if [ -f /opt/agrovesto/scripts/prepare-vault.sh ]; then
   bash /opt/agrovesto/scripts/prepare-vault.sh
 fi
@@ -180,6 +192,9 @@ ConditionPathExists=/opt/agrovesto/compose/docker-compose.yml
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
+# Restore the default Nomaos slots (blue) only when the deploy pipeline's slot
+# files are absent — never overwrite its blue/green choices on a running host.
+ExecStart=/bin/bash -c 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
 ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
 
 [Install]

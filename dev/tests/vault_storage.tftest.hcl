@@ -97,7 +97,7 @@ variables {
     serviceprovider = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5005
-      subdomain = "dev-serviceprovider-api"
+      subdomain = "dev-service-api"
     }
   }
 

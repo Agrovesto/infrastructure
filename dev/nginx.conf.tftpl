@@ -77,48 +77,62 @@ http {
     }
   }
 %{ endfor ~}
-  # ── Nomaos API — blue/green deployment ─────────────────────────────────────
-  # Terraform owns the vhost and ships the default slot (blue) as
-  # nginx/nomaos-active.conf in the config bucket; the boot sync lays it out at
-  # /opt/nomaos/nginx/upstreams/nomaos.conf and the compose file bind-mounts it
-  # read-only at the path the include below reads.
-  # deploy.sh owns : /opt/nomaos/nginx/upstreams/nomaos_api.conf
-  # include /etc/nginx/upstreams/*.conf;
-  #   upstream nomaos_active {
-  #       server nomaos-api-blue:5007;
+  # ── NomaOS APIs — blue/green deployments ───────────────────────────────────
+  # Terraform ships one default slot file (blue) per API as
+  # nginx/<app>_api-active.conf in the config bucket, named for the deploy
+  # pipeline's UPSTREAM_NAME. Boot copies each to
+  # /opt/nomaos/nginx/upstreams/<app>_api.conf when that file does not exist
+  # yet (see user_data.sh.tftpl), and the compose file bind-mounts the
+  # directory at the path the include below reads. The deploy pipeline owns
+  # each file from then on: rewriting its default target flips slots, followed
+  # by an nginx reload.
+  #
+  # Each file must express the active slot as a single map over the empty
+  # string — for the nomaos API, say:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-blue:5007;
   #   }
-  #
-  # or:
-  #
-  #   upstream nomaos_active {
-  #       server nomaos-api-green:5008;
+  # or, with green active:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-green:5008;
   #   }
-  #
+  # The proxy_pass directives in the vhosts below use those variables, so
+  # Docker's DNS (the resolver at the top of this file) resolves the slot
+  # hostname at request time and caches it for 10s. A slot container that is
+  # down or absent then only 502s its own vhost; a static `upstream` block
+  # would instead make nginx resolve the name once at start-up and exit with
+  # "host not found in upstream" — taking the whole edge down, as the nomaos
+  # green-slot outage of 2026-10-09 did. See docs/blue-green-deployments.md.
   include /etc/nginx/upstreams/*.conf;
 
+%{ for bg in blue_green_apis ~}
+  # ── ${bg.key} API (deploy.sh --app ${bg.app_name}) — blue/green on its own hostname
   server {
     listen 80;
-    server_name dev-api-test.${domain};
-    
-    location = /__edge_health { 
+    server_name ${bg.subdomain}.${domain};
+
+    location = /__edge_health {
       access_log off;
-      return 200 "edge-ok\n"; 
+      return 200 "edge-ok\n";
     }
 
-    location /health { 
-      proxy_pass http://nomaos_api; 
-      proxy_connect_timeout 5s; 
-      proxy_read_timeout 10s; 
-      proxy_http_version 1.1; 
-      proxy_set_header Host $host; 
-      proxy_set_header X-Real-IP $remote_addr; 
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
-      proxy_set_header X-Forwarded-Proto $forwarded_proto; 
-      proxy_set_header X-Forwarded-Host $host; 
+    # $${bg.upstream_name}_backend comes from the included slot file above;
+    # with a variable in proxy_pass nginx resolves it per request (resolver
+    # above) instead of at start-up, so a missing slot is 502, not a crash.
+    location /health {
+      proxy_pass http://$${bg.upstream_name}_backend;
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 10s;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header X-Forwarded-Host $host;
     }
 
     location / {
-      proxy_pass http://nomaos_api;
+      proxy_pass http://$${bg.upstream_name}_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
@@ -127,6 +141,7 @@ http {
       proxy_set_header X-Forwarded-Host $host;
     }
   }
+%{ endfor ~}
   # ── Vault: dev-mode secrets UI/API ──────────────────────────────────────────
   # Before OIDC this remains internal even if DNS points here: do not send
   # Vault tokens over public HTTP. With OIDC enabled, Caddy owns public 80/443

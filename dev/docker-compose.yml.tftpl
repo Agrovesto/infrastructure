@@ -25,6 +25,9 @@ services:
       - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf
       # Blue/green slot: Terraform ships the default (blue), the deploy
       # pipeline rewrites the host file to flip slots, then reloads nginx.
+      # The file defines the slot as a map over $nomaos_api_backend, which the
+      # vhost proxies to by variable — resolved at request time, so a missing
+      # slot container 502s its vhost instead of keeping nginx from starting.
       - /opt/nomaos/nginx/upstreams:/etc/nginx/upstreams
     restart: unless-stopped
     depends_on:

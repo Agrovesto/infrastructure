@@ -204,10 +204,11 @@ db_size_alarm_enabled = false
 #   "dev-onboarding-api"      = "<dev EC2 Elastic IP>"
 #   "dev-input-api"           = "<dev EC2 Elastic IP>"
 #   "dev-moneval-api"         = "<dev EC2 Elastic IP>"
-#   "dev-serviceprovider-api" = "<dev EC2 Elastic IP>"
-#   # The Nomaos API blue/green vhost (dev/nginx.conf.tftpl): the deploy pipeline
-#   # flips the active slot behind it, and its health checks use this name.
-#   "dev-api-test"            = "<dev EC2 Elastic IP>"
+#   # dev-service-api (not dev-serviceprovider-api): every dev API serves its
+#   # blue/green deploys on its own hostname (dev/nginx.conf.tftpl) — the deploy
+#   # pipeline flips the active slot behind it, and its health checks use this
+#   # name. No separate deployment records like the old dev-api-test.
+#   "dev-service-api"         = "<dev EC2 Elastic IP>"
 #   "dev-agx-api"             = "<dev EC2 Elastic IP>"
 #   # dev-vault is already pointed manually; keep dev-mode Vault tunnel-only.
 #   # Once persistent Vault + OIDC is migrated, manage DNS deliberately here if desired.
