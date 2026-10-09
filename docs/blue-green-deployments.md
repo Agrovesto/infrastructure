@@ -1,10 +1,12 @@
 # Blue/green deployments on the dev host
 
 Every backend API on the dev EC2 box has the same blue/green deployment
-mechanism: two slot containers managed by the app repo's `deploy.sh`, one nginx
-vhost per API that routes to whichever slot is active, and a slot file that
-naming the active slot. Terraform owns the vhosts and the *default* slot files;
-`deploy.sh` owns the slot files from the first deploy on.
+mechanism: two slot containers managed by the app repo's `deploy.sh`, and the
+API's **own nginx vhost** — `dev-wallet-api.nomaos.com`, `dev-input-api
+.nomaos.com`, … — routing to whichever slot is active. There are no separate
+deployment hostnames: a deploy flips the backend behind the name the API
+already has, so DNS never changes. Terraform owns the vhosts and the *default*
+slot files; `deploy.sh` owns the slot files from the first deploy on.
 
 ## The pieces, per API
 
@@ -17,23 +19,34 @@ nginx/onboarding_api-...  ──────┼─ (copy only if ──►  noma
 ...                             │  the file is         wallet_api.conf      rewrites
                                 │  absent)             ...                  to flip
 nginx.conf.tftpl ── renders /opt/agrovesto/nginx/nginx.conf
+                    server_name <the API's own subdomain>;<── e.g. dev-wallet-api
                     include /etc/nginx/upstreams/*.conf  ◄── bind-mounted dir
                     proxy_pass http://$<app>_api_backend;  ◄── runtime DNS
 ```
 
-| API | `deploy.sh --app` | slot containers | ports (blue/green) | deployment vhost |
+| API | `deploy.sh --app` | slot containers | ports (blue/green) | vhost (the API's own) |
 |---|---|---|---|---|
-| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `dev-api-test.nomaos.com` |
-| wallet | `wallet-api` | `wallet-api-blue` / `-green` | 5009 / 5010 | `dev-wallet-api-test.nomaos.com` |
-| onboarding | `onboarding-api` | `onboarding-api-blue` / `-green` | 5011 / 5012 | `dev-onboarding-api-test.nomaos.com` |
-| input | `input-api` | `input-api-blue` / `-green` | 5013 / 5014 | `dev-input-api-test.nomaos.com` |
-| moneval | `moneval-api` | `moneval-api-blue` / `-green` | 5015 / 5016 | `dev-moneval-api-test.nomaos.com` |
-| serviceprovider | `serviceprovider-api` | `serviceprovider-api-blue` / `-green` | 5017 / 5018 | `dev-serviceprovider-api-test.nomaos.com` |
+| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `dev-noma-api.nomaos.com` |
+| wallet | `wallet-api` | `wallet-api-blue` / `-green` | 5009 / 5010 | `dev-wallet-api.nomaos.com` |
+| onboarding | `onboarding-api` | `onboarding-api-blue` / `-green` | 5011 / 5012 | `dev-onboarding-api.nomaos.com` |
+| input | `input-api` | `input-api-blue` / `-green` | 5013 / 5014 | `dev-input-api.nomaos.com` |
+| moneval | `moneval-api` | `moneval-api-blue` / `-green` | 5015 / 5016 | `dev-moneval-api.nomaos.com` |
+| serviceprovider | `serviceprovider-api` | `serviceprovider-api-blue` / `-green` | 5017 / 5018 | `dev-service-api.nomaos.com` |
 
 Compose services (the placeholder images) hold 5000–5006; the slot pairs start
 above them and never overlap. The slot containers are **not** compose services:
 `deploy.sh` starts them (`--name <app>-<slot>`, on the compose network, with a
 restart policy), so `docker compose up -d` neither starts nor fixes them.
+
+Two consequences of serving deploys on the API's own hostname:
+
+- Once an API opts in (`blue_green` in `dev/terraform.auto.tfvars`), its
+  compose placeholder no longer answers for that hostname — the vhost routes
+  to the slots, which 502 until the pipeline's first deploy. Clear
+  `blue_green` to put the direct-to-compose routing back.
+- `serviceprovider`'s hostname is `dev-service-api` (not
+  `dev-serviceprovider-api`): the shorter name is the rename, and the prod
+  `extra_a_records` entry changes with it.
 
 ## The slot-file contract (read this before touching deploy.sh)
 
@@ -112,7 +125,9 @@ variable is missing, so a wrong-format file fails safe at reload time.
 
 3. **Set `EDGE_HEALTH_HOST` per app** for the post-flip edge check. The nginx
    default server answers `404` to `Host: localhost`, so the check must send
-   the deployment hostname, e.g. `EDGE_HEALTH_HOST=dev-wallet-api-test.nomaos.com`.
+   the API's own hostname, e.g. `EDGE_HEALTH_HOST=dev-wallet-api.nomaos.com`.
+   For nomaos this is a change from `dev-api-test.nomaos.com`, which no longer
+   exists as a vhost: `EDGE_HEALTH_HOST=dev-noma-api.nomaos.com`.
 
 `UPSTREAM_NAME` in `deploy.sh` is `${APP_NAME//-/_}`, so `--app wallet-api`
 yields upstream `wallet_api`, variable `$wallet_api_backend`, slot file
@@ -138,12 +153,13 @@ blue (the shipped default), which the pipeline's first deploy recreates.
 
 ## DNS
 
-The vhosts answer by `server_name`, but public resolution needs A records in
-the prod-owned zone — `terraform output blue_green_domains` lists them; add
-them to `extra_a_records` in `prod/terraform.auto.tfvars` the way
-`dev-api-test.nomaos.com` already is. Until then the vhosts are reachable via
-the host IP with a Host header (and by `deploy.sh`'s edge check through the
-nginx container).
+There is nothing new to create: the vhosts are the APIs' existing hostnames,
+whose A records already point at the dev EIP via `extra_a_records` in
+`prod/terraform.auto.tfvars`. The one rename is `dev-service-api` (was
+`dev-serviceprovider-api`) — change the record key there and re-apply prod. If
+a record is missing (host reachable only by IP), the vhosts still answer to a
+`Host` header, which is all `deploy.sh`'s edge check needs since it runs
+inside the nginx container.
 
 ## TLS
 

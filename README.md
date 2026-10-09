@@ -68,7 +68,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 #### 5. Networking & DNS
 - **Prod** account is authoritative for the root domain `nomaos.com`.
 - **ALB**: Prod uses an internet-facing ALB with an ACM wildcard certificate.
-- **Dev blue/green deploys**: every dev API has a blue/green deployment vhost and slot pair managed by the app repo's `deploy.sh` (`--app <key>-api`); Terraform ships the default blue slot file per API and boot seeds it. Port table, slot-file contract and `deploy.sh` requirements: `docs/blue-green-deployments.md`.
+- **Dev blue/green deploys**: every dev API serves its deploys on its own hostname — `deploy.sh` (`--app <key>-api`) flips slots behind `dev-wallet-api.nomaos.com` & co; Terraform ships the default blue slot file per API and boot seeds it. Port table, slot-file contract and `deploy.sh` requirements: `docs/blue-green-deployments.md`.
 - **Dev agx API**: `agx` is an additional Compose service on port 5006, routed by nginx at `dev-agx-api.nomaos.com`, with its own ECR repository. The agx database was already migrated; this stack does not create a new one. Its image is still the placeholder nginx image; replace it with the real API image and add `dev-agx-api` to prod-managed `extra_a_records` to make the name resolve.
 - **Dev agx frontend**: `agx-frontend` is a manual Amplify placeholder on the `dev` branch. There is no source repository or deployed build yet, so auto-build and DNS publication for the reserved `dev-agx.nomaos.com` hostname are disabled. When the real frontend exists, set its `repository`, enable auto-build, set `publish_dns = true`, and add the CNAME in the prod-owned zone (or deploy artifacts manually).
 - **NAT**: A single NAT Gateway is used in Prod to balance cost and redundancy.

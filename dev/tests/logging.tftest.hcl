@@ -64,7 +64,6 @@ variables {
       host_port = 5000
       subdomain = "noma-wallet-api"
       blue_green = {
-        subdomain  = "dev-api-test"
         blue_port  = 5007
         green_port = 5008
       }
@@ -74,7 +73,6 @@ variables {
       host_port = 5001
       subdomain = "dev-wallet-api"
       blue_green = {
-        subdomain  = "dev-wallet-api-test"
         blue_port  = 5009
         green_port = 5010
       }

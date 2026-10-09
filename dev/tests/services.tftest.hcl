@@ -71,7 +71,6 @@ variables {
       subdomain = "dev-noma-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
       blue_green = {
-        subdomain  = "dev-api-test"
         blue_port  = 5007
         green_port = 5008
       }
@@ -82,7 +81,6 @@ variables {
       subdomain = "dev-wallet-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
       blue_green = {
-        subdomain  = "dev-wallet-api-test"
         blue_port  = 5009
         green_port = 5010
       }
@@ -447,10 +445,19 @@ run "nomaos_blue_green_vhost" {
   assert {
     condition = (
       strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
-      strcontains(local.nginx_conf, "server_name dev-api-test.${var.domain_name};") &&
+      strcontains(local.nginx_conf, "server_name noma-api.${var.domain_name};") &&
       strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", "nomaos_api"))
     )
-    error_message = "The blue/green vhost must include the upstream directory and proxy to the slot through the map variable, so DNS is resolved at request time."
+    error_message = "The blue/green vhost must be the API's own hostname, include the upstream directory, and proxy to the slot through the map variable so DNS is resolved at request time."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.nginx_conf, "dev-api-test") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://nomaos:5000;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://wallet:5001;")
+    )
+    error_message = "An opted-in API has no separate deployment subdomain and no direct vhost to the compose service: its one hostname routes to the slots."
   }
 
   assert {

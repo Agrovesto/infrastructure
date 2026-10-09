@@ -96,7 +96,7 @@ variables {
     serviceprovider = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5005
-      subdomain = "dev-serviceprovider-api"
+      subdomain = "dev-service-api"
     }
     agx = {
       image         = "public.ecr.aws/nginx/nginx:alpine"
@@ -423,7 +423,7 @@ run "dns_managed_by_dev" {
   }
 
   assert {
-    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-agx-api", "dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "dev-noma-api", "mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
+    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-agx-api", "dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-service-api", "dev-wallet-api", "dev-noma-api", "mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
     error_message = "A record keys are the API subdomains and mssql, excluding Vault."
   }
 

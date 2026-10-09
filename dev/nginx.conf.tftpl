@@ -106,7 +106,7 @@ http {
   include /etc/nginx/upstreams/*.conf;
 
 %{ for bg in blue_green_apis ~}
-  # ── ${bg.key} API (deploy.sh --app ${bg.app_name}) ──────────────────────────────
+  # ── ${bg.key} API (deploy.sh --app ${bg.app_name}) — blue/green on its own hostname
   server {
     listen 80;
     server_name ${bg.subdomain}.${domain};

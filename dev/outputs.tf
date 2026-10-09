@@ -88,11 +88,6 @@ output "backend_domains" {
   value = local.api_fqdns
 }
 
-output "blue_green_domains" {
-  description = "Blue/green deployment vhosts per API. DNS is owned by the prod stack: add each of these to extra_a_records there (like dev-api-test.nomaos.com already is)."
-  value       = { for bg in local.blue_green_apis : bg.key => "${bg.subdomain}.${var.domain_name}" }
-}
-
 output "vault_url" {
   description = "Vault is local to the host; use SSH/SSM port forwarding to reach this loopback endpoint"
   value       = "http://127.0.0.1:${var.vault.host_port}"

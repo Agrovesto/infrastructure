@@ -155,15 +155,16 @@ variable "apis" {
     # dev API host. nginx keeps routing the vhost either way.
     tls_via_caddy = optional(bool, false)
     # Blue/green deployment, deployed by the app repo's deploy.sh
-    # (--app <key>-api). Setting this adds a second nginx vhost on its own
-    # subdomain that routes to whichever slot container
+    # (--app <key>-api). Setting this routes the API's OWN vhost
+    # (<subdomain>.<domain_name>) to whichever slot container
     # (<key>-api-blue / <key>-api-green) the pipeline's slot file names, and
-    # ships that slot file's blue default. The slots are NOT compose services —
-    # the pipeline creates them — so ports here only need to stay clear of the
-    # compose host ports and of every other slot pair. Leave null to keep the
-    # API on its direct vhost only.
+    # ships that slot file's blue default — no separate deployment hostname and
+    # no extra DNS record: the API's existing name serves the deploys. The
+    # slots are NOT compose services — the pipeline creates them — so the ports
+    # here only need to stay clear of the compose host ports and of every
+    # other slot pair. Leave null to keep the vhost routed to the compose
+    # service.
     blue_green = optional(object({
-      subdomain  = string
       blue_port  = number
       green_port = number
     }))
