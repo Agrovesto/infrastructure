@@ -134,6 +134,13 @@ yields upstream `wallet_api`, variable `$wallet_api_backend`, slot file
 `wallet_api.conf` — matching the infra-side names above exactly. Keep the
 `--app` naming convention `<key>-api`.
 
+A complete reference implementation of all of the above lives in this repo at
+[`docs/examples/deploy.sh`](examples/deploy.sh) — verified against the
+rendered nginx config (its `write_upstream` output is byte-equivalent to the
+shipped default slot file). It is a copy: the live, versioned `deploy.sh` and
+its `lib.sh` belong to the application repository, so diff against this file
+when upgrading.
+
 ## Flip and rollback
 
 `deploy.sh` flips by rewriting the slot file's `default` line and reloading:
