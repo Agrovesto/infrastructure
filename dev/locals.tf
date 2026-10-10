@@ -593,11 +593,13 @@ locals {
 
   blue_green_slot_confs = {
     for bg in local.blue_green_apis :
-    "nginx/${bg.upstream_name}-active.conf" => <<-NGINX
-      map '' $${bg.upstream_name}_backend {
-        default ${bg.key}-api-blue:${bg.blue_port};
-      }
-      NGINX
+    "nginx/${bg.upstream_name}-active.conf" => {
+       content = format(
+         "map '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
+         bg.upstream_name, bg.key, bg.blue_port,
+       )
+       content_type = "text/plain"
+    }
   }
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).

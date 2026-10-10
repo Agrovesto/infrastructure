@@ -445,9 +445,9 @@ run "nomaos_blue_green_vhost" {
   assert {
     condition = (
       strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
-      strcontains(local.nginx_conf, "server_name noma-api.${var.domain_name};") &&
+      strcontains(local.nginx_conf, format("server_name %s.%s;", var.apis.nomaos.subdomain, var.domain_name)) &&
       strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", "nomaos_api"))
-    )
+     )
     error_message = "The blue/green vhost must be the API's own hostname, include the upstream directory, and proxy to the slot through the map variable so DNS is resolved at request time."
   }
 
@@ -467,13 +467,13 @@ run "nomaos_blue_green_vhost" {
 
   assert {
     condition = (
-      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"], "map '' $nomaos_api_backend {") &&
-      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"], "default nomaos-api-blue:5007;") &&
-      local.host_config_files["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"] &&
-      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"]
-    )
-    error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos_api-active.conf with the expected backend."
-  }
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content, "map '' $nomaos_api_backend {") &&
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content, "default nomaos-api-blue:5007;") &&
+      local.host_config_files["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content &&
+      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content
+     )
+     error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos_api-active.conf with the expected backend."
+   }
 
   # Every opted-in API needs its vhost, its backend variable and its own
   # shipped slot file — the nomaos asserts above pin the concrete nomaos
@@ -483,16 +483,14 @@ run "nomaos_blue_green_vhost" {
       for bg in local.blue_green_apis :
       strcontains(local.nginx_conf, "server_name ${bg.subdomain}.${var.domain_name};") &&
       strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", bg.upstream_name)) &&
-      aws_s3_object.host_config["nginx/${bg.upstream_name}-active.conf"].content == local.blue_green_slot_confs["nginx/${bg.upstream_name}-active.conf"]
-    ])
-    error_message = "Every blue/green API must have its vhost, its backend variable and its shipped default slot file."
-  }
-
+      aws_s3_object.host_config["nginx/${bg.upstream_name}-active.conf"].content == local.blue_green_slot_confs["nginx/${bg.upstream_name}-active.conf"].content
+     ])
+     error_message = "Every blue/green API must have its vhost, its backend variable and its shipped default slot file."
+   }
   assert {
-    condition = strcontains(local.blue_green_slot_confs["nginx/wallet_api-active.conf"], "default wallet-api-blue:5009;")
+    condition = strcontains(local.blue_green_slot_confs["nginx/wallet_api-active.conf"].content, "default wallet-api-blue:5009;")
     error_message = "Each API's slot file must name its own containers and its own port pair — the pairs never overlap."
   }
-
   assert {
     condition = strcontains(
       local.docker_compose,
@@ -584,13 +582,12 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 15 &&
+      length(aws_s3_object.host_config) == 16 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the four always-needed and nine logging objects (15 total)."
-  }
-
+    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the five always-needed (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql) and nine logging objects (16 total)."
+  } 
   assert {
     condition = alltrue([
       strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "Agrovesto/Infrastructure"),
