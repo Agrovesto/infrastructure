@@ -143,8 +143,8 @@ run "logging_stack_resources" {
       aws_s3_object.host_config["nginx/nginx.conf"].content == local.nginx_conf &&
       aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content &&
       aws_s3_object.host_config["logging/loki/config.yml"].content == local.loki_config
-     )
-     error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
+    )
+    error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
   }
   assert {
     condition = (

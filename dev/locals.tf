@@ -583,9 +583,9 @@ locals {
   blue_green_apis = [
     for k in sort(keys(var.apis)) : {
       key           = k
-      app_name      = "${k}-api"                      # deploy.sh --app value
-      upstream_name = "${replace(k, "-", "_")}_api"   # deploy.sh UPSTREAM_NAME
-      subdomain     = var.apis[k].subdomain           # the API's own hostname
+      app_name      = "${k}-api"                    # deploy.sh --app value
+      upstream_name = "${replace(k, "-", "_")}_api" # deploy.sh UPSTREAM_NAME
+      subdomain     = var.apis[k].subdomain         # the API's own hostname
       blue_port     = var.apis[k].blue_green.blue_port
       green_port    = var.apis[k].blue_green.green_port
     } if var.apis[k].blue_green != null
@@ -594,11 +594,11 @@ locals {
   blue_green_slot_confs = {
     for bg in local.blue_green_apis :
     "nginx/${bg.upstream_name}-active.conf" => {
-       content = format(
-         "map '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
-         bg.upstream_name, bg.key, bg.blue_port,
-       )
-       content_type = "text/plain"
+      content = format(
+        "map '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
+        bg.upstream_name, bg.key, bg.blue_port,
+      )
+      content_type = "text/plain"
     }
   }
 
