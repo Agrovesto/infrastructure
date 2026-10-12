@@ -1031,3 +1031,40 @@ run "rabbitmq_disabled" {
     error_message = "Disabling RabbitMQ must remove the broker and management route."
   }
 }
+
+run "caddy_https_covers_all_enabled_api_hosts" {
+  command = plan
+  variables {
+    apis = {
+      nomaos = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5000
+        subdomain     = "dev-noma-api"
+        tls_via_caddy = true
+        blue_green = {
+          blue_port  = 5007
+          green_port = 5008
+        }
+      }
+      wallet = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5001
+        subdomain     = "dev-wallet-api"
+        tls_via_caddy = true
+      }
+    }
+  }
+  assert {
+    condition = (
+      local.tls_proxy_enabled &&
+      length(local.api_tls_domains) == length(var.apis) &&
+      alltrue([for api in var.apis :
+        contains(local.github_sso_proxy.domains, "${api.subdomain}.${var.domain_name}") &&
+        strcontains(local.caddyfile, "${api.subdomain}.${var.domain_name}") &&
+        strcontains(local.nginx_conf, "server_name ${api.subdomain}.${var.domain_name};")
+      ]) &&
+      strcontains(local.caddyfile, "redir @tls_hosts https://{host}{uri} 308")
+    )
+    error_message = "Every TLS-enabled API, blue/green or direct, must have a Caddy certificate hostname, HTTP redirect and nginx route."
+  }
+}

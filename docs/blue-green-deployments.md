@@ -213,3 +213,42 @@ Verify public DNS/TLS routing independently: a successful localhost request does
 not prove the public hostname reaches this host. Application image identity and
 dependency health checks belong to the application repository; an empty `checks`
 list does not demonstrate database health.
+
+## HTTPS for all dev APIs
+
+All six APIs in `dev/terraform.auto.tfvars` set `tls_via_caddy = true`.
+Caddy obtains and renews certificates for their individual hostnames, redirects
+HTTP to HTTPS with status 308, and forwards requests to the existing nginx slot
+routes. This is **not a wildcard certificate**: adding another API requires its
+hostname and `tls_via_caddy = true` in the API configuration. Production ECS
+continues using its ALB/ACM setup, not this Caddy instance.
+
+Before rollout, point each hostname at the dev Elastic IP in the authoritative
+DNS zone. An explicit stale A/CNAME overrides wildcard DNS; also remove/fix any
+stale AAAA record. Allow public 80/443 to reach Caddy for ACME validation. Enabling
+HTTPS in Terraform does not change externally managed DNS or make undeployed
+backend slots healthy.
+
+Publish and sync the newly rendered config through the normal infrastructure
+workflow. On an existing host, validate the new Caddyfile and recreate the edge
+so its single-file bind mount picks up the new contents:
+
+```bash
+sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml \
+  run --rm --no-deps edge caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile &&
+sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml \
+  up -d --no-deps --force-recreate edge
+docker logs --since 5m --tail 100 agrovesto-edge
+curl -iS --max-time 15 http://dev-noma-api.nomaos.com/health
+curl -iS --max-time 15 https://dev-noma-api.nomaos.com/health
+```
+
+Expect HTTP 308 and, once the certificate is issued and the API is healthy,
+HTTPS 200. Preserve Caddy's mounted `/data` and `/config`; do not delete its
+certificate storage while troubleshooting. A successful `caddy validate` checks
+configuration, not DNS or successful certificate issuance.
+
+After this change, a localhost request through Caddy on port 80 also redirects
+when it carries an API Host header. For a backend-only local diagnostic, call
+nginx from inside its container, or use the real HTTPS hostname. The reference
+`deploy.sh` checks the edge from inside nginx, so it bypasses Caddy's redirect.

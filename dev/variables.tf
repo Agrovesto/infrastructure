@@ -150,9 +150,9 @@ variable "apis" {
     subdomain = string
     env       = optional(map(string), {})
     # Serve this API's vhost over HTTPS at the Caddy TLS edge (port 80 redirects
-    # to https with 308). Off — the default — keeps the vhost on plain HTTP
-    # through the edge's :80 catch-all, which is the current behaviour of every
-    # dev API host. nginx keeps routing the vhost either way.
+    # to https with 308). The checked-in dev configuration enables this for
+    # every API. False retains HTTP through the edge's :80 catch-all for explicit
+    # legacy configurations. nginx keeps routing the vhost either way.
     tls_via_caddy = optional(bool, false)
     # Blue/green deployment, deployed by the app repo's deploy.sh
     # (--app <key>-api). Setting this routes the API's OWN vhost
