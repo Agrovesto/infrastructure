@@ -204,6 +204,95 @@
    }
   },
   {
+   "id": 15,
+   "type": "row",
+   "title": "CPU and memory per service",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 5
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "CPU utilisation per service",
+   "description": "Average and peak CPUUtilization of the service's tasks, as a percentage of the CPU the task definition asks for.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "ecs_service_cpu_utilization_percent{service=~\"$service\"}",
+     "legendFormat": "{{service}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "ecs_service_cpu_utilization_percent_max{service=~\"$service\"}",
+     "legendFormat": "{{service}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 0,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 17,
+   "type": "timeseries",
+   "title": "Memory utilisation per service",
+   "description": "Percentage of the task's memory limit. Fargate kills a task that goes past 100%, so a service sitting above 85% needs a bigger task definition.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "ecs_service_memory_utilization_percent{service=~\"$service\"}",
+     "legendFormat": "{{service}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "ecs_service_memory_utilization_percent_max{service=~\"$service\"}",
+     "legendFormat": "{{service}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 0,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
    "id": 7,
    "type": "timeseries",
    "title": "Tasks running vs desired",
@@ -211,7 +300,7 @@
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 5
+    "y": 14
    },
    "datasource": {
     "type": "prometheus",
@@ -240,7 +329,7 @@
     "h": 9,
     "w": 12,
     "x": 12,
-    "y": 5
+    "y": 14
    },
    "datasource": {
     "type": "prometheus",
@@ -265,7 +354,7 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 14
+    "y": 23
    },
    "datasource": {
     "type": "prometheus",
@@ -290,7 +379,7 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 14
+    "y": 23
    },
    "datasource": {
     "type": "prometheus",
@@ -316,12 +405,62 @@
      "expr": "ecs_service_deployment_failed",
      "format": "table",
      "instant": true
+    },
+    {
+     "refId": "E",
+     "expr": "ecs_service_cpu_utilization_percent",
+     "format": "table",
+     "instant": true
+    },
+    {
+     "refId": "F",
+     "expr": "ecs_service_memory_utilization_percent",
+     "format": "table",
+     "instant": true
     }
    ],
    "fieldConfig": {
-    "defaults": {},
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
     "overrides": []
-   }
+   },
+   "description": "Task state and resource use per service. CPU and memory are percentages of what the task definition asks for.",
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "service",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "cluster": true,
+       "job": true,
+       "instance": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value #A": "Desired tasks",
+       "Value #B": "Running tasks",
+       "Value #C": "Pending tasks",
+       "Value #D": "Deployment failed",
+       "Value #E": "CPU %",
+       "Value #F": "Memory %"
+      }
+     }
+    }
+   ]
   },
   {
    "id": 11,
@@ -331,7 +470,7 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 22
+    "y": 31
    },
    "datasource": {
     "type": "loki",
@@ -356,7 +495,7 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 22
+    "y": 31
    },
    "datasource": {
     "type": "loki",
@@ -381,7 +520,7 @@
     "h": 7,
     "w": 12,
     "x": 0,
-    "y": 30
+    "y": 39
    },
    "datasource": {
     "type": "prometheus",
@@ -406,7 +545,7 @@
     "h": 7,
     "w": 12,
     "x": 12,
-    "y": 30
+    "y": 39
    },
    "datasource": {
     "type": "prometheus",
@@ -425,5 +564,6 @@
     "overrides": []
    }
   }
- ]
+ ],
+ "description": "ECS platform state from the collector's ECS API reads, plus per-service CPU and memory from the basic CloudWatch metrics it republishes. No Container Insights, no CloudWatch dashboards."
 }

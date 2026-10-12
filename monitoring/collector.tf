@@ -1,15 +1,38 @@
-# ECS platform monitoring without Container Insights or CloudWatch metrics:
-# a scheduled Fargate task reads the ECS API and ships service logs into Loki,
-# pushing its own state to Pushgateway for Prometheus.
+# ECS platform monitoring without Container Insights or CloudWatch dashboards:
+# a scheduled Fargate task reads the ECS API, ships service logs into Loki,
+# republishes the free basic CloudWatch metrics as Prometheus series and parses
+# the ALB access logs out of S3, pushing its own state to Pushgateway.
 
 locals {
   collector_enabled = var.enable_ecs_monitoring
 
-  ecs_cluster       = var.ecs_cluster_name != "" ? var.ecs_cluster_name : "${var.project}-${var.environment}"
-  ecs_log_prefix    = var.ecs_log_group_prefix != "" ? var.ecs_log_group_prefix : "/ecs/${var.project}-${var.environment}"
-  collector_scripts = var.enable_ecs_log_shipping ? ["python /collector/config/ecs_metrics.py", "python /collector/config/ecs_logs.py"] : ["python /collector/config/ecs_metrics.py"]
+  # Both extra collectors ride the ECS collector task: same schedule, same EFS
+  # checkpoint directory, same task role, and no second Fargate task to run.
+  cloudwatch_metrics_enabled = local.collector_enabled && var.enable_cloudwatch_metrics
+  alb_log_shipping_enabled   = local.collector_enabled && var.enable_alb_log_shipping
 
-  collector_command = join(" && ", concat(["pip install --quiet --no-cache-dir boto3"], local.collector_scripts))
+  ecs_cluster    = var.ecs_cluster_name != "" ? var.ecs_cluster_name : "${var.project}-${var.environment}"
+  ecs_log_prefix = var.ecs_log_group_prefix != "" ? var.ecs_log_group_prefix : "/ecs/${var.project}-${var.environment}"
+
+  # prod/alb.tf names the access log bucket <project>-<environment>-alb-logs-<account id>.
+  alb_logs_bucket = var.alb_access_logs_bucket != "" ? var.alb_access_logs_bucket : "${var.project}-${var.environment}-alb-logs-${data.aws_caller_identity.current.account_id}"
+
+  # Target groups are named <project>-<environment>-<service>, so stripping this
+  # prefix gives the ALB series and log streams the same `service` value the ECS
+  # series carry, and a dashboard can put the two side by side.
+  service_prefix = "${var.project}-${var.environment}-"
+
+  collector_scripts = concat(
+    ["python /collector/config/ecs_metrics.py"],
+    var.enable_ecs_log_shipping ? ["python /collector/config/ecs_logs.py"] : [],
+    local.cloudwatch_metrics_enabled ? ["python /collector/config/cw_metrics.py"] : [],
+    local.alb_log_shipping_enabled ? ["python /collector/config/alb_logs.py"] : [],
+  )
+
+  # "; " and not "&& ": every script reports its own failure through Pushgateway
+  # and exits 0, so one collector having a bad run must not stop the others. The
+  # dependency install still has to succeed, or nothing below can run at all.
+  collector_command = join("; ", concat(["pip install --quiet --no-cache-dir boto3 || exit 1"], local.collector_scripts))
 
   collector_log_config = {
     logDriver = "awslogs"
@@ -60,7 +83,7 @@ resource "aws_ecs_task_definition" "collector" {
 
       command = ["sh", "-c", local.collector_command]
 
-      environment = [
+      environment = concat([
         { name = "AWS_REGION", value = var.aws_region },
         { name = "ECS_CLUSTER", value = local.ecs_cluster },
         { name = "LOG_GROUP_PREFIX", value = local.ecs_log_prefix },
@@ -68,7 +91,19 @@ resource "aws_ecs_task_definition" "collector" {
         { name = "PUSHGATEWAY_URL", value = local.endpoints.pushgateway },
         { name = "STATE_FILE", value = "/collector/state/ecs_logs.json" },
         { name = "LOOKBACK_MINUTES", value = tostring(var.ecs_log_lookback_minutes) },
-      ]
+        { name = "SERVICE_PREFIX", value = local.service_prefix },
+        ], local.cloudwatch_metrics_enabled ? [
+        # cw_metrics.py checkpoints to CW_STATE_FILE (its default is fine, the
+        # STATE_FILE above belongs to the ECS log shipper).
+        { name = "ALB_ARN_SUFFIX", value = data.aws_lb.main.arn_suffix },
+        { name = "METRIC_DELAY_SECONDS", value = tostring(var.cloudwatch_metric_delay_seconds) },
+        { name = "MAX_WINDOW_MINUTES", value = tostring(var.cloudwatch_max_window_minutes) },
+        ] : [], local.alb_log_shipping_enabled ? [
+        { name = "ALB_LOGS_BUCKET", value = local.alb_logs_bucket },
+        { name = "ALB_LOGS_PREFIX", value = var.alb_access_logs_prefix },
+        { name = "ACCOUNT_ID", value = data.aws_caller_identity.current.account_id },
+        { name = "MAX_OBJECTS_PER_RUN", value = tostring(var.alb_log_max_objects_per_run) },
+      ] : [])
 
       mountPoints      = [{ sourceVolume = "data", containerPath = "/collector", readOnly = false }]
       logConfiguration = local.collector_log_config
@@ -82,7 +117,7 @@ resource "aws_cloudwatch_event_rule" "collector" {
   count = local.collector_enabled ? 1 : 0
 
   name                = "${local.name}-ecs-collector"
-  description         = "Runs the ECS metrics and log collector"
+  description         = "Runs the ECS, CloudWatch metric and ALB access log collectors"
   schedule_expression = var.collector_schedule_expression
 
   tags = local.tags
