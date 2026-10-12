@@ -151,6 +151,34 @@ services:
     restart: unless-stopped
     mem_limit: 128M
 %{ endif ~}
+%{ if rabbitmq.enabled ~}
+  # AMQP and management are never published on the host. nginx reaches the UI
+  # over default; API slots reach AMQP over nomaos_data, not the edge network.
+  rabbitmq:
+    image: ${rabbitmq.image}
+    container_name: agrovesto-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+      RABBITMQ_DEFAULT_USER: nomaos-admin
+      RABBITMQ_DEFAULT_PASS: $${RABBITMQ_PASSWORD:?RabbitMQ SSM password is required}
+      RABBITMQ_DEFAULT_VHOST: nomaos
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.4 disk_free_limit 1073741824"
+    volumes:
+      - ${rabbitmq.data_dir}:/var/lib/rabbitmq
+    networks:
+      - default
+      - nomaos_data
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    cpus: "${rabbitmq.cpu_limit}"
+    mem_limit: ${rabbitmq.memory_limit_mb}M
+%{ endif ~}
 %{ if redis.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -535,3 +563,8 @@ networks:
   nomaos_edge:
     external: true
     name: nomaos_edge
+%{ if rabbitmq.enabled ~}
+  nomaos_data:
+    external: true
+    name: nomaos_data
+%{ endif ~}

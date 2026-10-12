@@ -98,7 +98,10 @@ locals {
   # Secret parameters the host reads at boot (dev/host_config.tf). Spelled as
   # deterministic ARNs so the instance policy does not depend on unknown resource
   # attributes or indexed counts at plan time.
+  rabbitmq_password_parameter = "/${local.name}/rabbitmq_password"
+
   host_password_param_arns = [
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/rabbitmq_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/mssql_sa_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_db_password",
@@ -221,7 +224,7 @@ locals {
   # The TLS edge runs whenever something needs public HTTPS: GitHub SSO for the
   # dev UIs, Vault OIDC (whose Dex login broker serves at the Vault host's
   # /dex path), or an opted-in API vhost.
-  tls_proxy_enabled = local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
+  tls_proxy_enabled = var.rabbitmq.enabled || local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
 
   # ---------------------------------------------------------------------------
   # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
@@ -312,6 +315,7 @@ locals {
         var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.ui_tls_enabled ? local.sonar_fqdn : "",
         var.logging.enabled && var.logging.expose_via_nginx && local.ui_tls_enabled ? local.grafana_fqdn : "",
         var.vault.oidc_enabled ? local.vault_fqdn_for_oidc : "",
+        var.rabbitmq.enabled ? "${var.rabbitmq.subdomain}.${var.domain_name}" : "",
       ],
       local.api_tls_domains,
     ))
@@ -371,6 +375,7 @@ locals {
       keys(var.apis),
       ["nginx", "mssql", "vault"],
       var.redis.enabled ? ["redis"] : [],
+      var.rabbitmq.enabled ? ["rabbitmq"] : [],
       var.sonarqube.enabled ? ["sonarqube"] : [],
       local.tls_proxy_enabled ? ["edge"] : [],
       var.vault.oidc_enabled ? ["dex"] : [],
@@ -543,6 +548,7 @@ locals {
     mssql             = local.mssql
     vault             = var.vault
     domain            = var.domain_name
+    rabbitmq          = var.rabbitmq
     redis             = var.redis
     sonarqube         = local.sonarqube_runtime
     sonar_jdbc_url    = local.sonar_jdbc_url
@@ -562,6 +568,7 @@ locals {
     sonar           = local.sonarqube_nginx
     vault           = local.vault_nginx
     blue_green_apis = local.blue_green_apis
+    rabbitmq        = var.rabbitmq
   })
 
   # ── NomaOS blue/green deployments ──────────────────────────────────────────
@@ -670,6 +677,7 @@ locals {
     local.sonarqube_nginx.enabled ? {
       (var.sonarqube.subdomain) = local.ec2_public_ip
     } : {},
+    var.rabbitmq.enabled ? { (var.rabbitmq.subdomain) = local.ec2_public_ip } : {},
     var.extra_a_records
   )
 

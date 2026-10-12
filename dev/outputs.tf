@@ -258,3 +258,13 @@ output "rekognition" {
     liveness_identity_pool_id = one(aws_cognito_identity_pool.liveness[*].id)
   }
 }
+
+output "rabbitmq_access" {
+  description = "Private broker endpoint and HTTPS management URL. No credentials are exposed."
+  value = var.rabbitmq.enabled ? {
+    endpoint           = "rabbitmq:5672"
+    vhost              = "nomaos"
+    management_url     = "https://${var.rabbitmq.subdomain}.${var.domain_name}"
+    password_parameter = local.rabbitmq_password_parameter
+  } : null
+}

@@ -285,3 +285,11 @@ public_subnet_cidrs = ["172.96.0.0/24"]
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Password must be provisioned in SSM before boot; see docs/rabbitmq.md.
+# Management is HTTPS but denied until trusted operator CIDRs are supplied.
+rabbitmq = {
+  enabled       = false # Enable after provisioning SSM, DNS, and operator CIDRs.
+  subdomain     = "dev-rabbitmq"
+  allowed_cidrs = []
+}
