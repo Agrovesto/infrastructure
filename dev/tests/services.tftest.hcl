@@ -255,7 +255,7 @@ run "service_passwords" {
   }
 
   assert {
-    condition     = length(local.host_password_param_arns) == 13
+    condition     = length(local.host_password_param_arns) == 14
     error_message = "The instance role is scoped to SA, Grafana, SonarQube, Redis, and the GitHub SSO parameters for SonarQube, Grafana, and Vault (three additional Vault parameters)."
   }
 
