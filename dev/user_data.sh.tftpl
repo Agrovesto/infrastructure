@@ -228,7 +228,7 @@ chmod 700 /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
 # it uses when auth_enabled is false); alloy/ holds config.alloy plus its
 # positions/state; the grafana/ tree is what the container mounts read-only
 # except for its sqlite data dir.
-mkdir -p "${logging_root}"/{loki/rules/fake,tempo,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+mkdir -p "${logging_root}"/{loki/rules/fake,tempo,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/provisioning/plugins,grafana/provisioning/alerting,grafana/dashboards}
 
 # The images run as their own users, and a bind mount keeps host ownership, so
 # each store has to be handed to the uid its image drops to.
