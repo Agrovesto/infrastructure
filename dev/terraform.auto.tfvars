@@ -71,12 +71,15 @@ amplify_apps = {
 # there is no security group rule, no public endpoint and nothing to look up. In
 # ASP.NET terms this is what goes into
 # ConnectionStrings:Redis / IConnectionMultiplexer.Connect("redis:6379").
+# Caddy obtains and renews certificates for every dev API below. DNS must
+# resolve each hostname to this host before ACME validation can succeed.
 apis = {
   nomaos = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5000
-    subdomain = "dev-noma-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5000
+    subdomain     = "dev-noma-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     # Blue/green slots, managed by the app repo's deploy.sh (--app nomaos-api).
     blue_green = {
       blue_port  = 5007
@@ -84,40 +87,44 @@ apis = {
     }
   }
   wallet = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5001
-    subdomain = "dev-wallet-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5001
+    subdomain     = "dev-wallet-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     blue_green = {
       blue_port  = 5009
       green_port = 5010
     }
   }
   onboarding = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5002
-    subdomain = "dev-onboarding-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5002
+    subdomain     = "dev-onboarding-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     blue_green = {
       blue_port  = 5011
       green_port = 5012
     }
   }
   input = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5003
-    subdomain = "dev-input-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5003
+    subdomain     = "dev-input-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     blue_green = {
       blue_port  = 5013
       green_port = 5014
     }
   }
   moneval = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5004
-    subdomain = "dev-moneval-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5004
+    subdomain     = "dev-moneval-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     blue_green = {
       blue_port  = 5015
       green_port = 5016
@@ -126,10 +133,11 @@ apis = {
   # "service" not "serviceprovider" in the hostname: the shorter name is what
   # the API is called by its deployment vhost and its prod DNS record.
   serviceprovider = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5005
-    subdomain = "dev-service-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5005
+    subdomain     = "dev-service-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     blue_green = {
       blue_port  = 5017
       green_port = 5018
