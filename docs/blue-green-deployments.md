@@ -26,7 +26,7 @@ nginx.conf.tftpl ── renders /opt/agrovesto/nginx/nginx.conf
 
 | API | `deploy.sh --app` | slot containers | ports (blue/green) | vhost (the API's own) |
 |---|---|---|---|---|
-| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `noma-api.nomaos.com` |
+| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `dev-noma-api.nomaos.com` |
 | wallet | `wallet-api` | `wallet-api-blue` / `-green` | 5009 / 5010 | `dev-wallet-api.nomaos.com` |
 | onboarding | `onboarding-api` | `onboarding-api-blue` / `-green` | 5011 / 5012 | `dev-onboarding-api.nomaos.com` |
 | input | `input-api` | `input-api-blue` / `-green` | 5013 / 5014 | `dev-input-api.nomaos.com` |
@@ -127,7 +127,7 @@ variable is missing, so a wrong-format file fails safe at reload time.
    default server answers `404` to `Host: localhost`, so the check must send
    the API's own hostname, e.g. `EDGE_HEALTH_HOST=dev-wallet-api.nomaos.com`.
    For nomaos this is a change from `dev-api-test.nomaos.com`, which no longer
-   exists as a vhost: `EDGE_HEALTH_HOST=noma-api.nomaos.com`.
+   exists as a vhost: `EDGE_HEALTH_HOST=dev-noma-api.nomaos.com`.
 
 `UPSTREAM_NAME` in `deploy.sh` is `${APP_NAME//-/_}`, so `--app wallet-api`
 yields upstream `wallet_api`, variable `$wallet_api_backend`, slot file
@@ -202,12 +202,12 @@ sudo bash -ec 'for f in /opt/agrovesto/nginx/*_api-active.conf; do
 done'
 sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml run --rm --no-deps nginx nginx -t &&
 sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml up -d --no-deps --force-recreate nginx
-curl -iS --max-time 15 -H 'Host: noma-api.nomaos.com' http://localhost/__edge_health
-curl -iS --max-time 15 -H 'Host: noma-api.nomaos.com' http://localhost/health
+curl -iS --max-time 15 -H 'Host: dev-noma-api.nomaos.com' http://localhost/__edge_health
+curl -iS --max-time 15 -H 'Host: dev-noma-api.nomaos.com' http://localhost/health
 ```
 
-The checked-in dev NomaOS hostname is `noma-api.nomaos.com`; always match the
-rendered `server_name` rather than assuming a `dev-` prefix. Edge health must
+The checked-in dev NomaOS hostname is `dev-noma-api.nomaos.com`; always match the
+rendered `server_name` and keep dev API hosts under the `dev-` prefix. Edge health must
 return `200 edge-ok`; backend health separately verifies slot connectivity.
 Verify public DNS/TLS routing independently: a successful localhost request does
 not prove the public hostname reaches this host. Application image identity and

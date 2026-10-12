@@ -15,8 +15,13 @@ class NginxRecoveryTests(unittest.TestCase):
 
     def test_example_deploy_uses_configured_nomaos_hostname(self):
         deploy = (ROOT / 'docs/examples/deploy.sh').read_text()
-        self.assertIn('echo "noma-api.${domain}"', deploy)
-        self.assertNotIn('dev-noma-api', deploy)
+        self.assertIn('echo "dev-noma-api.${domain}"', deploy)
+        config = (ROOT / 'dev/terraform.auto.tfvars').read_text()
+        api_config = config.split('apis = {', 1)[1].split('# `sonar`', 1)[0]
+        hosts = re.findall(r'subdomain\s*=\s*"([^"]+)"', api_config)
+        self.assertEqual(len(hosts), 6)
+        self.assertIn('dev-noma-api', hosts)
+        self.assertTrue(all(host.startswith('dev-') for host in hosts))
 
     def test_persistent_edge_network(self):
         compose = (ROOT / 'dev/docker-compose.yml.tftpl').read_text()
