@@ -52,9 +52,9 @@
       },
       {
         "name": "level",
-        "label": "Line filter",
-        "type": "custom",
-        "description": "Applied as a LogQL line filter (|~).",
+      "label": "Level",
+      "type": "custom",
+      "description": "Matches the promoted Loki level label (anchored regex), so errors-only views are filtered in the index instead of per line. Add ad-hoc line filters to the panel query, e.g. |~ \"(?i)timeout\".",
         "query": ".*,(?i)(fail|crit|error),(?i)(warn|fail|crit|error)",
         "current": {
           "text": "everything",
@@ -676,7 +676,7 @@
             "type": "loki",
             "uid": "agrovesto-loki"
           },
-          "expr": "{job=\"docker\", service=~\"$service\"} |~ \"$level\"",
+          "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\"}",
           "queryType": "range",
           "maxLines": 500
         }

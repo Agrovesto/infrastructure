@@ -213,7 +213,13 @@ resource "aws_ssm_association" "host_config_refresh" {
       "# config hash: ${sha256(jsonencode({ for k, o in aws_s3_object.host_config : k => o.etag }))}",
       "# Vault OAuth parameter versions: ${var.vault.oidc_enabled ? join(",", [tostring(aws_ssm_parameter.vault_github_client_id[0].version), tostring(aws_ssm_parameter.vault_github_client_secret[0].version), tostring(aws_ssm_parameter.vault_oidc_client_secret[0].version)]) : "disabled"}",
       "set -euo pipefail",
-      ], var.manage_fresh_vault ? [
+      ], var.logging.enabled ? [
+      # Grafana logs a boot-time error for every absent provisioning subdirectory;
+      # only datasources and dashboards are populated here, but plugins and
+      # alerting must exist as (empty) dirs to keep the startup log clean. The
+      # S3 sync copies objects, never bare directories, so ensure them each run.
+      "mkdir -p ${local.logging_root}/grafana/provisioning/plugins ${local.logging_root}/grafana/provisioning/alerting",
+      ] : [], var.manage_fresh_vault ? [
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
       "bash /opt/agrovesto/scripts/prepare-vault.sh",
       "systemctl start agrovesto-sync.service",
