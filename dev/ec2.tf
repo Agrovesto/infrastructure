@@ -52,8 +52,10 @@ resource "aws_instance" "app" {
       client_secret = aws_ssm_parameter.grafana_github_client_secret[0].name
     } : {}
 
-    redis           = var.redis
-    redis_parameter = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
+    rabbitmq           = var.rabbitmq
+    rabbitmq_parameter = local.rabbitmq_password_parameter
+    redis              = var.redis
+    redis_parameter    = var.redis.enabled && var.redis.password != "" ? aws_ssm_parameter.redis_password[0].name : ""
 
     sonarqube           = local.sonarqube_runtime
     sonar_web_baseurl   = local.sonar_web_baseurl

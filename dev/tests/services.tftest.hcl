@@ -461,6 +461,14 @@ run "nomaos_blue_green_vhost" {
   }
 
   assert {
+    condition = alltrue([
+      for bg in local.blue_green_apis :
+      strcontains(local.nginx_conf, format("location /health {\n      proxy_pass http://$%s_backend;", bg.upstream_name))
+    ])
+    error_message = "Every blue/green health location must open a block before proxy_pass; a missing brace prevents the entire nginx edge from starting."
+  }
+
+  assert {
     condition     = strcontains(local.nginx_conf, "resolver 127.0.0.11")
     error_message = "Resolving the slot at request time requires Docker's embedded DNS resolver in nginx.conf; without it the variable proxy_pass cannot resolve."
   }
@@ -974,5 +982,52 @@ run "ui_https_without_oauth" {
   assert {
     condition     = yamldecode(local.docker_compose).services.edge.labels["com.agrovesto.caddy-config-sha256"] == sha256(local.caddyfile)
     error_message = "Caddy must be recreated when its rendered config changes."
+  }
+}
+
+run "rabbitmq_private_broker_https_management" {
+  command = plan
+  variables {
+    rabbitmq = {
+      enabled       = true
+      allowed_cidrs = ["203.0.113.10/32"]
+    }
+  }
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "hostname: rabbitmq") &&
+      strcontains(local.docker_compose, "RABBITMQ_NODENAME: rabbit@rabbitmq") &&
+      strcontains(local.docker_compose, "- /data/rabbitmq:/var/lib/rabbitmq") &&
+      strcontains(local.docker_compose, "- nomaos_data") &&
+      !strcontains(local.docker_compose, ":5672:5672") &&
+      !strcontains(local.docker_compose, ":15672:15672")
+    )
+    error_message = "RabbitMQ must have stable identity, persisted data and private networking without published ports."
+  }
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name dev-rabbitmq.nomaos.com;") &&
+      strcontains(local.nginx_conf, "allow 203.0.113.10/32;") &&
+      strcontains(local.nginx_conf, "set $rabbitmq_backend rabbitmq:15672;") &&
+      contains(local.github_sso_proxy.domains, "dev-rabbitmq.nomaos.com") &&
+      local.tls_proxy_enabled &&
+      contains(keys(local.a_records), "dev-rabbitmq")
+    )
+    error_message = "RabbitMQ management must use the HTTPS edge, allowlisted nginx vhost and DNS record wiring."
+  }
+}
+
+run "rabbitmq_disabled" {
+  command = plan
+  variables {
+    rabbitmq = { enabled = false }
+  }
+  assert {
+    condition = (
+      !strcontains(local.docker_compose, "agrovesto-rabbitmq") &&
+      !strcontains(local.nginx_conf, "rabbitmq_backend") &&
+      !contains(local.github_sso_proxy.domains, "dev-rabbitmq.nomaos.com")
+    )
+    error_message = "Disabling RabbitMQ must remove the broker and management route."
   }
 }

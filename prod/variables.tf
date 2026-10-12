@@ -702,3 +702,13 @@ variable "import_existing" {
   type        = bool
   default     = true
 }
+
+variable "rabbitmq" {
+  description = "Private, single-instance Amazon MQ RabbitMQ reachable only by authorized ECS application services. No external management route."
+  type = object({
+    enabled        = optional(bool, false)
+    engine_version = optional(string, "4.2")
+    instance_type  = optional(string, "mq.m7g.large")
+  })
+  default = {}
+}

@@ -215,6 +215,7 @@ db_size_alarm_enabled = false
 #   # The dev logging stack's Grafana (nginx vhost on the dev host). Without this
 #   # record the UI is still reachable through the SSH tunnel printed by
 #   # `terraform -chdir=../dev output logging_access`.
+#   "dev-rabbitmq"                = "<dev EC2 Elastic IP>"
 #   "dev-grafana"                 = "<dev EC2 Elastic IP>"
 #   # Dev SonarQube. Not dev-prefixed on purpose: sonar.nomaos.com is the name the
 #   # SONAR_HOST_URL secret and the sonar-project-*.properties files use, and it
@@ -282,3 +283,12 @@ public_subnet_map_public_ip       = true
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Private, single-node Amazon MQ. No infrastructure is created until apply.
+# Confirm engine/instance availability and cost in eu-west-1 before applying.
+# AMQP and management are private: only authorized ECS application services.
+rabbitmq = {
+  enabled        = true
+  engine_version = "4.2"
+  instance_type  = "mq.m7g.large"
+}
