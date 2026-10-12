@@ -11,7 +11,7 @@ class ApiHttpsTests(unittest.TestCase):
         source = (ROOT / 'dev/terraform.auto.tfvars').read_text()
         apis = source.split('apis = {', 1)[1].split('\n# `sonar`', 1)[0]
         entries = re.findall(r'^  (\w+) = \{\n(.*?)^  \}', apis, re.M | re.S)
-        self.assertEqual(len(entries), 6)
+        self.assertEqual(len(entries), 7)
         for name, body in entries:
             with self.subTest(api=name):
                 self.assertRegex(body, r'tls_via_caddy\s*=\s*true')

@@ -26,6 +26,7 @@ nginx.conf.tftpl ── renders /opt/agrovesto/nginx/nginx.conf
 
 | API | `deploy.sh --app` | slot containers | ports (blue/green) | vhost (the API's own) |
 |---|---|---|---|---|
+| agx | `agx-api` | `agx-api-blue` / `-green` | 5019 / 5020 | `dev-agx-api.nomaos.com` |
 | nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `dev-noma-api.nomaos.com` |
 | wallet | `wallet-api` | `wallet-api-blue` / `-green` | 5009 / 5010 | `dev-wallet-api.nomaos.com` |
 | onboarding | `onboarding-api` | `onboarding-api-blue` / `-green` | 5011 / 5012 | `dev-onboarding-api.nomaos.com` |
@@ -216,7 +217,7 @@ list does not demonstrate database health.
 
 ## HTTPS for all dev APIs
 
-All six APIs in `dev/terraform.auto.tfvars` set `tls_via_caddy = true`.
+All seven APIs in `dev/terraform.auto.tfvars` set `tls_via_caddy = true`.
 Caddy obtains and renews certificates for their individual hostnames, redirects
 HTTP to HTTPS with status 308, and forwards requests to the existing nginx slot
 routes. This is **not a wildcard certificate**: adding another API requires its
@@ -252,3 +253,17 @@ After this change, a localhost request through Caddy on port 80 also redirects
 when it carries an API Host header. For a backend-only local diagnostic, call
 nginx from inside its container, or use the real HTTPS hostname. The reference
 `deploy.sh` checks the edge from inside nginx, so it bypasses Caddy's redirect.
+
+### AGX API
+
+AGX uses `--app agx-api`, upstream `agx_api`, and slot ports 5019 (blue)
+and 5020 (green). Its Compose placeholder uses 5006; it does not serve real API
+traffic once blue/green routing is enabled. The active slot file is
+`/opt/nomaos/nginx/upstreams/agx_api.conf`, seeded only when missing.
+
+Point `dev-agx-api.nomaos.com` at the dev Elastic IP, sync the rendered config,
+seed missing slot files through the host refresh process, and deploy the actual
+AGX image using the updated app deployment script. Slots must join `nomaos_edge`
+and the networks needed by their dependencies. Caddy manages HTTPS; until a slot
+is deployed and healthy, backend requests return 502 while `/__edge_health`
+can return 200. No AGX database or production service is added by this change.

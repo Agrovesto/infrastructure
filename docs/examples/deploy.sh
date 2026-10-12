@@ -21,6 +21,7 @@
 #   input-api            blue 5013 / green 5014
 #   moneval-api          blue 5015 / green 5016
 #   serviceprovider-api  blue 5017 / green 5018
+#   agx-api              blue 5019 / green 5020
 #
 # Deployment flow:
 #   1. Validate configuration
@@ -91,7 +92,7 @@ Required:
   --app <name>
       App key. One of:
         nomaos-api  wallet-api  onboarding-api
-        input-api   moneval-api  serviceprovider-api
+        input-api   moneval-api  serviceprovider-api  agx-api
 
   --image <ref>
       Full immutable image reference.
@@ -142,6 +143,7 @@ Port allocation (per app):
   input-api            blue 5013 / green 5014
   moneval-api          blue 5015 / green 5016
   serviceprovider-api  blue 5017 / green 5018
+  agx-api              blue 5019 / green 5020
 EOF
 }
 
@@ -167,6 +169,8 @@ slot_port() {
     moneval-api:green)         echo 5016 ;;
     serviceprovider-api:blue)  echo 5017 ;;
     serviceprovider-api:green) echo 5018 ;;
+    agx-api:blue)              echo 5019 ;;
+    agx-api:green)             echo 5020 ;;
     *)
       die "no blue/green port pair for app '${APP_NAME}' slot '${slot}'"
       ;;
@@ -193,7 +197,7 @@ vhost_hostname() {
 
 is_managed_app() {
   case "$1" in
-    nomaos-api | wallet-api | onboarding-api | input-api | moneval-api | serviceprovider-api)
+    nomaos-api | wallet-api | onboarding-api | input-api | moneval-api | serviceprovider-api | agx-api)
       return 0
       ;;
     *)
@@ -252,7 +256,7 @@ done
 
 is_managed_app "$APP_NAME" || {
   usage >&2
-  die "unknown app '$APP_NAME': expected nomaos-api, wallet-api, onboarding-api, input-api, moneval-api or serviceprovider-api"
+  die "unknown app '$APP_NAME': expected nomaos-api, wallet-api, onboarding-api, input-api, moneval-api, serviceprovider-api or agx-api"
 }
 
 [[ -n "$IMAGE" ]] || {
@@ -386,6 +390,7 @@ fi
 #   input-api            blue 5013 / green 5014
 #   moneval-api          blue 5015 / green 5016
 #   serviceprovider-api  blue 5017 / green 5018
+#   agx-api              blue 5019 / green 5020
 #
 # This function deliberately calculates the port from the slot passed to it.
 # ─────────────────────────────────────────────────────────────────────────────
