@@ -1,0 +1,49 @@
+# =============================================================================
+# Loki alert rules for the dev EC2 host. Rendered by Terraform (dev/locals.tf)
+# and uploaded as logging/loki/rules/fake/application.yml in the host config
+# bucket (dev/host_config.tf); user_data syncs it to
+# /opt/agrovesto/logging/loki/rules/fake/application.yml, which the container
+# sees as /loki/rules/fake/application.yml. "fake" is not a placeholder here: it
+# is the tenant Loki ingests under when auth_enabled is false, and the ruler
+# only reads rules from a tenant directory.
+#
+# These are the alerts that need log lines rather than metrics - what the
+# applications wrote and what nginx answered. Host and container resource alerts
+# live in prometheus-rules.yml.tftpl; both reach the same Alertmanager and
+# therefore the same dev SNS alerts topic.
+# =============================================================================
+
+groups:
+  - name: application-logs
+    rules:
+      - alert: AppErrorSpike
+        expr: sum(rate({job="docker", level=~"(?i)(fail|crit|error)"}[${window}])) > ${app_error_rate}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The applications are logging errors"
+          description: "{{ $value | printf \"%.2f\" }} error lines per second for 10 minutes. Alloy promotes level from the JSON logs and from the .NET console prefix."
+
+  - name: nginx-traffic
+    rules:
+      - alert: NginxErrorSpike
+        expr: sum(rate({component="nginx", status=~"5.."}[${window}])) > ${nginx_5xx_rate}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "nginx is answering 5xx"
+          description: "{{ $value | printf \"%.2f\" }} 5xx responses per second for 10 minutes. The traffic dashboard breaks them down by vhost, URI and client."
+
+      # A 5xx with no upstream status means nginx never got an answer: the API
+      # container refused the connection or timed out. ContainerDown cannot see
+      # this, because the container is running - the application inside it is not.
+      - alert: NginxUpstreamRefused
+        expr: sum(rate({component="nginx", status=~"5.."} | json | upstream_status = "-" [${window}])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "nginx cannot reach an upstream"
+          description: "Sustained 5xx with no upstream status: an API is refusing connections or timing out rather than answering with an error."

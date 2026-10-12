@@ -54,6 +54,16 @@ describe are listed separately at the end.
   30 days on EFS.
 - The monitoring stack's own logs stay in CloudWatch Logs; they are not
   duplicated into Loki, so a broken ingest path is still visible.
+- Two prod sources are pulled into Loki on a schedule rather than pushed by the
+  application: the ECS log shipper reads the service log groups from CloudWatch
+  Logs (`FilterLogEvents`, cursor kept on the collector's EFS volume) and the ALB
+  shipper reads new objects out of the access-log bucket, parses each line and
+  pushes one Loki entry per request labelled `source="alb"`, `service`, `status`
+  and `method`. Client IP, user agent, URI and timings stay inside the line,
+  where LogQL unwraps them without indexing every value.
+- Both shippers publish shipped-line counters, a run counter and a newest-event
+  timestamp, so a pipeline that stops delivering is an alert rather than a
+  dashboard that quietly goes empty.
 - Dev is the opposite on purpose: no CloudWatch Logs at all. Alloy on the dev
   host tails the docker `json-file` logs and journald, pushes them to Loki on
   `127.0.0.1:3100` of the same box, and Grafana queries that. Nothing is
@@ -67,11 +77,19 @@ describe are listed separately at the end.
   Retention is 15 days.
 - Traces become metrics: Tempo's metrics-generator remote-writes span metrics to
   Prometheus, so request rates and latencies appear without an agent.
-- Batch work pushes instead of being scraped: the collector (every 2 minutes,
-  ECS `DescribeServices`/`DescribeTasks` over HTTPS), the SQL Server metrics job
-  (hourly, TDS 1433 DMV read using the master secret), the budget job (daily
-  06:15 UTC) and the monthly report job (08:00 UTC on the 1st) all push to
-  pushgateway on 9091.
+- Batch work pushes instead of being scraped. One scheduled collector task
+  (`rate(2 minutes)`, 0.25 vCPU / 0.5 GB, ARM64) runs whichever collector
+  scripts are enabled, in sequence, in the same container: ECS
+  `DescribeServices`/`DescribeTasks` over HTTPS, the CloudWatch Logs shipper,
+  `ListMetrics`/`GetMetricData` for the always-free basic metrics (ECS service
+  CPU and memory, RDS CPU/memory/free storage/connections, ALB request count,
+  latency and 5xx, NAT bytes, EFS burst credits) and the ALB access-log shipper.
+  Adding a script costs no extra task, so no extra Fargate spend; Container
+  Insights and X-Ray stay off because the basic metrics are $0 and answer the
+  same questions.
+- The SQL Server metrics job (hourly, TDS 1433 DMV read using the master
+  secret), the budget job (daily 06:15 UTC) and the monthly report job (08:00
+  UTC on the 1st) push to pushgateway on 9091 as their own tasks.
 - Grafana queries Prometheus 9090, Loki 3100 and Tempo 3200 as datasources, and
   reads its admin password from SSM Parameter Store over HTTPS.
 
@@ -80,15 +98,35 @@ describe are listed separately at the end.
 - Applications send OTLP to Alloy (4317 gRPC, 4318 HTTP) in the edge task.
 - Alloy forwards spans to Tempo (OTLP 4317). Tempo stores blocks on EFS for 14
   days and emits span metrics back into Prometheus.
+- Dev runs the same shape on the compose network: the compose APIs carry the
+  `OTEL_*` env block (`local.otel_environment` in `dev/locals.tf`), Alloy's OTLP
+  receiver forwards to Tempo on the host, Tempo keeps blocks for 14 days on the
+  logging EBS volume and remote-writes span metrics to the host Prometheus.
+  Nothing is ingested or charged by AWS, like the rest of the dev stack.
 
 ### Alert path
 
-- Prometheus evaluates alert rules and pushes them to Alertmanager on 9093,
-  inside the same edge task.
-- Alertmanager groups and routes, but every receiver is empty
-  (`alert_email`, `alert_smtp_host`, `alertmanager_webhook_url`), so today an
-  alert ends inside the stack and is only visible in Grafana. The rules cover
-  ECS task and service state plus the SQL Server size signal.
+- Prometheus evaluates the metric rules and pushes them to Alertmanager on 9093,
+  inside the same edge task. Loki's ruler evaluates the log rules and sends its
+  alerts to the same Alertmanager.
+- Alertmanager groups by `[alertname, probe]`, repeats critical alerts hourly,
+  inhibits a warning while the matching critical fires, and delivers over SNS
+  with sigv4 to `agrovesto-prod-alerts` (`var.alertmanager_sns_topic`). The SMTP
+  and webhook receivers are deliberately left empty (`alert_email`,
+  `alert_smtp_host`, `alertmanager_webhook_url`), so SNS is the only path out.
+- The rules cover ECS task and service state and failed rollouts, ALB target
+  health plus 5xx and latency from the access logs, RDS CPU, free memory, disk
+  space and burst balance, NAT port exhaustion, EFS burst credits, the health
+  and staleness of every collector and shipper, and the SQL Server size signal.
+- Loki's local rule store reads `<rules directory>/<tenant>/<namespace>.yml`.
+  With `auth_enabled: false` the tenant is literally `fake`, so the rules ship to
+  `config/loki/rules/fake/application.yml` and land at
+  `/loki/config/rules/fake/application.yml` in the container. A file published
+  one level up is never loaded, and the ruler does not complain about it.
+- Dev runs the same shape on one host: Prometheus evaluates host, container and
+  cadvisor rules, Loki's ruler evaluates the application and nginx rules
+  (`logging/loki/rules/fake/application.yml`), and the compose Alertmanager
+  delivers to the dev alerts topic, which e-mails `var.alert_emails`.
 - The SQL Server 8 GiB warning threshold travels the same route: the hourly job
   publishes `mssql_database_size_bytes` and the Alertmanager rule compares it
   with `mssql_database_size_warning_bytes`.
@@ -177,7 +215,7 @@ line).
 | EBS | Storage | 50 GB root + 50 GB data + 20 GB for the log stores, gp3 | ≈ $10 of the ≈ $35 |
 | nginx + 5 API containers | Runtime | reverse proxy on 443 → containers on 5001–5005 | — |
 | SQL Server container | Database | 5 databases on the data volume | — |
-| Logging + metrics containers | Observability | Loki, Alloy, Grafana, Prometheus, cAdvisor, node-exporter — on-host, no CloudWatch | — |
+| Logging, metrics & trace containers | Observability | Loki, Tempo, Alloy, Grafana, Prometheus, cAdvisor, node-exporter — on-host, no CloudWatch | — |
 | Vault container | Secrets | dev secrets | — |
 | EventBridge Scheduler | Scheduling | start 08:00, stop 20:00, Mon–Fri, Africa/Lagos (≈ 260 h/month) | — |
 | ECR | Images | 5 dev repos, MUTABLE tags, 3 kept | — |
@@ -188,7 +226,7 @@ line).
 
 | Node | Service | Key configuration | Cost |
 | --- | --- | --- | ---: |
-| collector task | Batch | `rate(2 minutes)`, 0.25 vCPU / 0.5 GB, ECS API polling | ≈ $3.06 for all four scheduled tasks |
+| collector task | Batch | `rate(2 minutes)`, 0.25 vCPU / 0.5 GB, runs the enabled collector scripts in sequence: ECS API polling, CloudWatch Logs shipping, basic CloudWatch metrics, ALB access-log shipping | ≈ $3.06 for all four scheduled tasks — the extra scripts add no task |
 | mssql-metrics task | Batch | hourly, DMV query through Secrets Manager | included above |
 | budget task | Batch | daily 06:15 UTC, DuckDB over CUR Parquet | included above |
 | report task | Batch | monthly, fpdf2 PDF, SES send | included above |
@@ -257,7 +295,8 @@ and served to tasks through IAM roles.
   instance plus four container nodes.
 - Amplify, the EventBridge scheduler and the dev S3 bucket have no separate
   cost line at the volumes described; they are drawn but costed as "—".
-- The Alertmanager receivers are empty, so the alert path terminates inside the
-  stack; the diagram shows the receiver node in the planned style.
+- Alertmanager delivers over SNS in both stacks (prod `agrovesto-prod-alerts`,
+  dev the alerts topic behind `var.alert_emails`); the SMTP and webhook
+  receivers are empty by choice, so the diagram draws SNS as the only receiver.
 - Wording follows the inventory: "not initialised" for Vault, "placeholder
   images" for the prod services, "sandbox" for SES.

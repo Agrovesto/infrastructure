@@ -121,9 +121,10 @@ One EC2 instance (`t3.large`, IMDSv2 only, hop limit 2) runs everything in Docke
 - **APIs** (images from ECR `agrovesto-dev-<svc>`): wallet :5001, onboarding :5002, input :5003, moneval :5004, serviceprovider :5005
 - **SQL Server** on its own EBS volume, with databases `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`. The SA password comes from the `TF_VAR_MSSQL_SA_PASSWORD_DEV` secret.
 - **nginx** reverse proxy: `dev-<svc>-api.nomaos.com` → API ports. Security group: 80/443 open, 22 from `allowed_ssh_cidrs` only.
-- **Logging and metrics** (own EBS volume): Loki 3.4.2, Alloy 1.6.1, Grafana 11.5.2, Prometheus 3.1.0, cAdvisor 0.57.0, node-exporter 1.9.1, **Alertmanager 0.28.1**. All bind to 127.0.0.1. Grafana is exposed only through the nginx allow-list.
+- **Logging, metrics and traces** (own EBS volume): Loki 3.4.2, Tempo 2.7.1, Alloy 1.6.1, Grafana 11.5.2, Prometheus 3.1.0, cAdvisor 0.57.0, node-exporter 1.9.1, **Alertmanager 0.28.1**. All bind to 127.0.0.1. Grafana is exposed only through the nginx allow-list.
+- **Grafana dashboards** (provisioned as files from `dev/grafana/dashboards/`, re-read every 30 s, so UI edits are reverted): `dev-host` (host CPU, memory, disk, network), `dev-logs` (log volume and error levels), `dev-services` (per-container CPU, memory against limit, throttling, restarts, trace-derived request rates), `dev-traffic` (nginx requests by vhost, URI, status, client IP and user agent), `dev-infra` (MSSQL, Redis, RabbitMQ, SonarQube, Vault and the observability containers themselves).
 
-**How configuration reaches the host.** Rendered files (compose, nginx, SQL init, Loki, Alloy, Prometheus, alert rules, Alertmanager and Grafana provisioning) are uploaded as objects to the host-config S3 bucket. `user_data` syncs them at boot. After changing config, run `aws s3 sync` on the host, or reboot it.
+**How configuration reaches the host.** Rendered files (compose, nginx, SQL init, Loki, Tempo, Alloy, Prometheus, alert rules, Alertmanager and Grafana provisioning) are uploaded as objects to the host-config S3 bucket. `user_data` syncs them at boot. After changing config, run `aws s3 sync` on the host, or reboot it.
 
 **Scheduler.** EventBridge Scheduler starts the host at 08:00 and stops it at 20:00, Monday to Friday, in the Africa/Lagos timezone.
 
@@ -195,15 +196,20 @@ Runs on ECS Fargate in the prod VPC (discovered through data sources). Storage i
 | Component | Purpose | Retention |
 |---|---|---|
 | Prometheus + Alertmanager | Metrics, alert rules, routing to SNS `agrovesto-prod-alerts` | 15 days |
-| Loki | Logs | 720 h (30 days) |
+| Loki | Logs, and its ruler evaluates the log alert rules | 720 h (30 days) |
 | Tempo | Traces (span metrics to Prometheus) | 336 h (14 days) |
-| Grafana | Dashboards at `grafana.nomaos.com` through the prod ALB (VPC-only unless `grafana_allowed_cidrs` is set) | n/a |
+| Grafana | Dashboards at `grafana.nomaos.com` through the prod ALB (VPC-only unless `grafana_allowed_cidrs` is set). Provisioned from `monitoring/dashboards/`: `platform`, `services`, `cost`, `ecs`, `resources`, `traffic` | n/a |
 | Alloy | Collection agent | n/a |
 | Blackbox exporter | HTTPS uptime probes: the 5 APIs, Vault `/v1/sys/health`, Grafana `/api/health` | n/a |
 | Pushgateway | Metrics from batch jobs | n/a |
-| RDS collector | Scheduled SQL Server size metrics for `migration-prod` | n/a |
+| ECS collector | Scheduled ECS service and task state, failed rollouts, stopped-task reasons; ships application logs from CloudWatch Logs into Loki | every 2 min |
+| CloudWatch collector | The always-free basic metrics: ECS service CPU and memory, RDS CPU/memory/free storage/connections, ALB requests/latency/5xx, NAT bytes, EFS burst credits | every 2 min |
+| ALB log shipper | Reads new access-log objects from S3 into Loki: request counts, status classes, latency, client IPs, user agents | every 2 min |
+| RDS collector | Scheduled SQL Server size metrics for `migration-prod` | hourly |
 | Cost | CUR bucket, AWS Budget $250/month (alert at 80%) | n/a |
 | Monthly report | PDF emailed through SES to `tech@agrovesto.com` | monthly |
+
+The three collectors above run as scripts inside the **one** existing collector task (`sh -c` over the enabled scripts, `monitoring/collector.tf`), so enabling them adds no Fargate spend. Each is behind its own toggle: `enable_ecs_monitoring`, `enable_ecs_log_shipping`, `cloudwatch_metrics_enabled`, `alb_log_shipping_enabled`. Container Insights and X-Ray stay off — the basic CloudWatch metrics are $0 and answer the same questions.
 
 ---
 
@@ -219,13 +225,18 @@ Apps ──────────────────► SNS <stack>-notif
 | Source | Alerts |
 |---|---|
 | Dev CloudWatch | host status check failed, host CPU high |
-| Dev Prometheus rules | TargetDown (5 min), HostHighCpu > 90%, HostHighMemory > 90%, HostDiskAlmostFull < 10% free, ContainerDown, ContainerRestarting (> 2 restarts in 15 min) |
+| Dev Prometheus rules | TargetDown (5 min), HostHighCpu > 90%, HostHighMemory > 90%, HostDiskAlmostFull < 10% free, ContainerDown, ContainerRestarting (> 2 restarts in 15 min), ContainerNearMemoryLimit > 90% of limit, ContainerHighCpu > 90% of quota, ContainerCpuThrottled > 25% |
+| Dev Loki rules | AppErrorSpike (application error lines/s), NginxErrorSpike (5xx/s), NginxUpstreamRefused (5xx with no upstream status — an API that runs but refuses connections) |
 | Prod CloudWatch | RDS CPU / free storage / freeable memory, ALB 5xx, per-service target 5xx, unhealthy targets, ECS CPU, ECS memory |
-| Monitoring Alertmanager | Everything Prometheus evaluates in prod (routes to the prod alerts topic) |
+| Monitoring Prometheus rules | ECS service state and failed rollouts, ALB target health plus 5xx and latency, RDS CPU/free memory/disk/burst balance, NAT port exhaustion, EFS burst credits, collector and shipper health including staleness |
+| Monitoring Loki rules | ApplicationErrorSpike, AlbRequestErrorSpike (5xx from the access logs), AlbClientErrorFlood (4xx) |
+| Monitoring Alertmanager | Everything Prometheus and the Loki ruler evaluate in prod (routes to the prod alerts topic) |
 
 - Topics are encrypted with a customer-managed KMS key, because CloudWatch cannot publish to topics that use `aws/sns`.
 - **Every email subscription must be confirmed** with the link AWS sends. Until then, alerts are not delivered.
 - Dev Alertmanager signs requests with the EC2 instance role (IMDSv2, hop limit 2). No keys are stored.
+- **Loki rule files must live in the tenant directory.** Loki's local rule store reads `<rules dir>/<tenant>/<namespace>.yml`, and with `auth_enabled: false` the tenant is literally `fake`. Both stacks publish `loki/rules/fake/application.yml`; a file published one level up is never loaded and the ruler stays silent about it.
+- Thresholds are variables, not hardcoded: dev in `var.alert_rules` (host, container and log rules), prod in `monitoring/variables.tf`.
 
 ---
 

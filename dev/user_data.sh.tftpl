@@ -223,14 +223,16 @@ chmod 700 /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
 %{ if logging.enabled ~}
 
 # Every directory a compose bind mount points at, so docker never has to create
-# one as root:config.yml lands in loki/, the WAL and TSDB next to it; alloy/ holds
-# config.alloy plus its positions/state; the grafana/ tree is what the container
-# mounts read-only except for its sqlite data dir.
-mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+# one as root: config.yml lands in loki/ and tempo/, the WALs and blocks beside
+# them, and Loki's ruler reads its rules from loki/rules/fake (the "fake" tenant
+# it uses when auth_enabled is false); alloy/ holds config.alloy plus its
+# positions/state; the grafana/ tree is what the container mounts read-only
+# except for its sqlite data dir.
+mkdir -p "${logging_root}"/{loki/rules/fake,tempo,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
 
 # The images run as their own users, and a bind mount keeps host ownership, so
 # each store has to be handed to the uid its image drops to.
-chown -R 10001:10001 "${logging_root}/loki"
+chown -R 10001:10001 "${logging_root}/loki" "${logging_root}/tempo"
 chown -R 65534:65534 "${logging_root}/prometheus" "${logging_root}/alertmanager"
 chown -R 472:472 "${logging_root}/grafana"
 %{ endif ~}

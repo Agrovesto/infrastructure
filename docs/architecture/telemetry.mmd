@@ -18,14 +18,17 @@ flowchart LR
     smsec["Secrets Manager<br/>mssql master secret"]
     cur["Cost and Usage Report<br/>daily, Parquet, us-east-1"]
     s3cur["S3 bucket cur"]
-    s3cfg["S3 bucket config<br/>dashboards, probe config, scripts"]
+    s3cfg["S3 bucket config<br/>dashboards, rule files, probe config, scripts"]
+    cwl["CloudWatch Logs<br/>service log groups"]
+    cwapi["CloudWatch metrics API<br/>ListMetrics and GetMetricData"]
+    s3alb["S3 bucket alb access logs"]
     ses["SES<br/>domain identity + DKIM"]
     ssm["SSM Parameter Store"]
   end
 
   subgraph collect["Scheduled Fargate tasks"]
     direction TB
-    collector["collector<br/>rate 2 min"]
+    collector["collector<br/>rate 2 min<br/>ecs metrics, log shipper,<br/>cloudwatch metrics, alb shipper"]
     mssqljob["mssql-metrics<br/>rate 1 h"]
     budgetjob["budget<br/>cron 15 6 daily"]
     reportjob["report<br/>cron 0 8 1st of month"]
@@ -49,7 +52,7 @@ flowchart LR
     direction TB
     viewer["Operator<br/>queried from inside the VPC"]
     mailbox["Report recipients<br/>PDF by e-mail"]
-    receivers["Alert receivers<br/>e-mail and webhook, currently empty"]
+    receivers["Alert receiver<br/>SNS agrovesto-prod-alerts"]
   end
 
   %% ── ingest paths ─────────────────────────────────────────────────
@@ -66,7 +69,8 @@ flowchart LR
   prom -->|"HTTP 9115 scrape probe results"| blkbox
   prom -->|"HTTP 9091 scrape"| pushgw
   prom -->|"HTTP 9093 alert rules"| alertmgr
-  alertmgr -->|"notification, no configured receiver"| receivers
+  alertmgr -->|"SNS notification, sigv4"| receivers
+  loki -->|"HTTP 9093 ruler alerts"| alertmgr
   efs -->|"NFS 2049"| prom
   efs -->|"NFS 2049"| loki
   efs -->|"NFS 2049"| tempo
@@ -81,6 +85,11 @@ flowchart LR
   collector -->|"HTTPS DescribeServices and DescribeTasks"| ecsapi
   ecsapi -->|"task and service metrics"| collector
   collector -->|"HTTP 9091 push"| pushgw
+  collector -->|"HTTPS FilterLogEvents, cursor on EFS"| cwl
+  collector -->|"HTTP 3100 push app logs"| loki
+  collector -->|"HTTPS GetMetricData, basic metrics only"| cwapi
+  collector -->|"S3 ListBucket and GetObject"| s3alb
+  collector -->|"HTTP 3100 push access logs"| loki
   mssqljob -->|"HTTPS GetSecretValue"| smsec
   smsec -->|"host, port, user, password"| mssqljob
   mssqljob -->|"TDS 1433 DMV query"| rdsapp
@@ -110,9 +119,8 @@ classDef internet fill:#eceff1,stroke:#607d8b,color:#263238
 classDef planned fill:#fafafa,stroke:#9e9e9e,stroke-dasharray:5,color:#616161
 
 class apis,vaultapp,albtargets,rdsapp compute
-class ecsapi,smsec,cur,s3cur,s3cfg,ses,ssm managed
+class ecsapi,smsec,cur,s3cur,s3cfg,ses,ssm,cwl,cwapi,s3alb managed
 class init,pushgw,blkbox,alloy managed
 class prom,loki,tempo,alertmgr,grafana,efs observability
 class collector,mssqljob,budgetjob,reportjob observability
-class viewer,mailbox internet
-class receivers planned
+class viewer,mailbox,receivers internet

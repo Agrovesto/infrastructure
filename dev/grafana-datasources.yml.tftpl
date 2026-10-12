@@ -8,8 +8,8 @@
 # the container mounts at /etc/grafana/provisioning/datasources.
 #
 # The URLs are docker service names on the compose network, so Grafana reaches
-# Loki and Prometheus without either of them publishing a public port, and the
-# uids are what the provisioned dashboards reference.
+# Loki, Tempo and Prometheus without any of them publishing a public port, and
+# the uids are what the provisioned dashboards reference.
 # =============================================================================
 apiVersion: 1
 
@@ -25,6 +25,28 @@ datasources:
       # Ceiling for Explore and the dashboard log panels; raise it here if you
       # would rather scroll deeper than 1000 lines.
       maxLines: 1000
+      # A log line carrying trace_id=... becomes a link into the trace that
+      # produced it — the same matcher the prod stack provisions. Backslashes
+      # are literal in a templatefile template (only $${ and %%{ are escapes),
+      # so \w is written as-is.
+      derivedFields:
+        - name: TraceID
+          matcherRegex: 'trace_id=(\w+)'
+          datasourceUid: agrovesto-tempo
+          url: "$${__value.raw}"
+
+  - name: Tempo
+    uid: agrovesto-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      # A span's logs one click away, filtered by trace id — the other half of
+      # the Loki <-> Tempo pair.
+      tracesToLogsV2:
+        datasourceUid: agrovesto-loki
+        filterByTraceID: true
 
   - name: Prometheus
     uid: agrovesto-prom

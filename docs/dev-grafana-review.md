@@ -12,8 +12,9 @@ were changed as part of the production RabbitMQ network restriction.
 - Container port 3000 is published on host loopback only. nginx reaches it on
   the default Compose network; it does not require `nomaos_edge` or `nomaos_data`.
 - Grafana data/provisioning/dashboards are mounted from the logging directory on
-  the encrypted logging EBS volume. Datasources are private Loki and Prometheus
-  Compose endpoints. A `/api/health` container check is configured.
+  the encrypted logging EBS volume. Datasources are private Loki, Tempo and
+  Prometheus Compose endpoints (Loki ↔ Tempo jump links provisioned both ways).
+  A `/api/health` container check is configured.
 - GitHub SSO is conditional on both client credentials being supplied. CI wires
   the dev GitHub OAuth secrets; the repository alone cannot establish whether
   the secrets are actually configured. Local administrator login stays enabled.

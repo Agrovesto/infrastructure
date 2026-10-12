@@ -450,6 +450,219 @@ run "ecs_collector_is_scheduled" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# The two extra collectors: basic CloudWatch metrics and the ALB access logs
+# -----------------------------------------------------------------------------
+
+run "cloudwatch_basic_metrics_are_collected" {
+  command = plan
+
+  assert {
+    condition     = strcontains(local.collector_command, "cw_metrics.py")
+    error_message = "The CloudWatch metric collector rides the existing ECS collector task: same schedule, same checkpoint volume, no second task to run."
+  }
+
+  assert {
+    condition     = strcontains(aws_s3_object.config["collector/cw_metrics.py"].content, "cloudwatch_collector_up")
+    error_message = "The collector script must be published for the init container to sync, and must report its own failure as a metric."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ALB_ARN_SUFFIX"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "METRIC_DELAY_SECONDS"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "SERVICE_PREFIX"),
+    ])
+    error_message = "The task hands the collector the prod load balancer, the CloudWatch delivery delay and the service name prefix."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:GetMetricData"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:ListMetrics"),
+    ])
+    error_message = "Basic metrics need two CloudWatch actions; discovering dimensions with ListMetrics is what keeps every service describe permission out."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_cloudwatch_rules, "EcsServiceHighCpu"),
+      strcontains(local.prometheus_cloudwatch_rules, "EcsServiceHighMemory"),
+      strcontains(local.prometheus_cloudwatch_rules, "AlbUnhealthyTargets"),
+      strcontains(local.prometheus_cloudwatch_rules, "AlbRejectingConnections"),
+      strcontains(local.prometheus_cloudwatch_rules, "RdsLowDiskSpace"),
+      strcontains(local.prometheus_cloudwatch_rules, "NatGatewayPortExhaustion"),
+      strcontains(local.prometheus_cloudwatch_rules, "CloudwatchMetricsStale"),
+    ])
+    error_message = "Everything the collector publishes must be alertable: service CPU and memory, unhealthy targets, database resources, NAT ports, and the collector itself going quiet."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_object.config["grafana/dashboards/resources.json"].content_type == "application/json",
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "rds_free_storage_space_bytes"),
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "alb_unhealthy_hosts"),
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "nat_gateway_bytes_out_to_destination"),
+    ])
+    error_message = "The cloud resources dashboard is provisioned with the others and queries what the collector publishes."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.config["grafana/dashboards/ecs.json"].content, "ecs_service_cpu_utilization_percent"),
+      strcontains(aws_s3_object.config["grafana/dashboards/ecs.json"].content, "ecs_service_memory_utilization_percent"),
+    ])
+    error_message = "Per-service CPU and memory belong on the ECS platform dashboard, next to the task counts."
+  }
+
+  assert {
+    condition     = output.dashboard_uids.resources == "agrovesto-resources"
+    error_message = "The new dashboard uid is published with the others."
+  }
+}
+
+run "alb_access_logs_are_shipped" {
+  command = plan
+
+  assert {
+    condition     = strcontains(local.collector_command, "alb_logs.py")
+    error_message = "The ALB access log shipper runs in the collector task too."
+  }
+
+  assert {
+    condition     = startswith(local.alb_logs_bucket, "agrovesto-prod-alb-logs-")
+    error_message = "With no explicit bucket the name prod/alb.tf creates is derived, so shipping works with no new variable value."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ALB_LOGS_BUCKET"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ACCOUNT_ID"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "MAX_OBJECTS_PER_RUN"),
+    ])
+    error_message = "The task tells the shipper which bucket to read, whose account the key paths belong to and how much one run may take."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "s3:ListBucket"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "arn:aws:s3:::${local.alb_logs_bucket}"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "arn:aws:s3:::${local.alb_logs_bucket}/${var.alb_access_logs_prefix}*"),
+    ])
+    error_message = "The shipper reads the access log bucket and nothing else: list on the bucket, get on the prefix."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.config["collector/alb_logs.py"].content, "alb_logs_shipper_up"),
+      strcontains(aws_s3_object.config["collector/alb_logs.py"].content, "ELB-HealthChecker"),
+    ])
+    error_message = "The shipper reports its own state as a metric and keeps health checks distinguishable from client requests."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_alb_rules, "AlbLogShipperFailing"),
+      strcontains(local.prometheus_alb_rules, "AlbLogShipperStalled"),
+      strcontains(local.prometheus_alb_rules, "AlbAccessLogsMissing"),
+      strcontains(local.prometheus_alb_rules, "AlbLogParseErrors"),
+      strcontains(local.loki_rules, "AlbRequestErrorSpike"),
+      strcontains(local.loki_rules, "AlbClientErrorFlood"),
+    ])
+    error_message = "A shipper that stops, a bucket that stops receiving and a log format that changes are all alertable, and the shipped lines drive the traffic alerts."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_object.config["grafana/dashboards/traffic.json"].content_type == "application/json",
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "count_over_time"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "client_ip"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "user_agent"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "alb_logs_shipped_total"),
+    ])
+    error_message = "The traffic dashboard counts requests per day per service and breaks them down by client IP, URI and user agent, and watches the shipper."
+  }
+
+  assert {
+    condition     = output.dashboard_uids.traffic == "agrovesto-traffic"
+    error_message = "The traffic dashboard uid is published with the others."
+  }
+}
+
+run "loki_rules_are_published_under_the_tenant_directory" {
+  command = plan
+
+  # Loki's local rule storage reads <directory>/<tenant>/<namespace>, and with
+  # auth_enabled false the tenant every line is ingested under is literally
+  # "fake". A rule file one level higher is never loaded, and the ruler does not
+  # complain: the alerts simply never evaluate.
+  assert {
+    condition     = contains(keys(aws_s3_object.config), "loki/rules/fake/application.yml")
+    error_message = "The Loki rules must be published under the fake tenant directory or the ruler loads nothing."
+  }
+
+  assert {
+    condition     = aws_s3_object.config["loki/rules/fake/application.yml"].key == "config/loki/rules/fake/application.yml"
+    error_message = "The init container syncs config/loki into the task, so the rules land at /loki/config/rules/fake/application.yml."
+  }
+
+  assert {
+    condition     = strcontains(local.loki_config, "directory: /loki/config/rules")
+    error_message = "The ruler's local storage directory must be the directory the rules are synced into."
+  }
+}
+
+run "extra_collectors_can_be_turned_off" {
+  command = plan
+
+  variables {
+    enable_cloudwatch_metrics = false
+    enable_alb_log_shipping   = false
+  }
+
+  assert {
+    condition     = !strcontains(local.collector_command, "cw_metrics.py") && !strcontains(local.collector_command, "alb_logs.py")
+    error_message = "Both extra collectors are optional."
+  }
+
+  assert {
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "Turning the extras off must not turn the ECS collector or its log shipper off."
+  }
+
+  assert {
+    condition = alltrue([
+      !contains(keys(aws_s3_object.config), "collector/cw_metrics.py"),
+      !contains(keys(aws_s3_object.config), "collector/alb_logs.py"),
+      !contains(keys(aws_s3_object.config), "prometheus/rules/cloudwatch.yml"),
+      !contains(keys(aws_s3_object.config), "prometheus/rules/alb.yml"),
+      !contains(keys(aws_s3_object.config), "grafana/dashboards/resources.json"),
+      !contains(keys(aws_s3_object.config), "grafana/dashboards/traffic.json"),
+    ])
+    error_message = "Nothing that reads those metrics or logs is published when they are switched off."
+  }
+
+  assert {
+    condition     = length(aws_s3_object.config) == 20
+    error_message = "Back to what the ECS collector and its log shipper need."
+  }
+
+  assert {
+    condition     = !strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:GetMetricData")
+    error_message = "Without the CloudWatch collector the task role keeps no CloudWatch read."
+  }
+
+  assert {
+    condition     = !strcontains(jsonencode(aws_iam_role_policy.task.policy), local.alb_logs_bucket)
+    error_message = "Without the log shipper the task role keeps no access to the access log bucket."
+  }
+
+  assert {
+    condition     = !contains(keys(output.dashboard_uids), "resources") && !contains(keys(output.dashboard_uids), "traffic")
+    error_message = "The dashboard uids follow the collectors that fill them."
+  }
+}
+
 run "scheduled_tasks_can_be_turned_off" {
   command = plan
 
@@ -479,7 +692,7 @@ run "scheduled_tasks_can_be_turned_off" {
   }
 
   assert {
-    condition     = length(aws_s3_object.config) == 18
+    condition     = length(aws_s3_object.config) == 24
     error_message = "Without RDS monitoring the database script and rules are not published."
   }
 }

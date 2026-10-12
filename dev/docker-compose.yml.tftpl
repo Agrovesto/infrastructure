@@ -8,9 +8,10 @@
 # the host is one `docker compose up -d` away, see dev/README.md.
 #
 # The services after `vault` are the on-host logging & metrics stack (Loki,
-# Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of this
-# compose project on purpose: they share the docker network with the apps, which
-# is how Grafana reaches Loki and how Alloy reaches the docker daemon. No AWS
+# Tempo, Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of
+# this compose project on purpose: they share the docker network with the apps,
+# which is how Grafana reaches Loki and Tempo, how Alloy reaches the docker
+# daemon, and how the APIs' OTEL_* env block finds Alloy's OTLP receiver. No AWS
 # service is involved in any of it.
 # =============================================================================
 services:
@@ -340,9 +341,10 @@ services:
 %{ if logging.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Logging & metrics. Every published port is on 127.0.0.1: the security group
-  # has no ingress for them either, so access is `ssh -L` or the Grafana vhost
-  # in nginx.conf. Each container is limited so it cannot starve SQL Server.
+  # Logging, metrics & traces. Every published port is on 127.0.0.1: the
+  # security group has no ingress for them either, so access is `ssh -L` or the
+  # Grafana vhost in nginx.conf. Each container is limited so it cannot starve
+  # SQL Server.
   # ─────────────────────────────────────────────────────────────────────────
 
   # Log store: single binary, filesystem storage on the logging volume, its own
@@ -365,6 +367,27 @@ services:
     cpus: "${logging.cpu_limits["loki"]}"
     mem_limit: ${logging.memory_limits_mb["loki"]}M
 
+  # Trace store: OTLP in on 4317/4318, blocks and WAL beside Loki's chunks on
+  # the logging volume, retention in config.yml (traces_retention_hours), span
+  # metrics remote-written to Prometheus. Also no shell in the image, so no
+  # health check — same trade-off as prod's monitoring/tempo.tf.
+  tempo:
+    image: ${logging.tempo_image}
+    container_name: agrovesto-tempo
+    user: "10001"
+    command:
+      - -config.file=/tempo/config.yml
+      - -target=all
+    ports:
+      - "127.0.0.1:${logging.tempo_port}:3200"
+    volumes:
+      # The whole directory is writable: config.yml (synced from S3), the WAL,
+      # the blocks and the metrics-generator WAL all live in /tempo.
+      - ${logging_root}/tempo:/tempo
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "tempo", "0.25")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "tempo", 384)}M
+
   # The collector: tails docker logs + journald, parses them, pushes to Loki.
   # Runs as root: the docker socket has to be writable and the sealed journal
   # files are only readable by root and the systemd-journal group. Both host
@@ -382,8 +405,12 @@ services:
     ports:
       # 12345: Prometheus scrape + Alloy's debug UI.
       # 3101: the Loki push API, for an app that would rather send its own logs.
+      # 4317/4318: OTLP gRPC/HTTP for the apps' spans — loopback publish only;
+      # containers on the compose network reach alloy:4317 directly.
       - "127.0.0.1:${logging.alloy_port}:12345"
       - "127.0.0.1:${logging.alloy_push_port}:3101"
+      - "127.0.0.1:${logging.alloy_otlp_grpc_port}:4317"
+      - "127.0.0.1:${logging.alloy_otlp_http_port}:4318"
     volumes:
       - ${logging_root}/alloy/config.alloy:/etc/alloy/config.alloy:ro
       # Positions file, so a container restart resumes instead of re-reading.
@@ -397,6 +424,7 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      - tempo
     cpus: "${logging.cpu_limits["alloy"]}"
     mem_limit: ${logging.memory_limits_mb["alloy"]}M
 
@@ -450,6 +478,7 @@ services:
     depends_on:
       - loki
       - prometheus
+      - tempo
     cpus: "${logging.cpu_limits["grafana"]}"
     mem_limit: ${logging.memory_limits_mb["grafana"]}M
 
@@ -464,6 +493,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${logging.prometheus_retention}
       - --storage.tsdb.retention.size=${logging.prometheus_retention_size}
+      # The receive side of every remote_write in this stack: Tempo's span
+      # metrics and the OTLP metrics Alloy fans out. Same flag as the prod
+      # monitoring stack's Prometheus.
+      - --web.enable-remote-write-receiver
     ports:
       - "127.0.0.1:${logging.prometheus_port}:9090"
     volumes:

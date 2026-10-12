@@ -663,7 +663,7 @@ variable "extra_alias_records" {
 }
 
 # -----------------------------------------------------------------------------
-# Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+# Logging, metrics & traces on the host (Loki + Tempo + Alloy + Grafana + Prometheus)
 #
 # The whole stack runs as docker containers on the app EC2 instance: it is
 # rendered into user_data by dev/locals.tf, so there is no separate host, no
@@ -673,10 +673,11 @@ variable "extra_alias_records" {
 
 variable "logging" {
   description = <<-EOT
-    On-host logging and metrics: Loki stores the logs and answers LogQL, Alloy
-    collects them (docker containers + journald + an optional push endpoint),
-    Grafana visualises and queries them, and Prometheus/cAdvisor/node-exporter
-    add the host and per-container metrics the dashboards sit on top of.
+    On-host logging, metrics and traces: Loki stores the logs and answers
+    LogQL, Tempo keeps the OTLP traces, Alloy collects both (docker containers
+    + journald + an optional push endpoint + OTLP from the APIs), Grafana
+    visualises and queries them, and Prometheus/cAdvisor/node-exporter add the
+    host and per-container metrics the dashboards sit on top of.
   EOT
 
   type = object({
@@ -686,6 +687,7 @@ variable "logging" {
     # that works here works there. No :latest — a rebuilt container must not
     # change what the dev logs look like.
     loki_image          = optional(string, "grafana/loki:3.4.2")
+    tempo_image         = optional(string, "grafana/tempo:2.7.1")
     alloy_image         = optional(string, "grafana/alloy:v1.6.1")
     grafana_image       = optional(string, "grafana/grafana-oss:11.5.2")
     prometheus_image    = optional(string, "prom/prometheus:v3.1.0")
@@ -695,14 +697,20 @@ variable "logging" {
 
     # Published on 127.0.0.1 on the host only, and the security group has no
     # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
-    loki_port          = optional(number, 3100)
-    alloy_port         = optional(number, 12345)
-    alloy_push_port    = optional(number, 3101)
-    grafana_port       = optional(number, 3000)
-    prometheus_port    = optional(number, 9090)
-    cadvisor_port      = optional(number, 8080)
-    node_exporter_port = optional(number, 9100)
-    alertmanager_port  = optional(number, 9093)
+    # The OTLP ports are Alloy's: apps on the compose network reach them as
+    # alloy:4317/4318 without the publish; the loopback mapping is for a host
+    # process or a tunnel.
+    loki_port            = optional(number, 3100)
+    tempo_port           = optional(number, 3200)
+    alloy_port           = optional(number, 12345)
+    alloy_push_port      = optional(number, 3101)
+    alloy_otlp_grpc_port = optional(number, 4317)
+    alloy_otlp_http_port = optional(number, 4318)
+    grafana_port         = optional(number, 3000)
+    prometheus_port      = optional(number, 9090)
+    cadvisor_port        = optional(number, 8080)
+    node_exporter_port   = optional(number, 9100)
+    alertmanager_port    = optional(number, 9093)
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
@@ -715,10 +723,13 @@ variable "logging" {
     allowed_cidrs = optional(list(string), [])
 
     # --- retention ------------------------------------------------------------
-    # Loki's compactor and Prometheus' TSDB delete on these numbers; the volume
-    # they live on is small on purpose (see volume_size_gb).
+    # Loki's compactor, Prometheus' TSDB and Tempo's compactor delete on these
+    # numbers; the volume they live on is small on purpose (see
+    # volume_size_gb). Traces keep the prod monitoring stack's 14 days so a
+    # query answered here is answered there.
     loki_retention_days       = optional(number, 14)
     system_retention_days     = optional(number, 5)
+    traces_retention_hours    = optional(number, 336)
     prometheus_retention      = optional(string, "14d")
     prometheus_retention_size = optional(string, "3GB")
 
@@ -748,8 +759,12 @@ variable "logging" {
 
     # Per-container caps, one entry per observability container. These are the
     # difference between "the logging stack is cheap to run" and "the box died".
+    # Tempo joins the list with a dev-sized cap; the compose file reads it with
+    # lookup() like Alertmanager, so an override written before it existed
+    # still renders.
     cpu_limits = optional(map(string), {
       loki          = "0.50"
+      tempo         = "0.25"
       alloy         = "0.25"
       grafana       = "0.50"
       prometheus    = "0.50"
@@ -759,6 +774,7 @@ variable "logging" {
     })
     memory_limits_mb = optional(map(number), {
       loki          = 384
+      tempo         = 384
       alloy         = 192
       grafana       = 192
       prometheus    = 384
@@ -902,11 +918,25 @@ variable "alarm_cpu_percent" {
 }
 
 variable "alert_rules" {
-  description = "Thresholds for the dev host's Prometheus alert rules (Alertmanager -> SNS alerts topic)"
+  description = "Thresholds for the dev host's Prometheus and Loki alert rules (Alertmanager -> SNS alerts topic)"
   type = object({
+    # Host, from node_exporter.
     cpu_percent       = optional(number, 90)
     memory_percent    = optional(number, 90)
     disk_free_percent = optional(number, 10)
+
+    # Containers, from cAdvisor, each measured against its own compose limit:
+    # a container can be pinned at mem_limit while the host still has memory
+    # free, and that container is the one the kernel kills.
+    container_memory_percent    = optional(number, 90)
+    container_cpu_percent       = optional(number, 90)
+    container_throttled_percent = optional(number, 25)
+
+    # Log-based, from the Loki ruler: lines or responses per second, measured
+    # over log_rule_window.
+    log_error_rate  = optional(number, 1)
+    nginx_5xx_rate  = optional(number, 0.1)
+    log_rule_window = optional(string, "10m")
   })
   default = {}
 }

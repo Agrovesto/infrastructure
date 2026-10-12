@@ -363,6 +363,199 @@ locals {
               summary: "ECS log shipping into Loki has stalled"
   EOT
 
+  # Resource alerts on the basic CloudWatch metrics the collector republishes
+  # (collector/cw_metrics.py). Thresholds are literals like the rest of the rule
+  # files; every series here is a window total or an average, so `for:` is what
+  # keeps a single bad window from paging anyone.
+  prometheus_cloudwatch_rules = <<-EOT
+    groups:
+      - name: cloudwatch
+        rules:
+          - alert: CloudwatchCollectorFailing
+            expr: cloudwatch_collector_up == 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The CloudWatch metric collector cannot read basic metrics"
+
+          - alert: CloudwatchMetricsStale
+            expr: time() - cloudwatch_collector_timestamp_seconds > 900
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Basic CloudWatch metrics have not been refreshed for 15m"
+
+          - alert: EcsServiceHighCpu
+            expr: ecs_service_cpu_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is above 85% CPU"
+              description: "{{ $labels.service }} on {{ $labels.cluster }} averaged {{ $value | printf \"%.0f\" }}% of its task CPU for 15 minutes."
+
+          - alert: EcsServiceHighMemory
+            expr: ecs_service_memory_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is above 85% memory"
+              description: "{{ $labels.service }} on {{ $labels.cluster }} averaged {{ $value | printf \"%.0f\" }}% of its task memory for 15 minutes. Past 100% Fargate kills the task."
+
+          - alert: EcsServiceMemoryCritical
+            expr: ecs_service_memory_utilization_percent_max > 95
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.service }} is about to be OOM-killed"
+              description: "Peak memory reached {{ $value | printf \"%.0f\" }}% of the task limit."
+
+          - alert: AlbUnhealthyTargets
+            expr: alb_unhealthy_hosts > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.target_group }} has unhealthy targets"
+              description: "{{ $value }} target(s) failing health checks behind {{ $labels.load_balancer }}."
+
+          - alert: AlbNoHealthyTargets
+            expr: alb_healthy_hosts == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.target_group }} has no healthy target"
+              description: "Every target behind {{ $labels.load_balancer }} is failing health checks; that service is down."
+
+          - alert: AlbRejectingConnections
+            expr: alb_rejected_connections > 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The load balancer is rejecting connections"
+              description: "{{ $value }} connection(s) rejected in the window - targets are at their connection limit."
+
+          - alert: AlbTargetErrorSpike
+            expr: sum by (service, load_balancer) (alb_target_5xx_count) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is returning 5xx through the load balancer"
+              description: "Target 5xx responses in five consecutive windows on {{ $labels.load_balancer }}."
+
+          - alert: AlbSlowResponses
+            expr: alb_target_response_time_seconds > 2
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.load_balancer }} responses average over 2s"
+              description: "Average target response time is {{ $value | printf \"%.2f\" }}s."
+
+          - alert: RdsHighCpu
+            expr: rds_cpu_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} is above 85% CPU"
+              description: "Average CPU {{ $value | printf \"%.0f\" }}% for 15 minutes."
+
+          - alert: RdsLowFreeMemory
+            expr: rds_freeable_memory_bytes < 268435456
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} has under 256MB freeable memory"
+              description: "{{ $value | humanize1024 }}B freeable; SQL Server starts paging and queries slow down."
+
+          - alert: RdsLowDiskSpace
+            expr: rds_free_storage_space_bytes < 5368709120
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Database {{ $labels.db_instance }} has under 5GB of free storage"
+              description: "{{ $value | humanize1024 }}B free on the volume."
+
+          - alert: RdsBurstBalanceLow
+            expr: rds_burst_balance_percent < 20
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} is running out of I/O burst balance"
+              description: "{{ $value | printf \"%.0f\" }}% burst balance left; gp2 throughput drops to baseline at zero."
+
+          - alert: NatGatewayPortExhaustion
+            expr: nat_gateway_error_port_allocation > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "NAT gateway {{ $labels.nat_gateway }} failed to allocate a port"
+              description: "{{ $value }} allocation error(s): outbound connections are being dropped."
+
+          - alert: EfsBurstCreditsLow
+            expr: efs_burst_credit_balance_bytes < 1073741824
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "EFS {{ $labels.file_system }} is low on burst credits"
+              description: "{{ $value | humanize1024 }}B of credits left; bursting throughput is throttled to baseline once they run out."
+  EOT
+
+  # Alerts on the ALB access log shipper (collector/alb_logs.py) and on what it
+  # delivers. Health checks alone keep the stream alive, so an hour without any
+  # line means the pipeline broke rather than that nobody visited.
+  prometheus_alb_rules = <<-EOT
+    groups:
+      - name: alb-logs
+        rules:
+          - alert: AlbLogShipperFailing
+            expr: alb_logs_shipper_up == 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The ALB access log shipper cannot read the log bucket"
+
+          - alert: AlbLogShipperStalled
+            expr: time() - alb_logs_scrape_timestamp_seconds > 900
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ALB access log shipping into Loki has stalled"
+
+          - alert: AlbAccessLogsMissing
+            expr: time() - alb_logs_newest_event_timestamp_seconds > 3600
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "No ALB access log line has reached Loki for an hour"
+              description: "Health checks are logged too, so an empty hour means delivery or shipping broke."
+
+          - alert: AlbLogParseErrors
+            expr: alb_logs_parse_errors_total - alb_logs_parse_errors_total offset 30m > 100
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ALB access log lines are failing to parse"
+              description: "{{ $value }} unparseable line(s) in 30 minutes; the log format may have changed."
+  EOT
+
   prometheus_cost_rules = <<-EOT
     groups:
       - name: cost
@@ -506,7 +699,15 @@ locals {
       reporting_enabled: false
   EOT
 
-  # LogQL alerts on application/ALB logs once services push them (see README).
+  # LogQL alerts on what actually reaches Loki: application lines once services
+  # push them (see README), and the ALB access logs the collector ships, where
+  # `status`, `method`, `service` and `kind` are stream labels.
+  #
+  # Published as loki/rules/fake/application.yml, not loki/rules/application.yml:
+  # Loki's local rule storage reads <directory>/<tenant>/<namespace>, and with
+  # auth_enabled=false the tenant every line is ingested under is literally
+  # "fake" (pkg/loki/modules.go injects it). A file one level higher is never
+  # loaded, and the ruler stays silent about it.
   loki_rules = <<-EOT
     groups:
       - name: application-logs
@@ -518,6 +719,26 @@ locals {
               severity: warning
             annotations:
               summary: "Error-rate spike in application logs"
+
+      - name: alb-traffic
+        rules:
+          - alert: AlbRequestErrorSpike
+            expr: sum by (service) (rate({source="alb", kind="request", status=~"5.."}[10m])) > 0.05
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is answering 5xx at the load balancer"
+              description: "Sustained above three 5xx responses a minute in the access logs."
+
+          - alert: AlbClientErrorFlood
+            expr: sum(rate({source="alb", kind="request", status=~"4.."}[10m])) > 10
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Unusual 4xx volume at the load balancer"
+              description: "More than 600 client errors a minute: usually scanning, or a client release calling a route that moved."
   EOT
 
   # --- Tempo -----------------------------------------------------------------------

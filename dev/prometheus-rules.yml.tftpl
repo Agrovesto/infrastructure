@@ -62,3 +62,37 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} keeps restarting"
           description: "{{ $labels.name }} restarted {{ $value }} times in 15 minutes."
+
+      # Resource alerts are per container and measured against the container's
+      # own compose limits, not against the host: a container can be pinned at
+      # its mem_limit while the box still has memory free, and that container is
+      # the one the kernel is about to kill.
+      - alert: ContainerNearMemoryLimit
+        expr: container_memory_working_set_bytes{name=~"agrovesto-.+"} / on(id, name) group_left container_spec_memory_limit_bytes{name=~"agrovesto-.+"} * 100 > ${container_memory_percent}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is near its memory limit"
+          description: "{{ $value | printf \"%.0f\" }}% of mem_limit for 10 minutes. At 100% the kernel kills it and ContainerRestarting follows."
+
+      - alert: ContainerHighCpu
+        expr: 100 * sum by (name) (rate(container_cpu_usage_seconds_total{name=~"agrovesto-.+"}[5m])) / (max by (name) (container_spec_cpu_quota{name=~"agrovesto-.+"} > 0) / max by (name) (container_spec_cpu_period{name=~"agrovesto-.+"})) > ${container_cpu_percent}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is near its CPU limit"
+          description: "{{ $value | printf \"%.0f\" }}% of its cpus limit for 15 minutes. Containers without a cpus limit are not evaluated."
+
+      # Throttling is the sharper signal: the cgroup wanted more CPU than its
+      # quota allowed in that period, so the work waited whether or not the host
+      # was busy.
+      - alert: ContainerCpuThrottled
+        expr: rate(container_cpu_cfs_throttled_periods_total{name=~"agrovesto-.+"}[5m]) / rate(container_cpu_cfs_periods_total{name=~"agrovesto-.+"}[5m]) * 100 > ${container_throttled_percent}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is being CPU throttled"
+          description: "{{ $value | printf \"%.0f\" }}% of the last 15 minutes were throttled periods. Raise its cpus limit or find the hot loop."

@@ -170,6 +170,31 @@ resource "aws_iam_role_policy" "task" {
           Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
           Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
         }
+      ] : [],
+      local.cloudwatch_metrics_enabled ? [
+        {
+          # The two read actions the free basic metrics need. Dimension sets are
+          # discovered with ListMetrics, so the collector never needs a describe
+          # permission for ECS, ELB, RDS, EC2 or EFS.
+          Sid      = "ReadBasicCloudWatchMetrics"
+          Effect   = "Allow"
+          Action   = ["cloudwatch:ListMetrics", "cloudwatch:GetMetricData"]
+          Resource = ["*"]
+        }
+      ] : [],
+      local.alb_log_shipping_enabled ? [
+        {
+          Sid      = "ListAlbAccessLogs"
+          Effect   = "Allow"
+          Action   = ["s3:ListBucket"]
+          Resource = ["arn:aws:s3:::${local.alb_logs_bucket}"]
+        },
+        {
+          Sid      = "ReadAlbAccessLogs"
+          Effect   = "Allow"
+          Action   = ["s3:GetObject"]
+          Resource = ["arn:aws:s3:::${local.alb_logs_bucket}/${var.alb_access_logs_prefix}*"]
+        }
     ] : [])
   })
 }

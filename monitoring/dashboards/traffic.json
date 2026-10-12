@@ -1,0 +1,1636 @@
+{
+ "uid": "agrovesto-traffic",
+ "title": "Traffic: requests, status and clients",
+ "description": "Every request the prod load balancer accepted. The collector parses the ALB access logs out of S3 and ships them to Loki as JSON lines (monitoring/scripts/alb_logs.py), so volume, status, latency, client IP, URI and user agent are queryable here. Health-check requests are shipped too but tagged kind=\"health\" and left out of the client panels.",
+ "tags": [
+  "agrovesto",
+  "alb",
+  "traffic",
+  "loki"
+ ],
+ "timezone": "browser",
+ "refresh": "5m",
+ "schemaVersion": 39,
+ "version": 1,
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "service",
+    "label": "Service",
+    "type": "query",
+    "datasource": {
+     "type": "loki",
+     "uid": "loki"
+    },
+    "query": {
+     "type": 1,
+     "label": "service",
+     "stream": "{source=\"alb\"}",
+     "refId": "LokiVariableQueryEditor-VariableQuery"
+    },
+    "current": {
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "includeAll": true,
+    "allValue": ".*",
+    "multi": true,
+    "refresh": 2,
+    "regex": "",
+    "sort": 1,
+    "options": []
+   },
+   {
+    "name": "status",
+    "label": "Status",
+    "type": "query",
+    "datasource": {
+     "type": "loki",
+     "uid": "loki"
+    },
+    "query": {
+     "type": 1,
+     "label": "status",
+     "stream": "{source=\"alb\"}",
+     "refId": "LokiVariableQueryEditor-VariableQuery"
+    },
+    "current": {
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "includeAll": true,
+    "allValue": ".*",
+    "multi": true,
+    "refresh": 2,
+    "regex": "",
+    "sort": 1,
+    "options": []
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "Volume",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   }
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Requests (range)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"}[$__range]))",
+     "legendFormat": "requests",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 0,
+    "y": 1
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Requests (24h)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(count_over_time({source=\"alb\", kind=\"request\"}[24h]))",
+     "legendFormat": "requests",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 3,
+    "y": 1
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "5xx (range)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(count_over_time({source=\"alb\", kind=\"request\", status=~\"5..\", service=~\"$service\"}[$__range]))",
+     "legendFormat": "5xx",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 6,
+    "y": 1
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "4xx (range)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(count_over_time({source=\"alb\", kind=\"request\", status=~\"4..\", service=~\"$service\"}[$__range]))",
+     "legendFormat": "4xx",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 9,
+    "y": 1
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Error rate",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "100 * sum(count_over_time({source=\"alb\", kind=\"request\", status=~\"[45]..\", service=~\"$service\"}[$__range])) / sum(count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"}[$__range]))",
+     "legendFormat": "% 4xx+5xx",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 12,
+    "y": 1
+   }
+  },
+  {
+   "id": 7,
+   "type": "stat",
+   "title": "Distinct client IPs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "count(sum by (client_ip) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__range])))",
+     "legendFormat": "clients",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 15,
+    "y": 1
+   }
+  },
+  {
+   "id": 8,
+   "type": "stat",
+   "title": "p95 target latency",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "quantile_over_time(0.95, {source=\"alb\", kind=\"request\", service=~\"$service\"} | json | target_response_time != \"-\" | unwrap target_response_time | __error__=\"\" [$__range])",
+     "legendFormat": "p95",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 3
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 18,
+    "y": 1
+   }
+  },
+  {
+   "id": 9,
+   "type": "stat",
+   "title": "Shipper freshness",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "time() - alb_logs_scrape_timestamp_seconds",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "description": "Age of the last ALB log shipper run (Prometheus side).",
+   "gridPos": {
+    "h": 5,
+    "w": 3,
+    "x": 21,
+    "y": 1
+   }
+  },
+  {
+   "id": 10,
+   "type": "row",
+   "title": "Requests over time",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 6
+   }
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Requests per day by service",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"}[1d]))",
+     "legendFormat": "{{service}}",
+     "interval": "1d",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "One point per service per day: the query interval is pinned to 1d, so each point is a whole day of requests.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 7
+   }
+  },
+  {
+   "id": 12,
+   "type": "timeseries",
+   "title": "Requests per second by service",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (rate({source=\"alb\", kind=\"request\", service=~\"$service\"}[$__auto]))",
+     "legendFormat": "{{service}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "reqps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 7
+   }
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "Requests by status",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (status) (count_over_time({source=\"alb\", kind=\"request\", status=~\"$status\"}[$__auto]))",
+     "legendFormat": "{{status}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 15
+   }
+  },
+  {
+   "id": 14,
+   "type": "timeseries",
+   "title": "Requests by method",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (method) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"}[$__auto]))",
+     "legendFormat": "{{method}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 15
+   }
+  },
+  {
+   "id": 15,
+   "type": "timeseries",
+   "title": "Client requests vs health checks",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (kind) (count_over_time({source=\"alb\"}[$__auto]))",
+     "legendFormat": "{{kind}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Health checks are logged by the load balancer too; they are the reason the stream is never empty.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 15
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "Target latency p50 / p95 / p99",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "quantile_over_time(0.5, {source=\"alb\", kind=\"request\", service=~\"$service\"} | json | target_response_time != \"-\" | unwrap target_response_time | __error__=\"\" [$__auto])",
+     "legendFormat": "p50",
+     "queryType": "range"
+    },
+    {
+     "refId": "B",
+     "expr": "quantile_over_time(0.95, {source=\"alb\", kind=\"request\", service=~\"$service\"} | json | target_response_time != \"-\" | unwrap target_response_time | __error__=\"\" [$__auto])",
+     "legendFormat": "p95",
+     "queryType": "range"
+    },
+    {
+     "refId": "C",
+     "expr": "quantile_over_time(0.99, {source=\"alb\", kind=\"request\", service=~\"$service\"} | json | target_response_time != \"-\" | unwrap target_response_time | __error__=\"\" [$__auto])",
+     "legendFormat": "p99",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "decimals": 3
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "target_response_time is the load balancer's own measurement of the target, excluding its queueing.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 23
+   }
+  },
+  {
+   "id": 17,
+   "type": "timeseries",
+   "title": "p95 latency by service",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "quantile_over_time(0.95, {source=\"alb\", kind=\"request\", service=~\"$service\"} | json | target_response_time != \"-\" | unwrap target_response_time | __error__=\"\" [$__auto]) by (service)",
+     "legendFormat": "{{service}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "decimals": 3
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 23
+   }
+  },
+  {
+   "id": 18,
+   "type": "timeseries",
+   "title": "Bytes to clients",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(rate({source=\"alb\", kind=\"request\", service=~\"$service\"} | json | unwrap sent_bytes | __error__=\"\" [$__auto]))",
+     "legendFormat": "out",
+     "queryType": "range"
+    },
+    {
+     "refId": "B",
+     "expr": "sum(rate({source=\"alb\", kind=\"request\", service=~\"$service\"} | json | unwrap received_bytes | __error__=\"\" [$__auto]))",
+     "legendFormat": "in",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "Bps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 31
+   }
+  },
+  {
+   "id": 19,
+   "type": "timeseries",
+   "title": "Requests per service (CloudWatch)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (alb_request_count)",
+     "legendFormat": "{{service}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "The load balancer's own per-window request counts. Useful as a cross-check, and for the period before the log shipper was switched on.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 31
+   }
+  },
+  {
+   "id": 20,
+   "type": "timeseries",
+   "title": "5xx per service (CloudWatch)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (alb_target_5xx_count)",
+     "legendFormat": "{{service}} target 5xx"
+    },
+    {
+     "refId": "B",
+     "expr": "sum(alb_elb_5xx_count)",
+     "legendFormat": "load balancer 5xx"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 39
+   }
+  },
+  {
+   "id": 21,
+   "type": "row",
+   "title": "Where the requests come from",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 47
+   }
+  },
+  {
+   "id": 22,
+   "type": "table",
+   "title": "Top client IPs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(25, sum by (client_ip) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__range])))",
+     "queryType": "instant"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "client_ip",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "id": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value": "Requests"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    },
+    "showHeader": true,
+    "sortBy": []
+   },
+   "description": "Client addresses as the load balancer saw them. Nothing is geocoded: the IP and the user agent are the whole story here.",
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 48
+   }
+  },
+  {
+   "id": 23,
+   "type": "timeseries",
+   "title": "Top 10 client IPs over time",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(10, sum by (client_ip) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__auto])))",
+     "legendFormat": "{{client_ip}}",
+     "queryType": "range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 48
+   }
+  },
+  {
+   "id": 24,
+   "type": "table",
+   "title": "Top URIs",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(25, sum by (uri) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__range])))",
+     "queryType": "instant"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "uri",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "id": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value": "Requests"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    },
+    "showHeader": true,
+    "sortBy": []
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 57
+   }
+  },
+  {
+   "id": 25,
+   "type": "table",
+   "title": "Top hosts",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(15, sum by (host) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__range])))",
+     "queryType": "instant"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "host",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "id": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value": "Requests"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    },
+    "showHeader": true,
+    "sortBy": []
+   },
+   "description": "Host-header routing: one subdomain per service.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 57
+   }
+  },
+  {
+   "id": 26,
+   "type": "table",
+   "title": "Top user agents",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(20, sum by (user_agent) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"} | json [$__range])))",
+     "queryType": "instant"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "user_agent",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "id": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value": "Requests"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    },
+    "showHeader": true,
+    "sortBy": []
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 24,
+    "x": 0,
+    "y": 65
+   }
+  },
+  {
+   "id": 27,
+   "type": "bargauge",
+   "title": "Requests per service (range)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (count_over_time({source=\"alb\", kind=\"request\", service=~\"$service\"}[$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "displayMode": "gradient",
+    "legend": {
+     "show": false
+    },
+    "maxVizHeight": 300,
+    "minVizHeight": 16,
+    "minVizWidth": 8,
+    "namePlacement": "auto",
+    "orientation": "horizontal",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showUnfilled": true,
+    "valueMode": "color"
+   },
+   "gridPos": {
+    "h": 6,
+    "w": 24,
+    "x": 0,
+    "y": 73
+   }
+  },
+  {
+   "id": 28,
+   "type": "logs",
+   "title": "Recent requests",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{source=\"alb\", kind=\"request\", service=~\"$service\"} | json | line_format \"{{.client_ip}} {{.method}} {{.status}} {{.host}}{{.uri}} {{.target_response_time}}s {{.user_agent}}\"",
+     "queryType": "range",
+     "maxLines": 500
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showTime": true,
+    "showLabels": false,
+    "showCommonLabels": false,
+    "wrapLogMessage": true,
+    "prettifyLogMessage": false,
+    "enableLogDetails": true,
+    "dedupEnabled": false,
+    "sortOrder": "Descending",
+    "logTimeStyle": "ISO",
+    "tolerance": 0
+   },
+   "gridPos": {
+    "h": 12,
+    "w": 24,
+    "x": 0,
+    "y": 79
+   }
+  },
+  {
+   "id": 29,
+   "type": "logs",
+   "title": "Recent 5xx",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{source=\"alb\", kind=\"request\", status=~\"5..\"} | json | line_format \"{{.client_ip}} {{.service}} {{.status}}/{{.target_status}} {{.method}} {{.uri}} {{.error_reason}} {{.classification}} {{.trace_id}}\"",
+     "queryType": "range",
+     "maxLines": 500
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showTime": true,
+    "showLabels": false,
+    "showCommonLabels": false,
+    "wrapLogMessage": true,
+    "prettifyLogMessage": false,
+    "enableLogDetails": true,
+    "dedupEnabled": false,
+    "sortOrder": "Descending",
+    "logTimeStyle": "ISO",
+    "tolerance": 0
+   },
+   "description": "trace_id links a failed request to Tempo when the service exports traces.",
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 91
+   }
+  },
+  {
+   "id": 30,
+   "type": "row",
+   "title": "Shipper health",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 101
+   }
+  },
+  {
+   "id": 31,
+   "type": "timeseries",
+   "title": "Lines shipped per service",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (service) (rate(alb_logs_shipped_total[5m]))",
+     "legendFormat": "{{service}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Access log lines per second pushed into Loki.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 102
+   }
+  },
+  {
+   "id": 32,
+   "type": "timeseries",
+   "title": "Objects and parse errors",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_logs_objects_run_total",
+     "legendFormat": "objects per run"
+    },
+    {
+     "refId": "B",
+     "expr": "alb_logs_parse_errors_total",
+     "legendFormat": "parse errors (cumulative)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 102
+   }
+  },
+  {
+   "id": 33,
+   "type": "timeseries",
+   "title": "Newest log line age",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "time() - alb_logs_newest_event_timestamp_seconds",
+     "legendFormat": "age"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "The load balancer delivers a log file every five minutes and logs health checks, so this should stay in single-digit minutes.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 102
+   }
+  }
+ ]
+}

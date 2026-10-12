@@ -1,0 +1,1513 @@
+{
+ "uid": "agrovesto-resources",
+ "title": "Cloud resources: database, load balancer, network, storage",
+ "description": "The basic CloudWatch metrics every AWS resource publishes for free, republished as Prometheus series by the collector task (monitoring/scripts/cw_metrics.py). Container Insights stays off. SQL Server internals (blocked sessions, deadlocks, database size) come from the DMV task and live on the Services dashboard; ECS task state lives on the ECS platform dashboard.",
+ "tags": [
+  "agrovesto",
+  "resources",
+  "cloudwatch",
+  "capacity"
+ ],
+ "timezone": "browser",
+ "refresh": "1m",
+ "schemaVersion": 39,
+ "version": 1,
+ "time": {
+  "from": "now-12h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "service",
+    "label": "Service",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": "label_values(ecs_service_desired_count, service)",
+    "includeAll": true,
+    "multi": true,
+    "refresh": 2
+   },
+   {
+    "name": "db",
+    "label": "Database",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": "label_values(rds_cpu_utilization_percent, db_instance)",
+    "includeAll": true,
+    "multi": true,
+    "refresh": 2
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "Headline",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   }
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Services over 85% CPU",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "count(ecs_service_cpu_utilization_percent > 85) or vector(0)",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "ECS services whose average CPU passed 85% in the last window.",
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 0,
+    "y": 1
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Unhealthy targets",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(alb_unhealthy_hosts) or vector(0)",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Targets failing their ALB health check right now.",
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 4,
+    "y": 1
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Database CPU",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "max(rds_cpu_utilization_percent{db_instance=~\"$db\"})",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 70
+       },
+       {
+        "color": "red",
+        "value": 85
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 8,
+    "y": 1
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Database free disk",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "min(rds_free_storage_space_bytes{db_instance=~\"$db\"})",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "decimals": 1
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 12,
+    "y": 1
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "NAT port errors",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(nat_gateway_error_port_allocation) or vector(0)",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Failed port allocations mean outbound connections are being dropped.",
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 16,
+    "y": 1
+   }
+  },
+  {
+   "id": 7,
+   "type": "stat",
+   "title": "Metrics freshness",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "time() - cloudwatch_collector_timestamp_seconds",
+     "legendFormat": ""
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "description": "Age of the last CloudWatch collection run. The collector runs every two minutes and reads a window that lags five minutes behind now.",
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 20,
+    "y": 1
+   }
+  },
+  {
+   "id": 8,
+   "type": "row",
+   "title": "Database (RDS host resources)",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 6
+   }
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "Database CPU",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_cpu_utilization_percent{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "rds_cpu_utilization_percent_max{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 7
+   }
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "Freeable memory",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_freeable_memory_bytes{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "bytes",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Memory available to the database without paging. Under 256MB pages an alert.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 7
+   }
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Free storage space",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_free_storage_space_bytes{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "bytes",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 7
+   }
+  },
+  {
+   "id": 12,
+   "type": "timeseries",
+   "title": "Connections",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_database_connections{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "rds_database_connections_max{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 15
+   }
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "Disk IOPS",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_read_iops{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} read"
+    },
+    {
+     "refId": "B",
+     "expr": "rds_write_iops{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} write"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "iops",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 15
+   }
+  },
+  {
+   "id": 14,
+   "type": "timeseries",
+   "title": "Disk latency",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_read_latency_seconds{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} read"
+    },
+    {
+     "refId": "B",
+     "expr": "rds_write_latency_seconds{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} write"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "decimals": 4
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 15
+   }
+  },
+  {
+   "id": 15,
+   "type": "timeseries",
+   "title": "Disk queue depth",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_disk_queue_depth{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Requests waiting on the volume. Sustained above 2 the storage is the bottleneck.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 23
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "Network throughput",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rds_network_receive_bytes_per_second{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} in"
+    },
+    {
+     "refId": "B",
+     "expr": "rds_network_transmit_bytes_per_second{db_instance=~\"$db\"}",
+     "legendFormat": "{{db_instance}} out"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "Bps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 23
+   }
+  },
+  {
+   "id": 17,
+   "type": "row",
+   "title": "Load balancer",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 31
+   }
+  },
+  {
+   "id": 18,
+   "type": "timeseries",
+   "title": "Healthy targets",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_healthy_hosts",
+     "legendFormat": "{{target_group}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 32
+   }
+  },
+  {
+   "id": 19,
+   "type": "timeseries",
+   "title": "Unhealthy targets",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_unhealthy_hosts",
+     "legendFormat": "{{target_group}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Any value above zero for five minutes pages: traffic to that service is degraded.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 32
+   }
+  },
+  {
+   "id": 20,
+   "type": "timeseries",
+   "title": "Target response time",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_target_response_time_seconds",
+     "legendFormat": "{{load_balancer}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "alb_target_response_time_seconds_max",
+     "legendFormat": "{{load_balancer}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "decimals": 3
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 32
+   }
+  },
+  {
+   "id": 21,
+   "type": "timeseries",
+   "title": "Active connections",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_active_connections",
+     "legendFormat": "{{load_balancer}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 40
+   }
+  },
+  {
+   "id": 22,
+   "type": "timeseries",
+   "title": "New connections per window",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_new_connections",
+     "legendFormat": "{{load_balancer}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Connections opened during each collection window (about two minutes).",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 40
+   }
+  },
+  {
+   "id": 23,
+   "type": "timeseries",
+   "title": "Rejected connections",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "alb_rejected_connections",
+     "legendFormat": "{{load_balancer}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Non-zero means targets are at their connection limit and clients are being turned away.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 40
+   }
+  },
+  {
+   "id": 24,
+   "type": "row",
+   "title": "Network (NAT gateways)",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 48
+   }
+  },
+  {
+   "id": 25,
+   "type": "timeseries",
+   "title": "Bytes through NAT",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "nat_gateway_bytes_in_from_destination / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{nat_gateway}} in"
+    },
+    {
+     "refId": "B",
+     "expr": "nat_gateway_bytes_out_to_destination / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{nat_gateway}} out"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "Bps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Window totals divided by the window length, so runs of different length compare.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 49
+   }
+  },
+  {
+   "id": 26,
+   "type": "timeseries",
+   "title": "Packets through NAT",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "nat_gateway_packets_in_from_destination / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{nat_gateway}} in"
+    },
+    {
+     "refId": "B",
+     "expr": "nat_gateway_packets_out_to_destination / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{nat_gateway}} out"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "pps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 49
+   }
+  },
+  {
+   "id": 27,
+   "type": "timeseries",
+   "title": "NAT connections and port errors",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "nat_gateway_active_connections",
+     "legendFormat": "{{nat_gateway}} active"
+    },
+    {
+     "refId": "B",
+     "expr": "nat_gateway_error_port_allocation",
+     "legendFormat": "{{nat_gateway}} port errors"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "short",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 49
+   }
+  },
+  {
+   "id": 28,
+   "type": "row",
+   "title": "Storage (EFS)",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 57
+   }
+  },
+  {
+   "id": 29,
+   "type": "timeseries",
+   "title": "EFS storage",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "efs_storage_bytes",
+     "legendFormat": "{{file_system}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "bytes",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 58
+   }
+  },
+  {
+   "id": 30,
+   "type": "timeseries",
+   "title": "EFS throughput",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "efs_total_io_bytes / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{file_system}} total"
+    },
+    {
+     "refId": "B",
+     "expr": "efs_metered_io_bytes / scalar(cloudwatch_window_seconds)",
+     "legendFormat": "{{file_system}} metered"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "Bps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Metered IO is what costs money above the included baseline.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 58
+   }
+  },
+  {
+   "id": 31,
+   "type": "timeseries",
+   "title": "EFS burst credits",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "efs_burst_credit_balance_bytes",
+     "legendFormat": "{{file_system}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "bytes",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "description": "Only published for file systems in Bursting throughput mode; empty means Elastic or Provisioned.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 58
+   }
+  },
+  {
+   "id": 32,
+   "type": "timeseries",
+   "title": "EFS percent of IO limit",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "efs_percent_io_limit",
+     "legendFormat": "{{file_system}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsMode": "off",
+      "gradientMode": "none",
+      "stacking": "none"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 66
+   }
+  }
+ ]
+}

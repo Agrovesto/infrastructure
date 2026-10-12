@@ -1,0 +1,1543 @@
+{
+  "uid": "agrovesto-dev-traffic",
+  "title": "Agrovesto dev \u2014 traffic & clients",
+  "description": "nginx writes one JSON line per request (log_format agrovesto_json in dev/nginx.conf.tftpl) and Alloy tails it into Loki. Only component, level, status and method are labels; the vhost, URI, client IP and user agent stay in the line and are read out at query time with | json. nginx restores the client address from X-Forwarded-For for the trusted TLS proxy, so remote_addr is the real client and each API is its own vhost.",
+  "tags": [
+    "agrovesto",
+    "dev",
+    "nginx",
+    "traffic",
+    "loki"
+  ],
+  "timezone": "Africa/Lagos",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "status",
+        "label": "Status",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "agrovesto-loki"
+        },
+        "query": {
+          "type": 1,
+          "label": "status",
+          "stream": "{component=\"nginx\"}",
+          "refId": "LokiVariableQueryEditor-VariableQuery"
+        },
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Volume",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Requests (range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\"}[$__range]))",
+          "legendFormat": "requests",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Requests (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\"}[24h]))",
+          "legendFormat": "requests",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "5xx (range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\", status=~\"5..\"}[$__range]))",
+          "legendFormat": "5xx",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "4xx (range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(count_over_time({component=\"nginx\", status=~\"4..\"}[$__range]))",
+          "legendFormat": "4xx",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Error rate",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "100 * sum(count_over_time({component=\"nginx\", status=~\"[45]..\"}[$__range])) / sum(count_over_time({component=\"nginx\"}[$__range]))",
+          "legendFormat": "% 4xx+5xx",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Distinct client IPs",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "count(sum by (remote_addr) (count_over_time({component=\"nginx\"} | json [$__range])))",
+          "legendFormat": "clients",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Requests over time",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Requests per day by vhost",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (host) (count_over_time({component=\"nginx\"} | json [1d]))",
+          "legendFormat": "{{host}}",
+          "interval": "1d",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "One point per vhost per day: the interval is pinned to 1d, so each point is a whole day. Every API, plus RabbitMQ, Vault, Grafana and SonarQube, has its own vhost.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Requests per second by vhost",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (host) (rate({component=\"nginx\"} | json [$__auto]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Requests by status",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (status) (count_over_time({component=\"nginx\", status=~\"$status\"}[$__auto]))",
+          "legendFormat": "{{status}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "status is a label, so this one needs no JSON parsing.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Requests by method",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (method) (count_over_time({component=\"nginx\"}[$__auto]))",
+          "legendFormat": "{{method}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 14
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "5xx by vhost",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (host) (count_over_time({component=\"nginx\", status=~\"5..\"} | json [$__auto]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Request time p50 / p95 / p99",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.5, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto])",
+          "legendFormat": "p50",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.95, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto])",
+          "legendFormat": "p95",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.99, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto])",
+          "legendFormat": "p99",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "request_time is nginx's own measurement, including the time the API took.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "p95 request time by vhost",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.95, {component=\"nginx\"} | json | unwrap request_time | __error__=\"\" [$__auto]) by (host)",
+          "legendFormat": "{{host}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "p95 upstream time by vhost",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "quantile_over_time(0.95, {component=\"nginx\"} | json | upstream_response_time != \"-\" | unwrap upstream_response_time | __error__=\"\" [$__auto]) by (host)",
+          "legendFormat": "{{host}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "The API's own time. The gap to the panel above is queueing and proxying inside nginx.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Bytes to clients",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum(rate({component=\"nginx\"} | json | unwrap body_bytes | __error__=\"\" [$__auto]))",
+          "legendFormat": "body bytes/s",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Server spans per API (traces)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "agrovesto-prom"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "agrovesto-prom"
+          },
+          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\"}[5m]))",
+          "legendFormat": "{{service_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Tempo's span metrics, remote-written into Prometheus: what the APIs themselves report, once their images export traces. Compare with the nginx count above to spot requests that never reach the app.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      }
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Where the requests come from",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Top client IPs",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "topk(25, sum by (remote_addr) (count_over_time({component=\"nginx\"} | json [$__range])))",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "remote_addr",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "id": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Requests"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "description": "Real client addresses, after nginx replaced the TLS proxy's address from X-Forwarded-For. Nothing is geocoded: IP and user agent are the whole story.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Top 10 client IPs over time",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "topk(10, sum by (remote_addr) (count_over_time({component=\"nginx\"} | json [$__auto])))",
+          "legendFormat": "{{remote_addr}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsMode": "off",
+            "gradientMode": "opacity",
+            "stacking": "none"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      }
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Top URIs",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "topk(25, sum by (uri) (count_over_time({component=\"nginx\"} | json [$__range])))",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "uri",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "id": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Requests"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "description": "uri includes the query string, exactly as the client sent it.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      }
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Top user agents",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "topk(20, sum by (http_user_agent) (count_over_time({component=\"nginx\"} | json [$__range])))",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "http_user_agent",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "id": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Requests"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      }
+    },
+    {
+      "id": 24,
+      "type": "bargauge",
+      "title": "Requests per vhost (range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "sum by (host) (count_over_time({component=\"nginx\"} | json [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "show": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      }
+    },
+    {
+      "id": 25,
+      "type": "logs",
+      "title": "Recent requests",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "{component=\"nginx\"} | json | line_format \"{{.remote_addr}} {{.method}} {{.status}} {{.host}}{{.uri}} {{.request_time}}s {{.http_user_agent}}\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupEnabled": false,
+        "sortOrder": "Descending",
+        "logTimeStyle": "ISO",
+        "tolerance": 0
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      }
+    },
+    {
+      "id": 26,
+      "type": "logs",
+      "title": "Recent 5xx",
+      "datasource": {
+        "type": "loki",
+        "uid": "agrovesto-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "agrovesto-loki"
+          },
+          "expr": "{component=\"nginx\", status=~\"5..\"} | json | line_format \"{{.remote_addr}} {{.host}}{{.uri}} {{.status}}/{{.upstream_status}} upstream={{.upstream_addr}} {{.request_time}}s\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupEnabled": false,
+        "sortOrder": "Descending",
+        "logTimeStyle": "ISO",
+        "tolerance": 0
+      },
+      "description": "upstream_status and upstream_addr tell a failing API apart from a refused connection.",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      }
+    }
+  ]
+}

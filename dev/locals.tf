@@ -227,7 +227,7 @@ locals {
   tls_proxy_enabled = var.rabbitmq.enabled || local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
 
   # ---------------------------------------------------------------------------
-  # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+  # Logging, metrics & traces on the host (Loki + Tempo + Alloy + Grafana + Prometheus)
   #
   # Every file below is rendered at plan time and written by cloud-init, which is
   # how the compose and nginx configs already work. That has one consequence worth
@@ -245,7 +245,7 @@ locals {
   # the logs of the thing that writes its logs is an unbounded loop that ends with
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
   logging_own_services = concat(
-    ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
+    ["loki", "tempo", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
     local.tls_proxy_enabled ? ["edge"] : [],
     var.vault.oidc_enabled ? ["dex"] : [],
   )
@@ -338,6 +338,23 @@ locals {
     max_query_length_hours = local.logging_retention_hours
     querier_max_concurrent = var.logging.querier_max_concurrent
     retention_streams      = local.logging_retention_streams
+    alertmanager_port      = var.logging.alertmanager_port
+  })
+
+  # LogQL alerts Loki evaluates itself (the ruler block in loki-config.yml.tftpl)
+  # and hands to the same Alertmanager the Prometheus rules use. Published under
+  # the "fake" tenant directory: that is the tenant Loki ingests under when
+  # auth_enabled is false, and the ruler only reads rules from a tenant
+  # directory, so a file one level higher is silently never loaded.
+  loki_rules = templatefile("${path.module}/loki-rules.yml.tftpl", {
+    window         = var.alert_rules.log_rule_window
+    app_error_rate = var.alert_rules.log_error_rate
+    nginx_5xx_rate = var.alert_rules.nginx_5xx_rate
+  })
+
+  tempo_config = templatefile("${path.module}/tempo-config.yml.tftpl", {
+    retention_hours = var.logging.traces_retention_hours
+    hostname        = local.name
   })
 
   alloy_config = templatefile("${path.module}/alloy-config.alloy.tftpl", {
@@ -360,6 +377,7 @@ locals {
     grafana_port       = var.logging.grafana_port
     metrics_port       = var.logging.alloy_port
     alertmanager_port  = var.logging.alertmanager_port
+    tempo_port         = var.logging.tempo_port
   })
 
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
@@ -368,6 +386,10 @@ locals {
     cpu_percent       = var.alert_rules.cpu_percent
     memory_percent    = var.alert_rules.memory_percent
     disk_free_percent = var.alert_rules.disk_free_percent
+    # Per-container thresholds, each measured against the container's own limit.
+    container_memory_percent    = var.alert_rules.container_memory_percent
+    container_cpu_percent       = var.alert_rules.container_cpu_percent
+    container_throttled_percent = var.alert_rules.container_throttled_percent
     # The containers that should always be up. Redis and SonarQube join the list
     # only when they exist, otherwise ContainerDown fires for a service that was
     # deliberately turned off.
@@ -400,6 +422,51 @@ locals {
   grafana_dashboards_provider = file("${path.module}/grafana-dashboards.yml")
   grafana_dashboard_logs      = file("${path.module}/grafana/dashboards/dev-logs.json")
   grafana_dashboard_host      = file("${path.module}/grafana/dashboards/dev-host.json")
+  grafana_dashboard_services  = file("${path.module}/grafana/dashboards/dev-services.json")
+  grafana_dashboard_traffic   = file("${path.module}/grafana/dashboards/dev-traffic.json")
+  grafana_dashboard_infra     = file("${path.module}/grafana/dashboards/dev-infra.json")
+
+  # OpenTelemetry ----------------------------------------------------------------
+  #
+  # The same standard OTEL_* block prod's ECS tasks carry (prod/locals.tf
+  # otel_environment), pointed at Alloy on the compose network instead of the
+  # Cloud Map name. Inert until an image loads an OTel SDK — the env vars cost
+  # nothing, and the day the real images land traces start flowing with no
+  # further change (the same bet prod made in prod/ecs.tf).
+  #
+  # OTEL_SERVICE_NAME is what makes a span attributable: it is added per API
+  # below and is the same string as the compose service name, the database
+  # name and the Route53 subdomain prefix. api.env merges last, so a service
+  # can override any of it.
+  otel_environment = {
+    "OTEL_EXPORTER_OTLP_ENDPOINT" = "http://alloy:4317"
+    "OTEL_EXPORTER_OTLP_PROTOCOL" = "grpc"
+    "OTEL_TRACES_EXPORTER"        = "otlp"
+    "OTEL_METRICS_EXPORTER"       = "otlp"
+    # Logs stay on the stdout path Alloy already tails; OTLP-ing them would
+    # store every line twice for no benefit. Same call as prod's var.otel.
+    "OTEL_LOGS_EXPORTER"      = "none"
+    "OTEL_TRACES_SAMPLER"     = "parentbased_traceidratio"
+    "OTEL_TRACES_SAMPLER_ARG" = "1.0"
+    "OTEL_PROPAGATORS"        = "tracecontext,baggage"
+    "OTEL_RESOURCE_ATTRIBUTES" = join(",", [
+      "deployment.environment=${var.environment}",
+      "service.namespace=${var.project}",
+      "cloud.provider=aws",
+      "cloud.region=${var.aws_region}",
+      "host.name=${local.name}",
+    ])
+  }
+
+  # The compose project's view of the APIs: with the stack on, every compose
+  # API carries the block above. With logging.enabled = false there is no
+  # Alloy to receive the spans, so the APIs keep exactly their own env.
+  apis_with_otel = var.logging.enabled ? {
+    for name, api in var.apis :
+    name => merge(api, {
+      env = merge(local.otel_environment, { OTEL_SERVICE_NAME = name }, api.env)
+    })
+  } : var.apis
 
   # Host config in S3 ------------------------------------------------------------
   #
@@ -470,6 +537,17 @@ locals {
         content      = local.loki_config
         content_type = "text/yaml"
       }
+      # The tenant directory in this key is load-bearing: Loki's ruler reads
+      # <directory>/<tenant>/<namespace>, and "fake" is the tenant it ingests
+      # under when auth_enabled is false. One level higher and no rule loads.
+      "logging/loki/rules/fake/application.yml" = {
+        content      = local.loki_rules
+        content_type = "text/yaml"
+      }
+      "logging/tempo/config.yml" = {
+        content      = local.tempo_config
+        content_type = "text/yaml"
+      }
       "logging/alloy/config.alloy" = {
         content      = local.alloy_config
         content_type = "text/plain"
@@ -500,6 +578,18 @@ locals {
       }
       "logging/grafana/dashboards/dev-host.json" = {
         content      = local.grafana_dashboard_host
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-services.json" = {
+        content      = local.grafana_dashboard_services
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-traffic.json" = {
+        content      = local.grafana_dashboard_traffic
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-infra.json" = {
+        content      = local.grafana_dashboard_infra
         content_type = "application/json"
       }
     } : {},
@@ -544,7 +634,7 @@ locals {
   )
 
   docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    apis              = var.apis
+    apis              = local.apis_with_otel
     mssql             = local.mssql
     vault             = var.vault
     domain            = var.domain_name
