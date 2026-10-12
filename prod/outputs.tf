@@ -143,3 +143,12 @@ output "rekognition" {
     liveness_identity_pool_id = one(aws_cognito_identity_pool.liveness[*].id)
   }
 }
+
+output "rabbitmq_access" {
+  description = "Private TLS endpoints, restricted management URL and admin secret ARN (no password)."
+  value = var.rabbitmq.enabled ? {
+    amqps_endpoints   = aws_mq_broker.rabbitmq[0].instances[0].endpoints
+    management_url   = "https://${local.rabbitmq_fqdn}"
+    admin_secret_arn = aws_secretsmanager_secret.rabbitmq[0].arn
+  } : null
+}

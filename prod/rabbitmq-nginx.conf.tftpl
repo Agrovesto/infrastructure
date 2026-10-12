@@ -1,0 +1,26 @@
+events { worker_connections 256; }
+http {
+  access_log /dev/stdout;
+  error_log /dev/stderr warn;
+  resolver ${dns_server} valid=30s ipv6=off;
+  server {
+    listen 8080;
+    location = /__proxy_health { return 200 "proxy-ok\n"; }
+    location / {
+      set $mq_host ${broker_host};
+      proxy_pass https://$mq_host;
+      proxy_ssl_server_name on;
+      proxy_ssl_name ${broker_host};
+      proxy_ssl_verify on;
+      proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+      proxy_ssl_verify_depth 3;
+      proxy_set_header Host ${broker_host};
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_http_version 1.1;
+      proxy_connect_timeout 10s;
+      proxy_read_timeout 60s;
+      proxy_redirect https://${broker_host}/ /;
+    }
+  }
+}

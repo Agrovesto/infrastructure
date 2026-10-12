@@ -283,3 +283,14 @@ public_subnet_map_public_ip       = true
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Private, single-node Amazon MQ. No infrastructure is created until apply.
+# Confirm engine/instance availability and cost in eu-west-1 before applying.
+# Empty allowlist keeps management closed and does not start the proxy service.
+rabbitmq = {
+  enabled        = true
+  engine_version = "4.2"
+  instance_type  = "mq.m7g.large"
+  subdomain      = "rabbitmq"
+  allowed_cidrs  = []
+}

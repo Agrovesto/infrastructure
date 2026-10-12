@@ -702,3 +702,23 @@ variable "import_existing" {
   type        = bool
   default     = true
 }
+
+variable "rabbitmq" {
+  description = "Private, single-instance Amazon MQ RabbitMQ with IP-restricted HTTPS management proxy. Review engine/instance availability and costs before apply."
+  type = object({
+    enabled        = optional(bool, false)
+    engine_version = optional(string, "4.2")
+    instance_type  = optional(string, "mq.m7g.large")
+    subdomain      = optional(string, "rabbitmq")
+    proxy_image    = optional(string, "nginx:1.28-alpine")
+    allowed_cidrs  = optional(list(string), [])
+  })
+  default = {}
+  validation {
+    condition = (
+      length(var.rabbitmq.allowed_cidrs) <= 3 &&
+      alltrue([for cidr in var.rabbitmq.allowed_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")])
+    )
+    error_message = "Supply at most three trusted management CIDRs; /0 is prohibited. Empty means no public management access."
+  }
+}
