@@ -79,6 +79,16 @@ SonarQube, Vault, every other API) crash-looped until the file was fixed by
 hand. This is why the format is non-negotiable. `nginx -t` fails if the map
 variable is missing, so a wrong-format file fails safe at reload time.
 
+The same rule applies to every vhost Terraform renders. Since 2026-10-13 the
+Grafana and SonarQube vhosts also proxy through variables
+(`set $grafana_backend grafana:3000;` + `proxy_pass http://$grafana_backend;`)
+after a recreating Grafana during a compose refresh again produced
+`host not found in upstream "grafana"` and refused the whole edge at config
+load. The remaining literal `proxy_pass` hostnames belong to direct
+(non-blue/green) API vhosts, whose containers are compose services ordered
+before nginx via `depends_on`; anything deployed independently of the compose
+project must go through a variable.
+
 `deploy.sh` changes required to comply:
 
 1. **`write_upstream` writes the map format** (drop `max_fails`/`fail_timeout`
@@ -186,6 +196,13 @@ also attach their slots to `nomaos_edge`. Do not attach nginx to `nomaos_data`.
 
 Slot seeding only considers `*_api-active.conf`, ignores stale legacy names
 such as `nomaos-active.conf`, and never replaces an existing active slot file.
+Every host-refresh path seeds: boot (user_data), `agrovesto-sync.service`, and
+— since 2026-10-13 — the SSM `host-config-refresh` association, including its
+Vault-OIDC branch, which runs compose directly instead of starting the unit.
+Before that, an API opted into blue/green after the host booted was never
+seeded on that path: `nginx.conf` referenced `$agx_api_backend` with no map
+file present, and the whole edge crash-looped
+(`unknown "agx_api_backend" variable`) until the file was copied by hand.
 Existing old-format static upstream files require an operator-reviewed migration
 to maps preserving the current target. Do not blindly reset active slots to blue.
 
