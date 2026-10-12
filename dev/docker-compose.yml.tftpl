@@ -17,6 +17,10 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: agrovesto-nginx
+    # Keep access to Compose services and the independently deployed API slots.
+    networks:
+      - default
+      - nomaos_edge
 %{ if !sso_proxy.enabled ~}
     ports:
       - "80:80"
@@ -523,3 +527,11 @@ services:
     cpus: "${logging.cpu_limits["node-exporter"]}"
     mem_limit: ${logging.memory_limits_mb["node-exporter"]}M
 %{ endif ~}
+
+# Shared with app deploy pipelines; bootstrap creates it before Compose starts.
+# External ownership prevents Compose teardown from removing the slots' network.
+networks:
+  default: {}
+  nomaos_edge:
+    external: true
+    name: nomaos_edge

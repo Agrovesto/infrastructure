@@ -122,8 +122,8 @@ http {
     # start-up, so a missing slot is 502, not a crash. format() composes the
     # literal-$ + variable name, which a template cannot spell directly.
 
-    location /health
-      proxy_pass ${format("http://$%s_backend", bg.upstream_name)}; 
+    location /health {
+      proxy_pass ${format("http://$%s_backend", bg.upstream_name)};
       proxy_connect_timeout 5s;
       proxy_read_timeout 10s;
       proxy_http_version 1.1;

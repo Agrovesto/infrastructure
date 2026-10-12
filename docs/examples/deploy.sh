@@ -6,7 +6,7 @@
 #   deploy.sh --app <key>-api --image <ecr-ref> [options]
 #
 # Each app deploys behind its OWN nginx vhost (dev/<key>-api.nomaos.com, with
-# two renames: nomaos -> dev-noma-api, serviceprovider -> dev-service-api).
+# two renames: nomaos -> noma-api, serviceprovider -> dev-service-api).
 # The vhost routes to the active slot through a map variable, resolved by
 # nginx at request time, so a missing slot 502s its vhost and never takes the
 # edge down. The slot file this script writes must therefore be the map
@@ -177,14 +177,14 @@ slot_port() {
 # App -> vhost hostname mapping
 #
 # The nginx vhost each app deploys behind is the API's own hostname, which is
-# NOT always "<key>-api.<domain>": nomaos serves dev-noma-api and
+# NOT always "<key>-api.<domain>": nomaos serves noma-api and
 # serviceprovider serves dev-service-api. Keep in sync with
 # dev/terraform.auto.tfvars (apis.<key>.subdomain).
 # ─────────────────────────────────────────────────────────────────────────────
 vhost_hostname() {
   local domain="${DOMAIN_NAME:-nomaos.com}"
   case "$1" in
-    nomaos-api)          echo "dev-noma-api.${domain}" ;;
+    nomaos-api)          echo "noma-api.${domain}" ;;
     serviceprovider-api) echo "dev-service-api.${domain}" ;;
     *-api)               echo "dev-${1}.${domain}" ;;
     *) die "unknown app '$1': expected <key>-api" ;;

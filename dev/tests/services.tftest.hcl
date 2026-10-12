@@ -461,6 +461,14 @@ run "nomaos_blue_green_vhost" {
   }
 
   assert {
+    condition = alltrue([
+      for bg in local.blue_green_apis :
+      strcontains(local.nginx_conf, format("location /health {\n      proxy_pass http://$%s_backend;", bg.upstream_name))
+    ])
+    error_message = "Every blue/green health location must open a block before proxy_pass; a missing brace prevents the entire nginx edge from starting."
+  }
+
+  assert {
     condition     = strcontains(local.nginx_conf, "resolver 127.0.0.11")
     error_message = "Resolving the slot at request time requires Docker's embedded DNS resolver in nginx.conf; without it the variable proxy_pass cannot resolve."
   }

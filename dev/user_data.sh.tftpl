@@ -172,8 +172,11 @@ aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}
 # the deploy pipeline has not laid down its own, so a slot flip survives every
 # reboot while an instance replacement falls back to blue. nginx includes
 # whatever sits in this directory (dev/nginx.conf.tftpl).
+# Ignore legacy names such as nomaos-active.conf left behind by S3 sync.
+# Both nginx and independently deployed slots join this external edge network.
+docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge
 mkdir -p /opt/nomaos/nginx/upstreams
-for f in /opt/agrovesto/nginx/*-active.conf; do
+for f in /opt/agrovesto/nginx/*_api-active.conf; do
   [ -e "$f" ] || continue
   slot="/opt/nomaos/nginx/upstreams/$(basename "$f" -active.conf).conf"
   test -f "$slot" || cp "$f" "$slot"
@@ -194,7 +197,8 @@ Type=oneshot
 ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
 # Restore the default Nomaos slots (blue) only when the deploy pipeline's slot
 # files are absent — never overwrite its blue/green choices on a running host.
-ExecStart=/bin/bash -c 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
+ExecStart=/bin/bash -c 'docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge'
+ExecStart=/bin/bash -ec 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
 ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
 
 [Install]

@@ -26,7 +26,7 @@ nginx.conf.tftpl ── renders /opt/agrovesto/nginx/nginx.conf
 
 | API | `deploy.sh --app` | slot containers | ports (blue/green) | vhost (the API's own) |
 |---|---|---|---|---|
-| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `dev-noma-api.nomaos.com` |
+| nomaos | `nomaos-api` | `nomaos-api-blue` / `-green` | 5007 / 5008 | `noma-api.nomaos.com` |
 | wallet | `wallet-api` | `wallet-api-blue` / `-green` | 5009 / 5010 | `dev-wallet-api.nomaos.com` |
 | onboarding | `onboarding-api` | `onboarding-api-blue` / `-green` | 5011 / 5012 | `dev-onboarding-api.nomaos.com` |
 | input | `input-api` | `input-api-blue` / `-green` | 5013 / 5014 | `dev-input-api.nomaos.com` |
@@ -127,7 +127,7 @@ variable is missing, so a wrong-format file fails safe at reload time.
    default server answers `404` to `Host: localhost`, so the check must send
    the API's own hostname, e.g. `EDGE_HEALTH_HOST=dev-wallet-api.nomaos.com`.
    For nomaos this is a change from `dev-api-test.nomaos.com`, which no longer
-   exists as a vhost: `EDGE_HEALTH_HOST=dev-noma-api.nomaos.com`.
+   exists as a vhost: `EDGE_HEALTH_HOST=noma-api.nomaos.com`.
 
 `UPSTREAM_NAME` in `deploy.sh` is `${APP_NAME//-/_}`, so `--app wallet-api`
 yields upstream `wallet_api`, variable `$wallet_api_backend`, slot file
@@ -174,3 +174,42 @@ Blue/green vhosts are HTTP behind nginx like the other API vhosts. To put one
 on HTTPS via the Caddy edge, extend `local.api_tls_domains` /
 `github_sso_proxy.domains` for the subdomain (same mechanism
 `apis.<name>.tls_via_caddy` uses for the direct vhosts).
+
+## Edge recovery and rollout (October 2026)
+
+nginx must join both the Compose default network (Vault and platform services)
+and the external `nomaos_edge` network (independently deployed API slots).
+Bootstrap and `agrovesto-sync.service` create that network if absent; Compose
+preserves nginx's attachment across recreation. App deployment pipelines must
+also attach their slots to `nomaos_edge`. Do not attach nginx to `nomaos_data`.
+
+Slot seeding only considers `*_api-active.conf`, ignores stale legacy names
+such as `nomaos-active.conf`, and never replaces an existing active slot file.
+Existing old-format static upstream files require an operator-reviewed migration
+to maps preserving the current target. Do not blindly reset active slots to blue.
+
+For an existing host, user-data edits alone do not update its installed systemd
+unit. Publish and sync the rendered host config through the normal deployment
+process, update the unit from the new user-data template (or replace the host),
+and run `systemctl daemon-reload`. Before recreating nginx:
+
+```bash
+docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge
+sudo bash -ec 'for f in /opt/agrovesto/nginx/*_api-active.conf; do
+  [ -f "$f" ] || continue
+  dst="/opt/nomaos/nginx/upstreams/$(basename "$f" -active.conf).conf"
+  [ -f "$dst" ] || cp "$f" "$dst"
+done'
+sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml run --rm --no-deps nginx nginx -t &&
+sudo docker compose -f /opt/agrovesto/compose/docker-compose.yml up -d --no-deps --force-recreate nginx
+curl -iS --max-time 15 -H 'Host: noma-api.nomaos.com' http://localhost/__edge_health
+curl -iS --max-time 15 -H 'Host: noma-api.nomaos.com' http://localhost/health
+```
+
+The checked-in dev NomaOS hostname is `noma-api.nomaos.com`; always match the
+rendered `server_name` rather than assuming a `dev-` prefix. Edge health must
+return `200 edge-ok`; backend health separately verifies slot connectivity.
+Verify public DNS/TLS routing independently: a successful localhost request does
+not prove the public hostname reaches this host. Application image identity and
+dependency health checks belong to the application repository; an empty `checks`
+list does not demonstrate database health.
