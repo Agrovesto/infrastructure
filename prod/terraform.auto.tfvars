@@ -286,11 +286,9 @@ app_sns_topics = ["notifications"]
 
 # Private, single-node Amazon MQ. No infrastructure is created until apply.
 # Confirm engine/instance availability and cost in eu-west-1 before applying.
-# Empty allowlist keeps management closed and does not start the proxy service.
+# AMQP and management are private: only authorized ECS application services.
 rabbitmq = {
   enabled        = true
   engine_version = "4.2"
   instance_type  = "mq.m7g.large"
-  subdomain      = "rabbitmq"
-  allowed_cidrs  = []
 }

@@ -145,10 +145,10 @@ output "rekognition" {
 }
 
 output "rabbitmq_access" {
-  description = "Private TLS endpoints, restricted management URL and admin secret ARN (no password)."
+  description = "Private ECS-only TLS endpoints and admin secret ARN (no password)."
   value = var.rabbitmq.enabled ? {
     amqps_endpoints   = aws_mq_broker.rabbitmq[0].instances[0].endpoints
-    management_url   = "https://${local.rabbitmq_fqdn}"
+    management_url   = aws_mq_broker.rabbitmq[0].instances[0].console_url
     admin_secret_arn = aws_secretsmanager_secret.rabbitmq[0].arn
   } : null
 }

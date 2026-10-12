@@ -1,6 +1,11 @@
 mock_provider "aws" {}
 mock_provider "random" {}
 
+override_resource {
+  target = aws_security_group.rabbitmq_clients[0]
+  values = { id = "sg-0123456789abcdef0" }
+}
+
 override_data {
   target = data.aws_availability_zones.available
   values = { names = ["eu-west-1a", "eu-west-1b", "eu-west-1c"] }
@@ -20,8 +25,7 @@ override_data {
 variables {
   import_existing = false
   rabbitmq = {
-    enabled       = true
-    allowed_cidrs = ["203.0.113.10/32"]
+    enabled = true
   }
 }
 
@@ -38,13 +42,18 @@ run "private_single_broker" {
   }
   assert {
     condition = (
-      length(aws_lb_listener_rule.rabbitmq_allow) == 1 &&
-      length(aws_lb_listener_rule.rabbitmq_deny) == 1 &&
-      aws_lb_listener_rule.rabbitmq_allow[0].priority < aws_lb_listener_rule.rabbitmq_deny[0].priority &&
-      aws_route53_record.rabbitmq[0].name == "rabbitmq.nomaos.com" &&
-      aws_ecs_service.rabbitmq_proxy[0].network_configuration[0].assign_public_ip == false
+      length(aws_security_group.rabbitmq[0].ingress) == 2 &&
+      alltrue([for rule in aws_security_group.rabbitmq[0].ingress :
+        length(rule.cidr_blocks) == 0 &&
+        length(rule.ipv6_cidr_blocks) == 0 &&
+        rule.security_groups == toset([aws_security_group.rabbitmq_clients[0].id]) &&
+        contains([443, 5671], rule.from_port) && rule.from_port == rule.to_port
+      ]) &&
+      alltrue([for service in aws_ecs_service.services :
+        contains(service.network_configuration[0].security_groups, aws_security_group.rabbitmq_clients[0].id)
+      ])
     )
-    error_message = "Management must use allowlisted ALB routing, a deny fallback, and a private proxy task."
+    error_message = "Only application services with the dedicated client SG may connect on 443/5671; no CIDR ingress is permitted."
   }
   assert {
     condition = (
@@ -52,21 +61,6 @@ run "private_single_broker" {
       aws_secretsmanager_secret.rabbitmq[0].recovery_window_in_days == 30
     )
     error_message = "Bootstrap credentials require a strong generated password and recoverable secret storage."
-  }
-}
-
-run "empty_allowlist_is_closed" {
-  command = plan
-  variables {
-    rabbitmq = { enabled = true, allowed_cidrs = [] }
-  }
-  assert {
-    condition = (
-      length(aws_lb_listener_rule.rabbitmq_allow) == 0 &&
-      length(aws_ecs_service.rabbitmq_proxy) == 0 &&
-      length(aws_lb_listener_rule.rabbitmq_deny) == 1
-    )
-    error_message = "An empty allowlist must not start an unreachable proxy service or permit management requests."
   }
 }
 
@@ -78,9 +72,8 @@ run "disabled" {
   assert {
     condition = (
       length(aws_mq_broker.rabbitmq) == 0 &&
-      length(aws_ecs_service.rabbitmq_proxy) == 0 &&
-      length(aws_route53_record.rabbitmq) == 0
+      length(aws_security_group.rabbitmq_clients) == 0
     )
-    error_message = "Disabled RabbitMQ must not create a broker, proxy or DNS record."
+    error_message = "Disabled RabbitMQ must not create a broker or client security group."
   }
 }

@@ -1,10 +1,11 @@
 # Production RabbitMQ — Amazon MQ
 
 `prod/rabbitmq.tf` provisions a **private SINGLE_INSTANCE Amazon MQ RabbitMQ
-broker**, plus a restricted management proxy behind the existing HTTPS ALB.
+broker**, reachable only by authorized application services in the production
+ECS cluster. There is no public hostname, ALB listener, management proxy, or
+external-source ingress.
 Production configuration enables the broker; nothing is deployed until Terraform
-is applied. This adds recurring Amazon MQ, Secrets Manager, logging and (when
-management access is configured) Fargate costs. This is not a multi-AZ cluster:
+is applied. This adds recurring Amazon MQ, Secrets Manager and logging costs. This is not a multi-AZ cluster:
 maintenance and broker failures can interrupt messaging.
 
 ## Review before applying
@@ -19,25 +20,25 @@ maintenance and broker failures can interrupt messaging.
 - The broker uses the first private subnet, TLS-only app access on **5671**,
   AWS-owned-key storage encryption, automatic minor upgrades, and a Sunday
   03:00 UTC maintenance window. Changes are not applied immediately.
-- Confirm private-subnet NAT access for the proxy image pull and CloudWatch logs.
-- Set up to **three** operator public CIDRs in `rabbitmq.allowed_cidrs`.
-  Empty means deny all: DNS points at the ALB, but management returns 403 and
-  no proxy ECS service starts. ALB source-IP matching does not trust a caller's
-  `X-Forwarded-For`. Reserved rule priorities are 209 (allow) and 210 (deny).
-- The existing wildcard ACM certificate covers `rabbitmq.nomaos.com`.
-  No new DNS zone or public AMQP endpoint is introduced.
+- Both AMQPS (5671) and management HTTPS (443) accept only the dedicated
+  `rabbitmq_clients` security group, attached to `aws_ecs_service.services`.
+  Existing general ECS/Vault tasks do not automatically receive this access.
+- Security groups identify network interfaces, not ECS cluster identity. IAM
+  permissions must prevent attaching this group to EC2 instances, other clusters,
+  or externally accessible proxies. This Terraform stack only attaches it to
+  the application services in `aws_ecs_cluster.main`.
 - Review `terraform -chdir=prod plan` before apply. `prevent_destroy` protects
   the broker against replacement/deletion: any intentional replacement requires
   an explicit code review and a data migration plan, not merely toggling enabled.
 
 ## Management and authentication
 
-`https://rabbitmq.nomaos.com` → existing ALB (TLS + CIDR restriction) → private
-Fargate nginx proxy → Amazon MQ HTTPS console. The proxy verifies the broker's
-TLS certificate and hostname, resolves DNS at runtime, and forwards the
-operator's Authorization header. It has no embedded credentials or application
-IAM role. The broker console/API still requires RabbitMQ authentication; this
-is not OIDC/SSO. ALB-to-proxy traffic is HTTP inside the VPC, restricted by SGs.
+Use the broker-provided private HTTPS endpoint from an authorized ECS application
+service. No browser-accessible `rabbitmq.nomaos.com`, VPN exceptions, port-forward
+proxy, or public CIDR allowlist is provisioned. Management/API requests require
+RabbitMQ credentials as well as network access. If an operator needs to provision
+vhosts/users, run the operation in an authorized ECS workload; do not temporarily
+open the broker to the internet. Keep TLS certificate/hostname verification on.
 
 Retrieve bootstrap credentials from the Secrets Manager ARN in
 `terraform output rabbitmq_access`, using an authorized operator role. The
@@ -53,8 +54,8 @@ granted to application task roles.
 Use the broker's original `amqps://...:5671` endpoint from `rabbitmq_access`,
 with TLS certificate/hostname verification enabled. Do not use the management
 hostname for AMQP and do not replace the broker hostname with a custom alias
-that fails certificate verification. App ECS security group access is granted;
-other callers require reviewed security-group rules.
+that fails certificate verification. Only application tasks carrying the dedicated client security group can connect;
+external clients must remain blocked.
 
 Create a `nomaos` virtual host and separate least-privileged users/permissions
 through the management API/UI. Amazon MQ creates only the bootstrap admin here;
@@ -67,10 +68,10 @@ policies in the applications.
 
 ## Operations and verification
 
-- Verify UI login from an allowed source and 403 from a disallowed source.
-- Verify TLS publish/consume from an ECS application, not only proxy health.
-- `/__proxy_health` checks nginx only; it does not prove broker health.
-- General broker logs and proxy logs go to CloudWatch. Add workload-specific
+- Verify TLS publish/consume and authenticated management API access from an
+  authorized ECS application service. Verify connection failure from a separate
+  VPC workload without the client SG and from outside the VPC.
+- General broker logs go to CloudWatch. Add workload-specific
   RabbitMQ memory/disk/message backlog/consumer alarms and paging before relying
   on this for critical production traffic; they are not part of this initial
   integration.
@@ -82,3 +83,12 @@ policies in the applications.
   Updating a secret alone does not rotate a broker user; changing the Terraform
   bootstrap password is not a tested rotation workflow.
 - Terraform/Docker runtime tests and an AWS plan must pass in CI before deploy.
+
+## Migrating from the earlier public-proxy proposal
+
+The public proxy, target group, listener rules and DNS record were removed from
+this branch. If that earlier version was deployed separately, review the plan
+for their destruction and the removal of the proxy SG from broker ingress.
+Updating application security-group membership triggers ECS task replacement;
+review availability and connection recovery before applying. The broker itself
+should not be replaced solely for this network restriction.
