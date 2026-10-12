@@ -1,5 +1,5 @@
 # =============================================================================
-# DEV — on-host logging & metrics (Loki + Alloy + Grafana + Prometheus)
+# DEV — on-host logging, metrics & traces (Loki + Tempo + Alloy + Grafana + Prometheus)
 #
 # The stack is containers on the app host, so most of what there is to assert
 # lives in the rendered files rather than in AWS resources: the compose project,
@@ -122,8 +122,8 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 14
-    error_message = "Fourteen rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
+    condition     = length(aws_s3_object.host_config) == 15
+    error_message = "Fifteen rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
   }
 
   assert {
@@ -163,7 +163,7 @@ run "logging_stack_resources" {
 }
 
 # -----------------------------------------------------------------------------
-# compose: the six containers, loopback-only, inside everyone's limits
+# compose: the observability containers, loopback-only, inside everyone's limits
 # -----------------------------------------------------------------------------
 
 run "compose_services" {
@@ -173,6 +173,7 @@ run "compose_services" {
     condition = alltrue([
       for image in [
         var.logging.loki_image,
+        var.logging.tempo_image,
         var.logging.alloy_image,
         var.logging.grafana_image,
         var.logging.prometheus_image,
@@ -190,7 +191,7 @@ run "compose_services" {
 
   assert {
     condition = alltrue([
-      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port, var.logging.alertmanager_port] :
+      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.tempo_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port, var.logging.alloy_otlp_grpc_port, var.logging.alloy_otlp_http_port, var.logging.alertmanager_port] :
       strcontains(local.docker_compose, "127.0.0.1:${port}:")
     ])
     error_message = "No component of this stack publishes a non-loopback port; the security group stays as it was."
@@ -202,11 +203,11 @@ run "compose_services" {
   }
 
   assert {
-    # 7 observability containers, plus Redis and SonarQube when they are on: the
+    # 8 observability containers, plus Redis and SonarQube when they are on: the
     # count has to follow what is enabled, or disabling either service turns this
     # into a false failure.
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
-    error_message = "Every capped container carries a memory limit — the seven observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 8 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
+    error_message = "Every capped container carries a memory limit — the eight observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
   }
 
   assert {
@@ -259,8 +260,10 @@ run "alloy_pipeline" {
       strcontains(local.alloy_config, "loki.source.journal"),
       strcontains(local.alloy_config, "loki.source.api"),
       strcontains(local.alloy_config, "loki.write"),
+      strcontains(local.alloy_config, "otelcol.receiver.otlp"),
+      strcontains(local.alloy_config, "otelcol.exporter.otlp \"tempo\""),
     ])
-    error_message = "Three inputs (containers, journald, push API) and one output (Loki) must all be wired."
+    error_message = "Three log inputs (containers, journald, push API), the OTLP receiver and their outputs (Loki, Tempo) must all be wired."
   }
 
   assert {
@@ -276,6 +279,64 @@ run "alloy_pipeline" {
   assert {
     condition     = strcontains(local.alloy_config, "/loki/api/v1/push")
     error_message = "Loki is written over its push API on the compose network, not through a published port."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Traces: OTLP in, Tempo on the volume, spans queryable in Grafana
+# -----------------------------------------------------------------------------
+
+run "traces_pipeline" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "container_name: agrovesto-tempo") &&
+      strcontains(local.docker_compose, "image: ${var.logging.tempo_image}") &&
+      aws_s3_object.host_config["logging/tempo/config.yml"].content == local.tempo_config
+    )
+    error_message = "Tempo runs as a capped container with its rendered config shipped through the host config bucket, like every other component."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.tempo_config, "block_retention: ${var.logging.traces_retention_hours}h") &&
+      strcontains(local.tempo_config, "endpoint: 0.0.0.0:4317") &&
+      strcontains(local.tempo_config, "url: http://prometheus:9090/api/v1/write")
+    )
+    error_message = "Tempo keeps traces for traces_retention_hours, accepts OTLP on the standard ports and remote-writes span metrics to Prometheus."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: agrovesto-tempo") &&
+      strcontains(local.grafana_datasources, "datasourceUid: agrovesto-tempo") &&
+      strcontains(local.grafana_datasources, "datasourceUid: agrovesto-loki") &&
+      strcontains(local.grafana_datasources, "$${__value.raw}")
+    )
+    error_message = "Grafana gets a Tempo datasource, a Loki log-line -> trace link and the trace -> logs jump back."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_config, "job_name: tempo") &&
+      strcontains(local.docker_compose, "--web.enable-remote-write-receiver")
+    )
+    error_message = "Prometheus scrapes Tempo's own metrics and has the remote-write receiver on for Tempo's span metrics."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "OTEL_EXPORTER_OTLP_ENDPOINT") &&
+      strcontains(local.docker_compose, "OTEL_SERVICE_NAME: \"nomaos\"") &&
+      strcontains(local.docker_compose, "127.0.0.1:${var.logging.alloy_otlp_grpc_port}:4317")
+    )
+    error_message = "Every compose API carries the OTEL env block (service name = API key) and Alloy's OTLP receiver is loopback-published."
+  }
+
+  assert {
+    condition     = contains(local.logging_own_services, "tempo")
+    error_message = "Tempo's own logs are dropped by the collector like the rest of the stack's containers."
   }
 }
 
@@ -537,8 +598,13 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.docker_compose, "container_name: agrovesto-grafana") && !strcontains(local.docker_compose, "container_name: agrovesto-node-exporter")
+    condition     = !strcontains(local.docker_compose, "container_name: agrovesto-grafana") && !strcontains(local.docker_compose, "container_name: agrovesto-node-exporter") && !strcontains(local.docker_compose, "container_name: agrovesto-tempo")
     error_message = "The compose project must not carry any observability container."
+  }
+
+  assert {
+    condition     = !strcontains(local.docker_compose, "OTEL_EXPORTER_OTLP_ENDPOINT")
+    error_message = "With logging off there is no Alloy to receive spans, so the APIs keep exactly their own env — no OTEL block."
   }
 
   assert {

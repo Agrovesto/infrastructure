@@ -42,7 +42,7 @@ Agrovesto infrastructure is split into three primary logical blocks:
 ### 🛠 Component Details
 
 #### 1. Compute
-- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 7 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 7 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
+- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 7 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 8 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
 - **Prod**: 5 ECS Fargate services (ASPNETCORE APIs) running on Graviton (ARM64) for better price-performance. Scaling is managed via Application Auto Scaling (min 1, max 4).
 - **Monitoring**: 5 always-on Fargate tasks (Prometheus, Loki, Tempo, Grafana, Edge) plus several scheduled batch jobs.
 
@@ -85,6 +85,7 @@ The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while
 - **Traces**: Tempo handles OTLP traces. The receiving side has always been there; the sending side is now wired too — every prod ECS task definition carries `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.internal:4317` and the sampler/exporter settings, so traces flow the moment an image loads an OTel SDK. See `var.otel` in `prod/variables.tf`.
     - **Still required in the application image**: the OTLP exporter is a library, not a sidecar. For the ASP.NET APIs that means `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Exporter.OpenTelemetryProtocol` and the ASP.NET Core / HttpClient / SqlClient instrumentation packages. The environment variables are inert until then.
     - **Logs stay on the awslogs driver** (`OTEL_LOGS_EXPORTER=none`): exporting them over OTLP as well would store every line in CloudWatch *and* Loki.
+    - **Dev mirrors the same path on the host**: every compose API gets the identical `OTEL_*` env block pointed at `http://alloy:4317` (`local.otel_environment` in `dev/locals.tf`), Alloy forwards spans to an on-host Tempo container (14-day retention on the logging EBS volume, span metrics remote-written to the host Prometheus), and Grafana's Tempo↔Loki links are provisioned. Same caveat: inert until the image loads an OTel SDK.
 - **Dashboards**: Grafana OSS provides unified visualization, with trace-to-log jumps from Tempo to Loki already wired.
 - **Alerts**: Alertmanager routes alerts to Email/Webhooks.
 

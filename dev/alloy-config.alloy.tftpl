@@ -9,12 +9,14 @@
 // Iterate there instead - `docker compose restart alloy` after editing the file
 // makes a change visible without a Terraform run, and apply makes it final.
 //
-// Three inputs, one output:
+// Four inputs, three destinations (Loki, Prometheus, Tempo):
 //
 //   docker containers (the 7 APIs, Vault, SQL Server, nginx access log)
 //   journald         (sshd, kernel, cloud-init, unit failures)
 //   Loki push API    (an app that logs straight to Alloy, port ${push_port})
 //                            -> loki.process -> Loki on 127.0.0.1:3100
+//   OTLP gRPC/HTTP   (the APIs' OTEL_* env block, ports 4317/4318)
+//                            -> Tempo (traces) | Prometheus (metrics) | Loki
 // =============================================================================
 
 logging {
@@ -187,4 +189,60 @@ loki.source.api "push" {
 
   labels     = { job = "loki-push", host = "${hostname}" }
   forward_to = [loki.process.lines.receiver]
+}
+
+// -----------------------------------------------------------------------------
+// 5. OTLP: spans (and any OTLP metrics/logs) from the apps
+//
+// The receiving end of the OTEL_* env block Terraform puts on every compose
+// API — the same receiver shape the prod monitoring stack's Alloy runs
+// (monitoring/locals.tf). Traces go to Tempo beside this container, metrics
+// remote-write to the host Prometheus (the span metrics Tempo produces take
+// the same road), and OTLP logs — if a service ever turns them on — land in
+// Loki next to the docker-tailed lines.
+//
+// Containers on this network send to http://alloy:4317; a host process or an
+// SSH tunnel uses the loopback publishes in docker-compose.yml.
+// -----------------------------------------------------------------------------
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    // The compose service name, not localhost: this container has its own
+    // network namespace. No TLS — the docker network is private to the host.
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.loki.receiver]
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
 }

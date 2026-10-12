@@ -80,6 +80,11 @@ describe are listed separately at the end.
 - Applications send OTLP to Alloy (4317 gRPC, 4318 HTTP) in the edge task.
 - Alloy forwards spans to Tempo (OTLP 4317). Tempo stores blocks on EFS for 14
   days and emits span metrics back into Prometheus.
+- Dev runs the same shape on the compose network: the compose APIs carry the
+  `OTEL_*` env block (`local.otel_environment` in `dev/locals.tf`), Alloy's OTLP
+  receiver forwards to Tempo on the host, Tempo keeps blocks for 14 days on the
+  logging EBS volume and remote-writes span metrics to the host Prometheus.
+  Nothing is ingested or charged by AWS, like the rest of the dev stack.
 
 ### Alert path
 
@@ -177,7 +182,7 @@ line).
 | EBS | Storage | 50 GB root + 50 GB data + 20 GB for the log stores, gp3 | ≈ $10 of the ≈ $35 |
 | nginx + 5 API containers | Runtime | reverse proxy on 443 → containers on 5001–5005 | — |
 | SQL Server container | Database | 5 databases on the data volume | — |
-| Logging + metrics containers | Observability | Loki, Alloy, Grafana, Prometheus, cAdvisor, node-exporter — on-host, no CloudWatch | — |
+| Logging, metrics & trace containers | Observability | Loki, Tempo, Alloy, Grafana, Prometheus, cAdvisor, node-exporter — on-host, no CloudWatch | — |
 | Vault container | Secrets | dev secrets | — |
 | EventBridge Scheduler | Scheduling | start 08:00, stop 20:00, Mon–Fri, Africa/Lagos (≈ 260 h/month) | — |
 | ECR | Images | 5 dev repos, MUTABLE tags, 3 kept | — |

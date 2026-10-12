@@ -121,9 +121,9 @@ One EC2 instance (`t3.large`, IMDSv2 only, hop limit 2) runs everything in Docke
 - **APIs** (images from ECR `agrovesto-dev-<svc>`): wallet :5001, onboarding :5002, input :5003, moneval :5004, serviceprovider :5005
 - **SQL Server** on its own EBS volume, with databases `wallet`, `onboarding`, `input`, `moneval`, `serviceprovider`. The SA password comes from the `TF_VAR_MSSQL_SA_PASSWORD_DEV` secret.
 - **nginx** reverse proxy: `dev-<svc>-api.nomaos.com` → API ports. Security group: 80/443 open, 22 from `allowed_ssh_cidrs` only.
-- **Logging and metrics** (own EBS volume): Loki 3.4.2, Alloy 1.6.1, Grafana 11.5.2, Prometheus 3.1.0, cAdvisor 0.57.0, node-exporter 1.9.1, **Alertmanager 0.28.1**. All bind to 127.0.0.1. Grafana is exposed only through the nginx allow-list.
+- **Logging, metrics and traces** (own EBS volume): Loki 3.4.2, Tempo 2.7.1, Alloy 1.6.1, Grafana 11.5.2, Prometheus 3.1.0, cAdvisor 0.57.0, node-exporter 1.9.1, **Alertmanager 0.28.1**. All bind to 127.0.0.1. Grafana is exposed only through the nginx allow-list.
 
-**How configuration reaches the host.** Rendered files (compose, nginx, SQL init, Loki, Alloy, Prometheus, alert rules, Alertmanager and Grafana provisioning) are uploaded as objects to the host-config S3 bucket. `user_data` syncs them at boot. After changing config, run `aws s3 sync` on the host, or reboot it.
+**How configuration reaches the host.** Rendered files (compose, nginx, SQL init, Loki, Tempo, Alloy, Prometheus, alert rules, Alertmanager and Grafana provisioning) are uploaded as objects to the host-config S3 bucket. `user_data` syncs them at boot. After changing config, run `aws s3 sync` on the host, or reboot it.
 
 **Scheduler.** EventBridge Scheduler starts the host at 08:00 and stops it at 20:00, Monday to Friday, in the Africa/Lagos timezone.
 

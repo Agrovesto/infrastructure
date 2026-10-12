@@ -227,7 +227,7 @@ locals {
   tls_proxy_enabled = var.rabbitmq.enabled || local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
 
   # ---------------------------------------------------------------------------
-  # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+  # Logging, metrics & traces on the host (Loki + Tempo + Alloy + Grafana + Prometheus)
   #
   # Every file below is rendered at plan time and written by cloud-init, which is
   # how the compose and nginx configs already work. That has one consequence worth
@@ -245,7 +245,7 @@ locals {
   # the logs of the thing that writes its logs is an unbounded loop that ends with
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
   logging_own_services = concat(
-    ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
+    ["loki", "tempo", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
     local.tls_proxy_enabled ? ["edge"] : [],
     var.vault.oidc_enabled ? ["dex"] : [],
   )
@@ -340,6 +340,11 @@ locals {
     retention_streams      = local.logging_retention_streams
   })
 
+  tempo_config = templatefile("${path.module}/tempo-config.yml.tftpl", {
+    retention_hours = var.logging.traces_retention_hours
+    hostname        = local.name
+  })
+
   alloy_config = templatefile("${path.module}/alloy-config.alloy.tftpl", {
     metrics_port           = var.logging.alloy_port
     push_port              = var.logging.alloy_push_port
@@ -360,6 +365,7 @@ locals {
     grafana_port       = var.logging.grafana_port
     metrics_port       = var.logging.alloy_port
     alertmanager_port  = var.logging.alertmanager_port
+    tempo_port         = var.logging.tempo_port
   })
 
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
@@ -400,6 +406,48 @@ locals {
   grafana_dashboards_provider = file("${path.module}/grafana-dashboards.yml")
   grafana_dashboard_logs      = file("${path.module}/grafana/dashboards/dev-logs.json")
   grafana_dashboard_host      = file("${path.module}/grafana/dashboards/dev-host.json")
+
+  # OpenTelemetry ----------------------------------------------------------------
+  #
+  # The same standard OTEL_* block prod's ECS tasks carry (prod/locals.tf
+  # otel_environment), pointed at Alloy on the compose network instead of the
+  # Cloud Map name. Inert until an image loads an OTel SDK — the env vars cost
+  # nothing, and the day the real images land traces start flowing with no
+  # further change (the same bet prod made in prod/ecs.tf).
+  #
+  # OTEL_SERVICE_NAME is what makes a span attributable: it is added per API
+  # below and is the same string as the compose service name, the database
+  # name and the Route53 subdomain prefix. api.env merges last, so a service
+  # can override any of it.
+  otel_environment = {
+    "OTEL_EXPORTER_OTLP_ENDPOINT" = "http://alloy:4317"
+    "OTEL_EXPORTER_OTLP_PROTOCOL" = "grpc"
+    "OTEL_TRACES_EXPORTER"        = "otlp"
+    "OTEL_METRICS_EXPORTER"       = "otlp"
+    # Logs stay on the stdout path Alloy already tails; OTLP-ing them would
+    # store every line twice for no benefit. Same call as prod's var.otel.
+    "OTEL_LOGS_EXPORTER"      = "none"
+    "OTEL_TRACES_SAMPLER"     = "parentbased_traceidratio"
+    "OTEL_TRACES_SAMPLER_ARG" = "1.0"
+    "OTEL_PROPAGATORS"        = "tracecontext,baggage"
+    "OTEL_RESOURCE_ATTRIBUTES" = join(",", [
+      "deployment.environment=${var.environment}",
+      "service.namespace=${var.project}",
+      "cloud.provider=aws",
+      "cloud.region=${var.aws_region}",
+      "host.name=${local.name}",
+    ])
+  }
+
+  # The compose project's view of the APIs: with the stack on, every compose
+  # API carries the block above. With logging.enabled = false there is no
+  # Alloy to receive the spans, so the APIs keep exactly their own env.
+  apis_with_otel = var.logging.enabled ? {
+    for name, api in var.apis :
+    name => merge(api, {
+      env = merge(local.otel_environment, { OTEL_SERVICE_NAME = name }, api.env)
+    })
+  } : var.apis
 
   # Host config in S3 ------------------------------------------------------------
   #
@@ -468,6 +516,10 @@ locals {
     var.logging.enabled ? {
       "logging/loki/config.yml" = {
         content      = local.loki_config
+        content_type = "text/yaml"
+      }
+      "logging/tempo/config.yml" = {
+        content      = local.tempo_config
         content_type = "text/yaml"
       }
       "logging/alloy/config.alloy" = {
@@ -544,7 +596,7 @@ locals {
   )
 
   docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    apis              = var.apis
+    apis              = local.apis_with_otel
     mssql             = local.mssql
     vault             = var.vault
     domain            = var.domain_name

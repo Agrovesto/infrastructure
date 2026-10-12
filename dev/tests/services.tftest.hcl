@@ -590,11 +590,11 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 16 &&
+      length(aws_s3_object.host_config) == 17 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the five always-needed (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql) and nine logging objects (16 total)."
+    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the five always-needed (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql) and ten logging objects (17 total)."
   }
   assert {
     condition = alltrue([
@@ -752,8 +752,8 @@ run "disabled" {
   }
 
   assert {
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7
-    error_message = "Only the seven observability containers remain capped."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 8
+    error_message = "Only the eight observability containers remain capped."
   }
 }
 

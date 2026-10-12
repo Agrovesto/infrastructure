@@ -1,0 +1,66 @@
+# =============================================================================
+# Tempo — trace store on the dev EC2 host
+#
+# Rendered by Terraform (dev/locals.tf), uploaded as the object
+# logging/tempo/config.yml in the host config bucket (dev/host_config.tf) and
+# synced by user_data to /opt/agrovesto/logging/tempo/config.yml on every boot.
+#
+# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+# Iterate there instead - `docker compose restart tempo` after editing the file
+# makes a change visible without a Terraform run, and apply makes it final.
+#
+# Same shape as the prod monitoring stack's Tempo (monitoring/locals.tf): OTLP
+# in on 4317/4318, single binary on -target=all, local block storage beside
+# Loki's chunks on the logging volume, retention in the config rather than a
+# cron job, and span metrics remote-written to Prometheus so a trace also
+# produces a request rate. Sized for one box: no ring, no external object
+# store, nothing AWS-billed.
+# =============================================================================
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: ${retention_hours}h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tempo/blocks
+    wal:
+      path: /tempo/wal
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      host: ${hostname}
+  storage:
+    path: /tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+  processor:
+    span_metrics: {}
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors:
+        - span-metrics
