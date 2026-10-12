@@ -74,6 +74,17 @@ amplify_apps = {
 # Caddy obtains and renews certificates for every dev API below. DNS must
 # resolve each hostname to this host before ACME validation can succeed.
 apis = {
+  agx = {
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5006
+    subdomain     = "dev-agx-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5006", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5019
+      green_port = 5020
+    }
+  }
   nomaos = {
     image         = "public.ecr.aws/nginx/nginx:alpine"
     host_port     = 5000

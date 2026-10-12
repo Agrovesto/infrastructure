@@ -29,7 +29,9 @@
           "uid": "agrovesto-loki"
         },
         "query": {
-          "query": "label_values({job=\"docker\"}, service)",
+          "type": 1,
+          "label": "service",
+          "stream": "{job=\"docker\"}",
           "refId": "LokiVariableQueryEditor-VariableQuery"
         },
         "current": {
@@ -44,7 +46,7 @@
         "allValue": ".*",
         "multi": true,
         "refresh": 2,
-        "reg": "",
+        "regex": "",
         "sort": 1,
         "options": []
       },

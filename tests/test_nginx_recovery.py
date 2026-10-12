@@ -19,7 +19,7 @@ class NginxRecoveryTests(unittest.TestCase):
         config = (ROOT / 'dev/terraform.auto.tfvars').read_text()
         api_config = config.split('apis = {', 1)[1].split('# `sonar`', 1)[0]
         hosts = re.findall(r'subdomain\s*=\s*"([^"]+)"', api_config)
-        self.assertEqual(len(hosts), 6)
+        self.assertEqual(len(hosts), 7)
         self.assertIn('dev-noma-api', hosts)
         self.assertTrue(all(host.startswith('dev-') for host in hosts))
 
