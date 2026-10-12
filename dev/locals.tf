@@ -338,6 +338,18 @@ locals {
     max_query_length_hours = local.logging_retention_hours
     querier_max_concurrent = var.logging.querier_max_concurrent
     retention_streams      = local.logging_retention_streams
+    alertmanager_port      = var.logging.alertmanager_port
+  })
+
+  # LogQL alerts Loki evaluates itself (the ruler block in loki-config.yml.tftpl)
+  # and hands to the same Alertmanager the Prometheus rules use. Published under
+  # the "fake" tenant directory: that is the tenant Loki ingests under when
+  # auth_enabled is false, and the ruler only reads rules from a tenant
+  # directory, so a file one level higher is silently never loaded.
+  loki_rules = templatefile("${path.module}/loki-rules.yml.tftpl", {
+    window         = var.alert_rules.log_rule_window
+    app_error_rate = var.alert_rules.log_error_rate
+    nginx_5xx_rate = var.alert_rules.nginx_5xx_rate
   })
 
   tempo_config = templatefile("${path.module}/tempo-config.yml.tftpl", {
@@ -374,6 +386,10 @@ locals {
     cpu_percent       = var.alert_rules.cpu_percent
     memory_percent    = var.alert_rules.memory_percent
     disk_free_percent = var.alert_rules.disk_free_percent
+    # Per-container thresholds, each measured against the container's own limit.
+    container_memory_percent    = var.alert_rules.container_memory_percent
+    container_cpu_percent       = var.alert_rules.container_cpu_percent
+    container_throttled_percent = var.alert_rules.container_throttled_percent
     # The containers that should always be up. Redis and SonarQube join the list
     # only when they exist, otherwise ContainerDown fires for a service that was
     # deliberately turned off.
@@ -406,6 +422,9 @@ locals {
   grafana_dashboards_provider = file("${path.module}/grafana-dashboards.yml")
   grafana_dashboard_logs      = file("${path.module}/grafana/dashboards/dev-logs.json")
   grafana_dashboard_host      = file("${path.module}/grafana/dashboards/dev-host.json")
+  grafana_dashboard_services  = file("${path.module}/grafana/dashboards/dev-services.json")
+  grafana_dashboard_traffic   = file("${path.module}/grafana/dashboards/dev-traffic.json")
+  grafana_dashboard_infra     = file("${path.module}/grafana/dashboards/dev-infra.json")
 
   # OpenTelemetry ----------------------------------------------------------------
   #
@@ -518,6 +537,13 @@ locals {
         content      = local.loki_config
         content_type = "text/yaml"
       }
+      # The tenant directory in this key is load-bearing: Loki's ruler reads
+      # <directory>/<tenant>/<namespace>, and "fake" is the tenant it ingests
+      # under when auth_enabled is false. One level higher and no rule loads.
+      "logging/loki/rules/fake/application.yml" = {
+        content      = local.loki_rules
+        content_type = "text/yaml"
+      }
       "logging/tempo/config.yml" = {
         content      = local.tempo_config
         content_type = "text/yaml"
@@ -552,6 +578,18 @@ locals {
       }
       "logging/grafana/dashboards/dev-host.json" = {
         content      = local.grafana_dashboard_host
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-services.json" = {
+        content      = local.grafana_dashboard_services
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-traffic.json" = {
+        content      = local.grafana_dashboard_traffic
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-infra.json" = {
+        content      = local.grafana_dashboard_infra
         content_type = "application/json"
       }
     } : {},

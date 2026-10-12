@@ -122,8 +122,8 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 15
-    error_message = "Fifteen rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 2x dashboards."
+    condition     = length(aws_s3_object.host_config) == 19
+    error_message = "Nineteen rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 5x dashboards."
   }
 
   assert {
@@ -337,6 +337,167 @@ run "traces_pipeline" {
   assert {
     condition     = contains(local.logging_own_services, "tempo")
     error_message = "Tempo's own logs are dropped by the collector like the rest of the stack's containers."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Dashboards: what the metrics, logs and traces are looked at through
+# -----------------------------------------------------------------------------
+
+run "grafana_dashboards" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for name, content in {
+        "dev-logs"     = local.grafana_dashboard_logs
+        "dev-host"     = local.grafana_dashboard_host
+        "dev-services" = local.grafana_dashboard_services
+        "dev-traffic"  = local.grafana_dashboard_traffic
+        "dev-infra"    = local.grafana_dashboard_infra
+      } :
+      aws_s3_object.host_config["logging/grafana/dashboards/${name}.json"].content == content &&
+      aws_s3_object.host_config["logging/grafana/dashboards/${name}.json"].content_type == "application/json"
+    ])
+    error_message = "Every dashboard in dev/grafana/dashboards ships to the host verbatim, as JSON, under the directory the file provider reads."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_services, "agrovesto-dev-services"),
+      strcontains(local.grafana_dashboard_services, "container_cpu_usage_seconds_total"),
+      strcontains(local.grafana_dashboard_services, "container_spec_memory_limit_bytes"),
+      strcontains(local.grafana_dashboard_services, "container_spec_cpu_quota"),
+      strcontains(local.grafana_dashboard_services, "container_oom_events_total"),
+    ])
+    error_message = "The services dashboard answers CPU and memory per app, measured against each container's own compose limit, plus restarts and OOM kills."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_traffic, "agrovesto-dev-traffic"),
+      strcontains(local.grafana_dashboard_traffic, "count_over_time"),
+      strcontains(local.grafana_dashboard_traffic, "[1d]"),
+      strcontains(local.grafana_dashboard_traffic, "remote_addr"),
+      strcontains(local.grafana_dashboard_traffic, "http_user_agent"),
+      strcontains(local.grafana_dashboard_traffic, "quantile_over_time"),
+    ])
+    error_message = "The traffic dashboard counts requests per day per vhost and breaks them down by client IP, URI and user agent out of the nginx JSON access log."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_infra, "agrovesto-dev-infra"),
+      strcontains(local.grafana_dashboard_infra, "node_filesystem_avail_bytes"),
+      strcontains(local.grafana_dashboard_infra, "node_network_receive_bytes_total"),
+      strcontains(local.grafana_dashboard_infra, "container_spec_memory_limit_bytes"),
+      strcontains(local.grafana_dashboard_infra, "tempo_distributor_spans_received_total"),
+      strcontains(local.grafana_dashboard_infra, "traces_span_metrics_calls_total"),
+      strcontains(local.grafana_dashboard_infra, "ALERTS"),
+    ])
+    error_message = "The infrastructure dashboard covers the host, what the containers do to it, the observability stack watching both, and the alerts."
+  }
+
+  assert {
+    condition     = strcontains(local.grafana_dashboards_provider, "path: /var/lib/grafana/dashboards")
+    error_message = "The file provider still points at the directory the sync fills, so adding a dashboard is a file in this repository and nothing else."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Alerts: resource rules in Prometheus, log rules in Loki's own ruler
+# -----------------------------------------------------------------------------
+
+run "container_resource_alerts" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "HostHighCpu"),
+      strcontains(local.prometheus_rules, "ContainerDown"),
+      strcontains(local.prometheus_rules, "ContainerRestarting"),
+      strcontains(local.prometheus_rules, "ContainerNearMemoryLimit"),
+      strcontains(local.prometheus_rules, "ContainerHighCpu"),
+      strcontains(local.prometheus_rules, "ContainerCpuThrottled"),
+    ])
+    error_message = "The host rules must cover the box and the containers on it: down, restarting, memory near the limit, CPU near the limit, and CPU throttling."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_memory_percent}"),
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_cpu_percent}"),
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_throttled_percent}"),
+    ])
+    error_message = "Container thresholds come from var.alert_rules, not from the template, so they can be raised without editing it."
+  }
+
+  assert {
+    condition     = aws_s3_object.host_config["logging/prometheus/rules/host.yml"].content == local.prometheus_rules
+    error_message = "The rendered rules ship to the host verbatim."
+  }
+}
+
+run "log_alerts" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      strcontains(local.loki_rules, "AppErrorSpike"),
+      strcontains(local.loki_rules, "NginxErrorSpike"),
+      strcontains(local.loki_rules, "NginxUpstreamRefused"),
+    ])
+    error_message = "Loki alerts on what the applications logged, on 5xx at nginx, and on an upstream that never answered - the case ContainerDown cannot see."
+  }
+
+  assert {
+    condition     = aws_s3_object.host_config["logging/loki/rules/fake/application.yml"].content == local.loki_rules
+    error_message = "The rendered rules ship to the host verbatim."
+  }
+
+  # The tenant directory is the part that fails silently: Loki's local rule
+  # storage reads <directory>/<tenant>/<namespace>, and with auth_enabled false
+  # the tenant is literally "fake".
+  assert {
+    condition     = endswith(aws_s3_object.host_config["logging/loki/rules/fake/application.yml"].key, "/loki/rules/fake/application.yml")
+    error_message = "Rules must land in the fake tenant directory or Loki's ruler loads nothing and stays quiet about it."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.loki_config, "ruler:"),
+      strcontains(local.loki_config, "directory: /loki/rules"),
+      strcontains(local.loki_config, "alertmanager_url: http://alertmanager:${var.logging.alertmanager_port}"),
+    ])
+    error_message = "Loki's ruler reads /loki/rules and hands anything firing to the Alertmanager on the compose network."
+  }
+
+  assert {
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "loki/rules/fake")
+    error_message = "The bootstrap creates the tenant directory, so the sync lands in a directory the loki user owns."
+  }
+}
+
+run "alert_thresholds_are_configurable" {
+  command = plan
+
+  variables {
+    alert_rules = {
+      container_memory_percent = 70
+      log_error_rate           = 5
+      nginx_5xx_rate           = 2
+      log_rule_window          = "5m"
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "> 70"),
+      strcontains(local.loki_rules, "[5m]"),
+      strcontains(local.loki_rules, "> 5"),
+      strcontains(local.loki_rules, "> 2"),
+    ])
+    error_message = "Both rule files take their window and thresholds from var.alert_rules."
   }
 }
 

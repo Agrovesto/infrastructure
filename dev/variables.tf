@@ -918,11 +918,25 @@ variable "alarm_cpu_percent" {
 }
 
 variable "alert_rules" {
-  description = "Thresholds for the dev host's Prometheus alert rules (Alertmanager -> SNS alerts topic)"
+  description = "Thresholds for the dev host's Prometheus and Loki alert rules (Alertmanager -> SNS alerts topic)"
   type = object({
+    # Host, from node_exporter.
     cpu_percent       = optional(number, 90)
     memory_percent    = optional(number, 90)
     disk_free_percent = optional(number, 10)
+
+    # Containers, from cAdvisor, each measured against its own compose limit:
+    # a container can be pinned at mem_limit while the host still has memory
+    # free, and that container is the one the kernel kills.
+    container_memory_percent    = optional(number, 90)
+    container_cpu_percent       = optional(number, 90)
+    container_throttled_percent = optional(number, 25)
+
+    # Log-based, from the Loki ruler: lines or responses per second, measured
+    # over log_rule_window.
+    log_error_rate  = optional(number, 1)
+    nginx_5xx_rate  = optional(number, 0.1)
+    log_rule_window = optional(string, "10m")
   })
   default = {}
 }
