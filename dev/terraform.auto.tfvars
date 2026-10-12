@@ -75,7 +75,7 @@ apis = {
   nomaos = {
     image     = "public.ecr.aws/nginx/nginx:alpine"
     host_port = 5000
-    subdomain = "noma-api"
+    subdomain = "dev-noma-api"
     env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
     # Blue/green slots, managed by the app repo's deploy.sh (--app nomaos-api).
     blue_green = {
@@ -285,3 +285,11 @@ public_subnet_cidrs = ["172.96.0.0/24"]
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Password must be provisioned in SSM before boot; see docs/rabbitmq.md.
+# Management is HTTPS but denied until trusted operator CIDRs are supplied.
+rabbitmq = {
+  enabled       = false # Enable after provisioning SSM, DNS, and operator CIDRs.
+  subdomain     = "dev-rabbitmq"
+  allowed_cidrs = []
+}

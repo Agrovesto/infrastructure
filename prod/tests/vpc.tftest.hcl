@@ -34,6 +34,7 @@ override_data {
 }
 
 variables {
+  rabbitmq = { enabled = false }
   import_existing = false
 
   # Test the new-instance defaults, not the adoption values in terraform.auto.tfvars.

@@ -939,3 +939,26 @@ variable "ui_https_enabled" {
   type        = bool
   default     = false
 }
+
+variable "rabbitmq" {
+  description = "Single-node dev RabbitMQ. Password is provisioned out of band in SSM /<project>-<environment>/rabbitmq_password; never stored in host config. UI is HTTPS and deny-by-default."
+  type = object({
+    enabled         = optional(bool, false)
+    image           = optional(string, "rabbitmq:4.2-management-alpine")
+    subdomain       = optional(string, "dev-rabbitmq")
+    allowed_cidrs   = optional(list(string), [])
+    data_dir        = optional(string, "/data/rabbitmq")
+    memory_limit_mb = optional(number, 768)
+    cpu_limit       = optional(string, "0.50")
+  })
+  default = {}
+
+  validation {
+    condition     = alltrue([for cidr in var.rabbitmq.allowed_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")])
+    error_message = "RabbitMQ management requires explicit trusted CIDRs, not a world-open /0."
+  }
+  validation {
+    condition     = var.rabbitmq.memory_limit_mb >= 512
+    error_message = "RabbitMQ requires at least 512 MiB of container memory."
+  }
+}

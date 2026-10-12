@@ -172,8 +172,15 @@ aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}
 # the deploy pipeline has not laid down its own, so a slot flip survives every
 # reboot while an instance replacement falls back to blue. nginx includes
 # whatever sits in this directory (dev/nginx.conf.tftpl).
+# Ignore legacy names such as nomaos-active.conf left behind by S3 sync.
+# Both nginx and independently deployed slots join this external edge network.
+docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge
+%{ if rabbitmq.enabled ~}
+docker network inspect nomaos_data >/dev/null 2>&1 || docker network create nomaos_data
+mkdir -p "${rabbitmq.data_dir}"
+%{ endif ~}
 mkdir -p /opt/nomaos/nginx/upstreams
-for f in /opt/agrovesto/nginx/*-active.conf; do
+for f in /opt/agrovesto/nginx/*_api-active.conf; do
   [ -e "$f" ] || continue
   slot="/opt/nomaos/nginx/upstreams/$(basename "$f" -active.conf).conf"
   test -f "$slot" || cp "$f" "$slot"
@@ -194,7 +201,11 @@ Type=oneshot
 ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
 # Restore the default Nomaos slots (blue) only when the deploy pipeline's slot
 # files are absent — never overwrite its blue/green choices on a running host.
-ExecStart=/bin/bash -c 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
+ExecStart=/bin/bash -c 'docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge'
+%{ if rabbitmq.enabled ~}
+ExecStart=/bin/bash -c 'docker network inspect nomaos_data >/dev/null 2>&1 || docker network create nomaos_data'
+%{ endif ~}
+ExecStart=/bin/bash -ec 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
 ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
 
 [Install]
@@ -251,6 +262,13 @@ printf 'GRAFANA_GITHUB_CLIENT_SECRET=%s\n' "$GRAFANA_GITHUB_CLIENT_SECRET"
 %{ if sonarqube.enabled ~}
 SONAR_DB_PW=$(aws ssm get-parameter --with-decryption --name "${sonarqube_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 printf 'SONAR_DB_PASSWORD=%s\n' "$SONAR_DB_PW"
+%{ endif ~}
+%{ if rabbitmq.enabled ~}
+RABBITMQ_PW=$(aws ssm get-parameter --with-decryption --name "${rabbitmq_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+# Hex avoids Compose .env interpolation/escaping and gives >=128 bits entropy.
+[[ "$RABBITMQ_PW" =~ ^[a-fA-F0-9]{32,128}$ ]] || { echo "RabbitMQ password must be 32-128 hex characters" >&2; exit 1; }
+printf 'RABBITMQ_PASSWORD=%s\n' "$RABBITMQ_PW"
+unset RABBITMQ_PW
 %{ endif ~}
 %{ if redis_parameter != "" ~}
 REDIS_PW=$(aws ssm get-parameter --with-decryption --name "${redis_parameter}" --query Parameter.Value --output text --region "${aws_region}")
