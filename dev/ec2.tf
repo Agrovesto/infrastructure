@@ -218,7 +218,10 @@ resource "aws_ssm_association" "host_config_refresh" {
       # only datasources and dashboards are populated here, but plugins and
       # alerting must exist as (empty) dirs to keep the startup log clean. The
       # S3 sync copies objects, never bare directories, so ensure them each run.
-      "mkdir -p ${local.logging_root}/grafana/provisioning/plugins ${local.logging_root}/grafana/provisioning/alerting",
+      # The tempo dir joins the mkdir and is chowned: docker auto-created it
+      # root-owned while its mount was broken, and tempo runs as uid 10001.
+      "mkdir -p ${local.logging_root}/grafana/provisioning/plugins ${local.logging_root}/grafana/provisioning/alerting ${local.logging_root}/tempo",
+      "chown -R 10001:10001 ${local.logging_root}/tempo",
       ] : [], var.manage_fresh_vault ? [
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
       "bash /opt/agrovesto/scripts/prepare-vault.sh",

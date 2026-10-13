@@ -770,16 +770,16 @@ locals {
       trace:
         backend: local
         local:
-          path: /tempo/blocks
+          path: /var/tempo/blocks
         wal:
-          path: /tempo/wal
+          path: /var/tempo/wal
 
     metrics_generator:
       registry:
         external_labels:
           source: tempo
       storage:
-        path: /tempo/generator/wal
+        path: /var/tempo/generator/wal
         remote_write:
           - url: ${local.endpoints.prometheus}/api/v1/write
       processor:
