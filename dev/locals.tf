@@ -691,8 +691,15 @@ locals {
   blue_green_slot_confs = {
     for bg in local.blue_green_apis :
     "nginx/${bg.upstream_name}-active.conf" => {
+      # The header comment marks the file as Terraform-shipped (deploy.sh
+      # replaces the whole file when it flips slots). Being content, it also
+      # re-uploads every slot object whenever this format changes — which is
+      # how the bucket recovers an object that state lists but S3 is missing
+      # (2026-10-12: nginx/agx_api-active.conf absent while nginx.conf already
+      # referenced $agx_api_backend, so the seeders had no source to copy and
+      # the edge crash-looped on the undefined variable).
       content = format(
-        "map '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
+        "# Terraform-shipped default (blue); deploy.sh rewrites the live file when it flips slots.\nmap '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
         bg.upstream_name, bg.key, bg.blue_port,
       )
       content_type = "text/plain"
