@@ -399,8 +399,12 @@ run "nginx_vhost" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "proxy_pass http://sonarqube:${local.sonarqube_nginx.port};")
-    error_message = "The vhost proxies to the container port on the compose network, not to the published host port."
+    condition = (
+      strcontains(local.nginx_conf, "set $sonar_backend sonarqube:${local.sonarqube_nginx.port};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$sonar_backend;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://sonarqube:")
+    )
+    error_message = "The vhost proxies to the container port on the compose network, resolved at request time through a variable: an absent SonarQube must 502 its vhost, never keep nginx from starting."
   }
 
   assert {
@@ -420,7 +424,7 @@ run "nginx_vhost" {
 
   assert {
     condition     = strcontains(local.docker_compose, "      - sonarqube\n")
-    error_message = "nginx depends_on sonarqube: nginx resolves a static proxy_pass hostname at start-up, so an absent container fails nginx instead of 502ing."
+    error_message = "nginx depends_on sonarqube for start ordering on a cold boot; the vhost resolves at request time, so a later SonarQube restart only 502s its vhost."
   }
 }
 
@@ -897,6 +901,21 @@ run "vault_oidc_staged" {
       strcontains(local.host_config_files["scripts/refresh-vault-oidc.sh"].content, "VAULT_OIDC_CLIENT_SECRET")
     )
     error_message = "OIDC reuses the initialized file-storage Vault, with Dex, HTTPS and the Vault nginx route."
+  }
+
+  assert {
+    # The association's commands are etag-dependent and unknown during a
+    # mocked plan, so pin the source: the OIDC refresh branch bypasses
+    # agrovesto-sync.service and runs compose directly, so it must seed the
+    # blue/green slot files itself — between refresh-vault-oidc.sh and the
+    # compose up. An API opted in after the host booted otherwise leaves
+    # nginx.conf including an undefined $<app>_api_backend map, and nginx
+    # exits at config load (the 2026-10-12 whole-edge outage).
+    condition = can(regex(
+      "refresh-vault-oidc\\.sh\",\\n[\\s\\S]*?_api-active\\.conf[\\s\\S]*?up -d --remove-orphans",
+      file("${path.module}/ec2.tf"),
+    ))
+    error_message = "The Vault-OIDC refresh branch must seed absent slot files from nginx/*_api-active.conf before compose up, like agrovesto-sync.service does."
   }
 
   assert {

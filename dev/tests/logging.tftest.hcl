@@ -611,6 +611,15 @@ run "nginx_vhost_defaults_to_loopback" {
   }
 
   assert {
+    condition = (
+      strcontains(local.nginx_conf, "set $grafana_backend grafana:${local.logging_grafana.port};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$grafana_backend;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://grafana:")
+    )
+    error_message = "The Grafana vhost resolves at request time through the Docker resolver: a recreating or crashed Grafana must 502 its own vhost, never keep nginx from starting (host not found in upstream, 2026-10-12)."
+  }
+
+  assert {
     condition     = !strcontains(local.nginx_conf, "proxy_pass http://loki")
     error_message = "Loki is never proxied: it stays loopback-only and Grafana reaches it on the docker network."
   }

@@ -224,7 +224,14 @@ http {
 %{ endfor ~}
     deny all;
     location / {
-      proxy_pass http://grafana:${grafana.port};
+      # Variable proxy_pass like the vault vhost: nginx resolves the name
+      # through the Docker resolver at request time instead of once at
+      # start-up, so a Grafana that is recreating or gone only 502s this
+      # vhost. A literal hostname in proxy_pass is a start-up dependency — an
+      # absent grafana container kept the whole edge from starting ("host not
+      # found in upstream", 2026-10-12).
+      set $grafana_backend grafana:${grafana.port};
+      proxy_pass http://$grafana_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
@@ -257,7 +264,12 @@ http {
 %{ endfor ~}
     deny all;
     location / {
-      proxy_pass http://sonarqube:${sonar.port};
+      # Variable form as in the Grafana vhost above: SonarQube is the slowest
+      # thing on this box to come up, and a literal hostname in proxy_pass is
+      # resolved at start-up — an absent or recreating container would keep
+      # the whole edge from starting instead of 502ing this vhost.
+      set $sonar_backend sonarqube:${sonar.port};
+      proxy_pass http://$sonar_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;

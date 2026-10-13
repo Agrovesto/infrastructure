@@ -228,6 +228,14 @@ resource "aws_ssm_association" "host_config_refresh" {
       # SSM secrets and prepare Dex/Caddy state FIRST, then start the services.
       "aws s3 sync s3://${local.host_config_bucket}/ /opt/agrovesto --region ${var.aws_region} --only-show-errors",
       "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh",
+      # This branch composes up WITHOUT starting agrovesto-sync.service, whose
+      # copy loop is otherwise the only seeder of the blue/green slot files.
+      # An API opted in after the host booted then leaves nginx.conf including
+      # an undefined $<app>_api_backend map, and nginx exits at config load,
+      # taking the whole edge down (2026-10-12: unknown "agx_api_backend").
+      # Same semantics as the unit: seed only what is absent, so a deploy
+      # pipeline's slot choice survives every refresh.
+      "mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e \"$f\" ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename \"$f\" -active.conf).conf; test -f \"$s\" || cp \"$f\" \"$s\"; done",
       "docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans",
       ] : ["systemctl start agrovesto-sync.service"],
       ["AGROVESTO_HOST_REFRESH_BASH"],
