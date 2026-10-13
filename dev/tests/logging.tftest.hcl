@@ -833,9 +833,11 @@ run "database_pipeline" {
     condition = (
       aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content == file("../monitoring/scripts/mssql_metrics.py") &&
       strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "python-tds") &&
-      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_log_used_bytes")
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_log_used_bytes") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_io_read_bytes_total") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_wait_time_seconds_total")
     )
-    error_message = "The host config bucket ships the monitoring stack's collector script verbatim, with the per-database metrics and the correct PyPI distribution name."
+    error_message = "The host config bucket ships the monitoring stack's collector script verbatim, with the per-database metrics, the I/O and wait-stat sections and the correct PyPI distribution name."
   }
 
   assert {

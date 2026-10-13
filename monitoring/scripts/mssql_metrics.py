@@ -93,6 +93,56 @@ WHERE counter_name IN (
 
 SKIP_INSTANCES = {"", "_total", "mssqlsystemresource"}
 
+# Cumulative I/O and stall time per database (sys.dm_io_virtual_file_stats):
+# rate() of the byte/op counters is throughput and IOPS, stall/ops is the
+# average latency — the same numbers Performance Insights shows, but
+# Performance Insights does not exist for SQL Server Express, so prod grows
+# its own from these.
+IO_STATS = """
+SELECT DB_NAME(database_id) AS db,
+       SUM(num_of_reads) AS reads,
+       SUM(num_of_bytes_read) AS read_bytes,
+       SUM(num_of_writes) AS writes,
+       SUM(num_of_bytes_written) AS write_bytes,
+       SUM(io_stall_read_ms) AS stall_read_ms,
+       SUM(io_stall_write_ms) AS stall_write_ms
+FROM sys.dm_io_virtual_file_stats(NULL, NULL)
+GROUP BY database_id
+"""
+
+# Requests executing right now — a sample of the "Average Active Sessions"
+# that Performance Insights plots (one sample per push/scrape).
+ACTIVE_SESSIONS = "SELECT COUNT(*) AS value FROM sys.dm_exec_requests WHERE session_id > 50"
+
+# Who is connected, as a trend: sessions per login name.
+SESSIONS_BY_LOGIN = """
+SELECT login_name AS login, COUNT(*) AS value
+FROM sys.dm_exec_sessions
+WHERE is_user_process = 1 AND login_name <> ''
+GROUP BY login_name
+"""
+
+# Cumulative wait time per wait type, minus the idle/benign ones: rate() of
+# these series is the "load by waits" breakdown Performance Insights is known
+# for, and which wait class is eating the server when it is slow.
+WAIT_STATS = """
+SELECT TOP 20 wait_type, wait_time_ms
+FROM sys.dm_os_wait_stats
+WHERE wait_time_ms > 0
+  AND wait_type NOT LIKE 'SLEEP%'
+  AND wait_type NOT IN (
+    'BROKER_EVENTHANDLER', 'BROKER_RECEIVE_WAITFOR', 'BROKER_TASK_STOP',
+    'BROKER_TO_FLUSH', 'BROKER_TRANSMITTER', 'CHECKPOINT_QUEUE',
+    'DIRTY_PAGE_POLL', 'FT_IFTS_SCHEDULER_IDLE_WAIT', 'FT_IFTSHC_MUTEX',
+    'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'LAZYWRITER_SLEEP', 'LOGMGR_QUEUE',
+    'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP',
+    'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 'QDS_SHUTDOWN_QUEUE',
+    'REQUEST_FOR_DEADLOCK_SEARCH', 'SP_SERVER_DIAGNOSTICS_SLEEP',
+    'SQLTRACE_BUFFER_FLUSH', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 'WAITFOR',
+    'XE_DISPATCHER_WAIT', 'XE_LIVE_TARGET_TVF', 'XE_TIMER_EVENT')
+ORDER BY wait_time_ms DESC
+"""
+
 # Per-database counters: emitted with a db label. The KB counters become bytes.
 PER_DB_COUNTERS = {
     "Deadlocks/sec": ("mssql_deadlocks_total", 1),
@@ -224,6 +274,36 @@ def collect():
             except Exception as exc:
                 errors += 1
                 print(json.dumps({"section": "counters", "error": str(exc)}), file=sys.stderr)
+
+            try:
+                for row in query(cursor, IO_STATS):
+                    if not row["db"]:
+                        continue
+                    db = escape_label(row["db"])
+                    metrics.append('mssql_io_reads_total{db="%s"} %d' % (db, int(row["reads"])))
+                    metrics.append('mssql_io_read_bytes_total{db="%s"} %d' % (db, int(row["read_bytes"])))
+                    metrics.append('mssql_io_writes_total{db="%s"} %d' % (db, int(row["writes"])))
+                    metrics.append('mssql_io_write_bytes_total{db="%s"} %d' % (db, int(row["write_bytes"])))
+                    metrics.append('mssql_io_stall_read_seconds_total{db="%s"} %.3f' % (db, int(row["stall_read_ms"]) / 1000.0))
+                    metrics.append('mssql_io_stall_write_seconds_total{db="%s"} %.3f' % (db, int(row["stall_write_ms"]) / 1000.0))
+            except Exception as exc:
+                errors += 1
+                print(json.dumps({"section": "io", "error": str(exc)}), file=sys.stderr)
+
+            try:
+                metrics.append("mssql_active_sessions %d" % int(query(cursor, ACTIVE_SESSIONS)[0]["value"]))
+                for row in query(cursor, SESSIONS_BY_LOGIN):
+                    metrics.append('mssql_login_sessions{login="%s"} %d' % (escape_label(row["login"]), int(row["value"])))
+            except Exception as exc:
+                errors += 1
+                print(json.dumps({"section": "activity", "error": str(exc)}), file=sys.stderr)
+
+            try:
+                for row in query(cursor, WAIT_STATS):
+                    metrics.append('mssql_wait_time_seconds_total{wait_type="%s"} %.3f' % (escape_label(row["wait_type"]), int(row["wait_time_ms"]) / 1000.0))
+            except Exception as exc:
+                errors += 1
+                print(json.dumps({"section": "waits", "error": str(exc)}), file=sys.stderr)
 
             # Volume stats are per-database calls; on SQL Server on Linux the
             # DMV can refuse, so each database is its own guarded attempt and a

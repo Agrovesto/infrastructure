@@ -1,7 +1,7 @@
 {
  "uid": "agrovesto-database",
  "title": "Database: per-database SQL Server deep dive",
- "description": "Every database on the prod SQL Server (RDS Express, the same five as dev plus system DBs): size against the 10 GB per-database cap, log headroom, sessions, transactions, deadlocks and autogrowth, then the server's health, then live DMV queries through the MSSQL datasource for what is running right now. Trends come from the hourly DMV task (monitoring/rds.tf) via Pushgateway \u2014 rate/increase panels use 2h windows because values arrive once an hour. The summary stats also live on the Services dashboard.",
+ "description": "Every database on the prod SQL Server (RDS Express, the same five as dev plus system DBs): size against the 10 GB per-database cap, log headroom, sessions, transactions, deadlocks, autogrowth and read/write I/O with latency; a Performance-Insights-style workload row (active sessions, load by wait type, sessions per login \u2014 PI itself does not exist for Express); the server's health; and live DMV queries through the MSSQL datasource for what is running, who is connected, blocking chains and the top statements right now. Trends come from the hourly DMV task (monitoring/rds.tf) via Pushgateway \u2014 rate/increase panels use 2h windows because values arrive once an hour. The summary stats also live on the Services dashboard.",
  "tags": [
   "agrovesto",
   "database",
@@ -331,7 +331,7 @@
     "x": 8,
     "y": 9
    },
-   "description": "Write+commit activity per database. Values arrive hourly, so the window is 2h.",
+   "description": "Write+commit activity per database. Values arrive hourly, so rate windows are 2h.",
    "id": 5
   },
   {
@@ -533,15 +533,437 @@
    "id": 8
   },
   {
+   "type": "timeseries",
+   "title": "Disk throughput (read / write)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rate(mssql_io_read_bytes_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} read"
+    },
+    {
+     "refId": "B",
+     "expr": "rate(mssql_io_write_bytes_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} write"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 25
+   },
+   "description": "Bytes/sec against the database files (sys.dm_io_virtual_file_stats). Values arrive hourly, so rate windows are 2h.",
+   "id": 9
+  },
+  {
+   "type": "timeseries",
+   "title": "IOPS (read / write)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rate(mssql_io_reads_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} reads/s"
+    },
+    {
+     "refId": "B",
+     "expr": "rate(mssql_io_writes_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} writes/s"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "iops"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 25
+   },
+   "description": "I/O operations per second per database. Values arrive hourly, so rate windows are 2h.",
+   "id": 10
+  },
+  {
+   "type": "timeseries",
+   "title": "Disk latency (avg ms per operation)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "1000 * rate(mssql_io_stall_read_seconds_total{db=~\"$db\"}[2h]) / rate(mssql_io_reads_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} read"
+    },
+    {
+     "refId": "B",
+     "expr": "1000 * rate(mssql_io_stall_write_seconds_total{db=~\"$db\"}[2h]) / rate(mssql_io_writes_total{db=~\"$db\"}[2h])",
+     "legendFormat": "{{db}} write"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "line"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 10
+       },
+       {
+        "color": "red",
+        "value": 25
+       }
+      ]
+     },
+     "unit": "ms"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 25
+   },
+   "description": "Average time I/O spent waiting, per operation \u2014 the storage-health number Performance Insights would show. Sustained >10ms reads or >20ms writes on gp2 is worth investigating.",
+   "id": 11
+  },
+  {
+   "type": "row",
+   "title": "Workload \u2014 the Performance Insights substitute (PI does not exist for SQL Server Express)",
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 33
+   },
+   "id": 12
+  },
+  {
+   "type": "timeseries",
+   "title": "Active sessions",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "mssql_active_sessions",
+     "legendFormat": "active"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 34
+   },
+   "description": "Requests executing at collection time \u2014 one sample of Performance Insights' \"Average Active Sessions\". With the hourly cadence this is a coarse sampler; the Live SQL row below is real-time.",
+   "id": 13
+  },
+  {
+   "type": "timeseries",
+   "title": "Load by wait type (top 10)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "topk(10, rate(mssql_wait_time_seconds_total[2h]))",
+     "legendFormat": "{{wait_type}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 16,
+    "x": 8,
+    "y": 34
+   },
+   "description": "Seconds spent waiting per second, by wait class \u2014 Performance Insights' load breakdown grown at home from sys.dm_os_wait_stats. PAGEIOLATCH_* is storage, LCK_M_* is blocking, CXPACKET/CXCONSUMER is parallelism, ASYNC_NETWORK_IF is clients reading slowly. Values arrive hourly, so rate windows are 2h.",
+   "id": 14
+  },
+  {
+   "type": "timeseries",
+   "title": "Sessions by login",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "mssql_login_sessions",
+     "legendFormat": "{{login}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": true,
+      "axisPlacement": "auto",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
+      "gradientMode": "none",
+      "stacking": "none"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 24,
+    "x": 0,
+    "y": 42
+   },
+   "description": "Who is connected, as a trend (sys.dm_exec_sessions grouped by login). The Connections table below has the live detail \u2014 host, program and client IP per session.",
+   "id": 15
+  },
+  {
    "type": "row",
    "title": "Server (RDS db.t3.micro, sqlserver-ex)",
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 25
+    "y": 50
    },
-   "id": 9
+   "id": 16
   },
   {
    "type": "stat",
@@ -587,10 +1009,10 @@
     "h": 5,
     "w": 4,
     "x": 0,
-    "y": 26
+    "y": 51
    },
    "description": "Seconds a page stays in the buffer pool. Chronically low on a small box means memory pressure \u2014 reads go to disk.",
-   "id": 10
+   "id": 17
   },
   {
    "type": "stat",
@@ -638,10 +1060,10 @@
     "h": 5,
     "w": 4,
     "x": 4,
-    "y": 26
+    "y": 51
    },
    "description": "Share of page reads served from memory since startup.",
-   "id": 11
+   "id": 18
   },
   {
    "type": "stat",
@@ -686,9 +1108,9 @@
     "h": 5,
     "w": 4,
     "x": 8,
-    "y": 26
+    "y": 51
    },
-   "id": 12
+   "id": 19
   },
   {
    "type": "stat",
@@ -733,10 +1155,10 @@
     "h": 5,
     "w": 4,
     "x": 12,
-    "y": 26
+    "y": 51
    },
    "description": "Server-wide count; the blocking chains themselves are in the Live SQL row. Over 5 for 10m alerts.",
-   "id": 13
+   "id": 20
   },
   {
    "type": "stat",
@@ -796,10 +1218,10 @@
     "h": 5,
     "w": 4,
     "x": 16,
-    "y": 26
+    "y": 51
    },
    "description": "1 while the DMV collector reaches SQL Server.",
-   "id": 14
+   "id": 21
   },
   {
    "type": "stat",
@@ -845,10 +1267,10 @@
     "h": 5,
     "w": 4,
     "x": 20,
-    "y": 26
+    "y": 51
    },
    "description": "Seconds since the collector last succeeded. Over 3h alerts (MssqlMetricsStale).",
-   "id": 15
+   "id": 22
   },
   {
    "type": "timeseries",
@@ -910,10 +1332,10 @@
     "h": 8,
     "w": 8,
     "x": 0,
-    "y": 31
+    "y": 56
    },
    "description": "Total Server Memory approaching Target Server Memory means the buffer pool has taken everything SQL Server plans to use.",
-   "id": 16
+   "id": 23
   },
   {
    "type": "timeseries",
@@ -979,10 +1401,10 @@
     "h": 8,
     "w": 8,
     "x": 8,
-    "y": 31
+    "y": 56
    },
-   "description": "Server-wide throughput. Values arrive hourly, so the window is 2h.",
-   "id": 17
+   "description": "Server-wide throughput \u2014 logins/s spikes are connection churn (pools misconfigured or a login storm). Values arrive hourly, so rate windows are 2h.",
+   "id": 24
   },
   {
    "type": "bargauge",
@@ -1041,10 +1463,10 @@
     "h": 8,
     "w": 8,
     "x": 16,
-    "y": 31
+    "y": 56
    },
    "description": "Disk behind the database files (sys.dm_os_volume_stats). Under 15% free alerts.",
-   "id": 18
+   "id": 25
   },
   {
    "type": "row",
@@ -1053,9 +1475,9 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 39
+    "y": 64
    },
-   "id": 19
+   "id": 26
   },
   {
    "type": "table",
@@ -1104,10 +1526,62 @@
     "h": 9,
     "w": 24,
     "x": 0,
-    "y": 40
+    "y": 65
    },
    "description": "What is executing right now (sys.dm_exec_requests + statement text), most elapsed time first. This dashboard's own queries are excluded.",
-   "id": 20
+   "id": 27
+  },
+  {
+   "type": "table",
+   "title": "Connections \u2014 who is connected",
+   "datasource": {
+    "type": "mssql",
+    "uid": "mssql"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mssql",
+      "uid": "mssql"
+     },
+     "rawSql": "SELECT TOP 100\n  s.session_id,\n  DB_NAME(s.database_id) AS db,\n  s.login_name,\n  s.host_name,\n  s.program_name,\n  c.client_net_address AS client_ip,\n  s.status,\n  CAST(s.last_request_start_time AS varchar(23)) AS last_request_start,\n  s.cpu_time,\n  s.reads,\n  s.writes,\n  s.logical_reads,\n  s.memory_usage * 8 AS memory_kb\nFROM sys.dm_exec_sessions s\nLEFT JOIN sys.dm_exec_connections c ON c.session_id = s.session_id\nWHERE s.is_user_process = 1\nORDER BY s.last_request_start_time DESC",
+     "format": "table"
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "enablePagination": false,
+     "fields": ""
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false
+     }
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 9,
+    "w": 24,
+    "x": 0,
+    "y": 74
+   },
+   "description": "Every user session with its login, client machine, program, client IP, current database and the cost it has run up. Failed logins never appear here \u2014 they are in the SQL Server error log (dev: the mssql container's logs in dev-logs; prod: the CloudWatch error-log export).",
+   "id": 28
   },
   {
    "type": "table",
@@ -1156,10 +1630,10 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 49
+    "y": 83
    },
    "description": "Every blocked request with its blocker's last statement \u2014 who to kill or which query to fix.",
-   "id": 21
+   "id": 29
   },
   {
    "type": "table",
@@ -1208,10 +1682,10 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 49
+    "y": 83
    },
    "description": "Logical files, allocated size, growth setting and physical path (sys.master_files).",
-   "id": 22
+   "id": 30
   },
   {
    "type": "table",
@@ -1260,10 +1734,10 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 57
+    "y": 91
    },
    "description": "State, recovery model and collation per database.",
-   "id": 23
+   "id": 31
   },
   {
    "type": "table",
@@ -1312,10 +1786,114 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 57
+    "y": 91
    },
    "description": "Biggest tables of the database selected in the Live SQL database variable (sys.partitions + allocation units).",
-   "id": 24
+   "id": 32
+  },
+  {
+   "type": "table",
+   "title": "Top queries by total time",
+   "datasource": {
+    "type": "mssql",
+    "uid": "mssql"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mssql",
+      "uid": "mssql"
+     },
+     "rawSql": "SELECT TOP 25\n  qs.execution_count AS execs,\n  qs.total_elapsed_time / 1000 / qs.execution_count AS avg_elapsed_ms,\n  qs.total_worker_time / 1000 / qs.execution_count AS avg_cpu_ms,\n  qs.total_logical_reads / qs.execution_count AS avg_reads,\n  qs.total_logical_writes / qs.execution_count AS avg_writes,\n  qs.total_elapsed_time / 1000 AS total_elapsed_ms,\n  SUBSTRING(st.text, (qs.statement_start_offset / 2) + 1,\n    ((CASE qs.statement_end_offset WHEN -1 THEN DATALENGTH(st.text) ELSE qs.statement_end_offset END\n      - qs.statement_start_offset) / 2) + 1) AS statement_text\nFROM sys.dm_exec_query_stats qs\nCROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st\nORDER BY qs.total_elapsed_time DESC",
+     "format": "table"
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "enablePagination": false,
+     "fields": ""
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false
+     }
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 99
+   },
+   "description": "The plan cache's own accounting (sys.dm_exec_query_stats): every cached statement with its average and total cost. It covers what ran since the cache last warmed (restarts and evictions reset it) and carries no database column \u2014 attribute statements via their text.",
+   "id": 33
+  },
+  {
+   "type": "table",
+   "title": "Top queries by total reads",
+   "datasource": {
+    "type": "mssql",
+    "uid": "mssql"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mssql",
+      "uid": "mssql"
+     },
+     "rawSql": "SELECT TOP 25\n  qs.execution_count AS execs,\n  qs.total_elapsed_time / 1000 / qs.execution_count AS avg_elapsed_ms,\n  qs.total_worker_time / 1000 / qs.execution_count AS avg_cpu_ms,\n  qs.total_logical_reads / qs.execution_count AS avg_reads,\n  qs.total_logical_writes / qs.execution_count AS avg_writes,\n  qs.total_elapsed_time / 1000 AS total_elapsed_ms,\n  SUBSTRING(st.text, (qs.statement_start_offset / 2) + 1,\n    ((CASE qs.statement_end_offset WHEN -1 THEN DATALENGTH(st.text) ELSE qs.statement_end_offset END\n      - qs.statement_start_offset) / 2) + 1) AS statement_text\nFROM sys.dm_exec_query_stats qs\nCROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st\nORDER BY qs.total_logical_reads DESC",
+     "format": "table"
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "enablePagination": false,
+     "fields": ""
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false
+     }
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 99
+   },
+   "description": "The plan cache's own accounting (sys.dm_exec_query_stats): every cached statement with its average and total cost. It covers what ran since the cache last warmed (restarts and evictions reset it) and carries no database column \u2014 attribute statements via their text.",
+   "id": 34
   }
  ]
 }

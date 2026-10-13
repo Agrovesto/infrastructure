@@ -445,9 +445,13 @@ run "database_metrics_are_scheduled" {
     condition = (
       contains(keys(aws_s3_object.config), "grafana/dashboards/database.json") &&
       strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "agrovesto-database") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "mssql_wait_time_seconds_total") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "mssql_io_read_bytes_total") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "client_net_address") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "dm_exec_query_stats") &&
       output.dashboard_uids.database == "agrovesto-database"
     )
-    error_message = "The per-database deep-dive dashboard ships with the DMV task that feeds it."
+    error_message = "The per-database deep-dive dashboard ships with the DMV task that feeds it, including the Performance-Insights-style workload row and the who-is-connected / top-queries live tables."
   }
 
   assert {
