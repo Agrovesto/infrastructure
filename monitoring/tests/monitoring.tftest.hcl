@@ -136,11 +136,10 @@ override_data {
   values = {
     address = "migration-prod.abc123.eu-west-1.rds.amazonaws.com"
     port    = 1433
-    master_user_secret = [{
-      secret_arn    = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:rds!db-mock-AbCdEf"
-      secret_status = "active"
-      kms_key_id    = ""
-    }]
+    # The adopted migration-prod has no RDS-managed master secret
+    # (mssql_manage_master_user_password stays false in prod/), so the data
+    # source returns none and var.mssql_secret_name below carries the secret.
+    master_user_secret = []
   }
 }
 
@@ -156,6 +155,7 @@ variables {
   domain_name            = "nomaos.com"
   monthly_budget_usd     = 250
   enable_cost_monitoring = true
+  mssql_secret_name      = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-TEST01" # ggignore - test fixture, not a credential
 }
 
 run "components_run_on_fargate_with_their_own_state" {
@@ -371,8 +371,11 @@ run "database_metrics_are_scheduled" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "pytds")
-    error_message = "The metrics task must install the pure-Python TDS client."
+    # The distribution is python-tds; a PyPI project called "pytds" exists but
+    # ships no files, so installing it fails and the task never reaches the
+    # collector — the failure this pin now prevents.
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "python-tds")
+    error_message = "The metrics task must install the pure-Python TDS client under its real distribution name."
   }
 
   assert {
@@ -396,13 +399,63 @@ run "database_metrics_are_scheduled" {
   }
 
   assert {
-    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "secret:rds!db-mock-AbCdEf")
-    error_message = "The secret policy must be scoped to the adopted instance's RDS-managed secret (data.aws_db_instance.mssql)."
+    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "secret:nomaosDBcredentials-TEST01")
+    error_message = "The secret policy must be scoped to var.mssql_secret_name — the adopted instance's existing master secret; it has no RDS-managed one."
   }
 
   assert {
     condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "migration-prod.abc123.eu-west-1.rds.amazonaws.com")
     error_message = "DB_HOST must come from the RDS instance data source (managed secrets carry no host)."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: mssql") &&
+      strcontains(local.grafana_datasources, "type: mssql") &&
+      strcontains(local.grafana_datasources, "migration-prod.abc123.eu-west-1.rds.amazonaws.com:1433") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_USER}") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_PASSWORD}")
+    )
+    error_message = "Grafana provisions an MSSQL datasource pointing at the RDS endpoint, with credentials left as environment placeholders ECS fills from the managed secret."
+  }
+
+  assert {
+    condition = (
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "MSSQL_USER") &&
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), ":username::") &&
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), ":password::")
+    )
+    error_message = "The Grafana task resolves the secret's username and password keys at start (valueFrom with the :key:: suffix)."
+  }
+
+  assert {
+    condition     = contains(aws_ecs_service.grafana.network_configuration[0].security_groups, aws_security_group.internal.id)
+    error_message = "While the MSSQL datasource is on, Grafana joins the internal SG — the path the RDS instance admits the monitoring stack through."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_role_policy.execution_database_secret) == 1 &&
+      strcontains(aws_iam_role_policy.execution_database_secret[0].policy, "secret:nomaosDBcredentials-TEST01")
+    )
+    error_message = "Secret resolution for valueFrom runs under the execution role, scoped to the database master secret."
+  }
+
+  assert {
+    condition = (
+      contains(keys(aws_s3_object.config), "grafana/dashboards/database.json") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "agrovesto-database") &&
+      output.dashboard_uids.database == "agrovesto-database"
+    )
+    error_message = "The per-database deep-dive dashboard ships with the DMV task that feeds it."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_rds_rules, "MssqlLogSpaceHigh") &&
+      strcontains(local.prometheus_rds_rules, "mssql_log_used_bytes / mssql_log_size_bytes > 0.90")
+    )
+    error_message = "A database using over 90% of its transaction log alerts: a full log stalls every write."
   }
 
   assert {
@@ -643,7 +696,7 @@ run "extra_collectors_can_be_turned_off" {
   }
 
   assert {
-    condition     = length(aws_s3_object.config) == 20
+    condition     = length(aws_s3_object.config) == 21
     error_message = "Back to what the ECS collector and its log shipper need."
   }
 
@@ -689,6 +742,15 @@ run "scheduled_tasks_can_be_turned_off" {
   assert {
     condition     = length(aws_iam_role_policy.task_database_secret) == 0
     error_message = "Without RDS monitoring the database secret policy must go."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_role_policy.execution_database_secret) == 0 &&
+      !strcontains(local.grafana_datasources, "type: mssql") &&
+      !contains(keys(output.dashboard_uids), "database")
+    )
+    error_message = "Without RDS monitoring the Grafana MSSQL datasource, its execution-role secret policy and the Database dashboard all stay off."
   }
 
   assert {

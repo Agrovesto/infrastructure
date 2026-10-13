@@ -29,8 +29,9 @@ locals {
   }
 
   rds_config_parameters = local.mssql_enabled ? {
-    "rds/mssql_metrics.py"          = file("${path.module}/scripts/mssql_metrics.py")
-    "prometheus/rules/database.yml" = local.prometheus_rds_rules
+    "rds/mssql_metrics.py"             = file("${path.module}/scripts/mssql_metrics.py")
+    "prometheus/rules/database.yml"    = local.prometheus_rds_rules
+    "grafana/dashboards/database.json" = file("${path.module}/dashboards/database.json")
   } : {}
 
   collector_config_parameters = local.collector_enabled ? merge({

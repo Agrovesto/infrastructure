@@ -52,7 +52,8 @@ output "dashboard_uids" {
     cost     = "agrovesto-cost"
     }, local.collector_enabled ? { ecs = "agrovesto-ecs" } : {},
     local.cloudwatch_metrics_enabled ? { resources = "agrovesto-resources" } : {},
-    local.alb_log_shipping_enabled ? { traffic = "agrovesto-traffic" } : {}
+    local.alb_log_shipping_enabled ? { traffic = "agrovesto-traffic" } : {},
+    local.mssql_enabled ? { database = "agrovesto-database" } : {}
   )
 }
 

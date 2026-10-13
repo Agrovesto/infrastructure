@@ -231,6 +231,38 @@ resource "aws_iam_role_policy" "task_database_secret" {
   })
 }
 
+# ECS resolves the Grafana task's MSSQL credentials from the database master
+# secret (`secrets.valueFrom` in grafana.tf), and secret resolution runs under
+# the EXECUTION role — its own inline policy for the same Condition-unification
+# reason as task_database_secret above.
+resource "aws_iam_role_policy" "execution_database_secret" {
+  count = local.mssql_grafana_enabled ? 1 : 0
+
+  name = "${local.name}-execution-database-secret-policy"
+  role = aws_iam_role.execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [local.mssql_secret_id]
+      },
+      {
+        Sid      = "DecryptDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}
+
 # The scheduled tasks (cost report, SQL Server metrics) are started by
 # EventBridge, which needs both RunTask and permission to hand over task roles.
 resource "aws_iam_role" "events" {
