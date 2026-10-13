@@ -179,6 +179,7 @@ run "compose_services" {
         var.logging.prometheus_image,
         var.logging.cadvisor_image,
         var.logging.node_exporter_image,
+        var.logging.mssql_exporter_image,
       ] : strcontains(local.docker_compose, "image: ${image}")
     ])
     error_message = "Every pinned observability image must reach the compose file."
@@ -203,11 +204,11 @@ run "compose_services" {
   }
 
   assert {
-    # 8 observability containers, plus Redis and SonarQube when they are on: the
+    # 9 observability containers, plus Redis and SonarQube when they are on: the
     # count has to follow what is enabled, or disabling either service turns this
     # into a false failure.
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 8 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
-    error_message = "Every capped container carries a memory limit — the eight observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 9 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
+    error_message = "Every capped container carries a memory limit — the nine observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
   }
 
   assert {
@@ -804,5 +805,76 @@ run "disabled" {
   assert {
     condition     = length(aws_security_group.ec2.ingress) == 3
     error_message = "The security group is untouched: the stack adds no ingress rule, it rides on nginx's port 80."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# The SQL Server collector pipeline
+# -----------------------------------------------------------------------------
+
+run "database_pipeline" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "container_name: agrovesto-mssql-exporter") &&
+      strcontains(local.docker_compose, "image: ${var.logging.mssql_exporter_image}") &&
+      strcontains(local.docker_compose, "pip install --quiet --no-cache-dir python-tds") &&
+      strcontains(local.docker_compose, "DB_HOST: \"mssql\"") &&
+      strcontains(local.docker_compose, "SERVE_PORT: \"${var.logging.mssql_exporter_port}\"") &&
+      !strcontains(local.docker_compose, "127.0.0.1:${var.logging.mssql_exporter_port}:")
+    )
+    error_message = "The SQL Server collector runs the shared script in serve mode against the mssql container on the compose network, and publishes no host port."
+  }
+
+  assert {
+    # One collector, two stacks: what ships to the host IS the file the prod
+    # monitoring task runs — not a copy that can drift.
+    condition = (
+      aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content == file("../monitoring/scripts/mssql_metrics.py") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "python-tds") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_log_used_bytes") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_io_read_bytes_total") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_wait_time_seconds_total")
+    )
+    error_message = "The host config bucket ships the monitoring stack's collector script verbatim, with the per-database metrics, the I/O and wait-stat sections and the correct PyPI distribution name."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_config, "job_name: mssql") &&
+      strcontains(local.prometheus_config, "mssql-exporter:${var.logging.mssql_exporter_port}")
+    )
+    error_message = "Prometheus scrapes the collector as its ninth job."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: agrovesto-mssql") &&
+      strcontains(local.grafana_datasources, "type: mssql") &&
+      strcontains(local.grafana_datasources, "url: mssql:1433") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_SA_PASSWORD}") &&
+      strcontains(local.docker_compose, "MSSQL_SA_PASSWORD: \"$${MSSQL_SA_PASSWORD}\"")
+    )
+    error_message = "Grafana gets a provisioned MSSQL datasource whose password expands from its own environment, which compose fills from the host .env file."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_rules, "- name: dev-database") &&
+      strcontains(local.prometheus_rules, "DevMssqlUnreachable") &&
+      strcontains(local.prometheus_rules, "DevMssqlDeadlockSpike") &&
+      strcontains(local.prometheus_rules, "mssql_log_used_bytes / mssql_log_size_bytes > 0.90")
+    )
+    error_message = "The dev database alerts evaluate the collector's series: reachability, blocking, deadlocks and log headroom."
+  }
+
+  assert {
+    condition = (
+      aws_s3_object.host_config["logging/grafana/dashboards/dev-database.json"].content == local.grafana_dashboard_database &&
+      strcontains(local.grafana_dashboard_database, "agrovesto-dev-database") &&
+      strcontains(local.grafana_dashboard_database, "agrovesto-mssql")
+    )
+    error_message = "The dev-database dashboard ships through the host config bucket and queries both provisioned datasources."
   }
 }

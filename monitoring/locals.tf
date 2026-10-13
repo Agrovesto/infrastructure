@@ -282,13 +282,22 @@ locals {
             annotations:
               summary: "{{ $value }} sessions are blocked on the prod SQL Server"
 
+          - alert: MssqlLogSpaceHigh
+            expr: mssql_log_used_bytes / mssql_log_size_bytes > 0.90
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db }} has used over 90% of its transaction log"
+              description: "A full log stalls every write, and on Express the log counts toward the 10 GB per-database cap. Look for a long-open transaction or a stuck log backup (Live SQL row, Database dashboard)."
+
           - alert: MssqlDeadlockSpike
             expr: increase(mssql_deadlocks_total[15m]) > 5
             for: 5m
             labels:
               severity: warning
             annotations:
-              summary: "Deadlocks on the prod SQL Server"
+              summary: "Deadlocks in {{ $labels.db }} on the prod SQL Server"
               description: "{{ $value }} deadlocks in the last 15m"
 
           - alert: MssqlDatabaseNearSizeLimit
@@ -924,6 +933,26 @@ locals {
           tracesToLogsV2:
             datasourceUid: loki
             filterByTraceID: true
+%{ if local.mssql_grafana_enabled ~}
+
+      # Direct SQL access to the prod database: the "Live SQL" panels on the
+      # Database dashboard (running requests, blocking chains, file layout)
+      # query DMVs through this datasource, while the trends come from the
+      # hourly DMV task via Pushgateway. ECS resolves the two keys of the
+      # RDS-managed master secret into MSSQL_USER / MSSQL_PASSWORD at task
+      # start (valueFrom in grafana.tf); Grafana expands the placeholders
+      # from its own environment when it reads this file.
+      - name: MSSQL
+        uid: mssql
+        type: mssql
+        access: proxy
+        url: ${local.mssql_host}:${local.mssql_port}
+        database: master
+        user: $${MSSQL_USER}
+        editable: false
+        secureJsonData:
+          password: $${MSSQL_PASSWORD}
+%{ endif ~}
   EOT
 
   grafana_dashboards_provider = <<-EOT

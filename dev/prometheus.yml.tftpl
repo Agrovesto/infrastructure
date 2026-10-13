@@ -11,7 +11,7 @@
 # file makes a change visible without a Terraform run, and apply makes it final.
 #
 #
-# Eight scrape targets, all on the docker network. There is no service
+# Nine scrape targets, all on the docker network. There is no service
 # discovery: this is a single box, the TSDB on the logging volume is the store,
 # and the remote-write receiver (enabled in docker-compose) is what Tempo's
 # span metrics and Alloy's OTLP metrics arrive on.
@@ -73,3 +73,10 @@ scrape_configs:
   - job_name: alertmanager
     static_configs:
       - targets: ["alertmanager:${alertmanager_port}"]
+
+  # SQL Server DMVs: the mssql-exporter container re-runs the queries on every
+  # scrape (serve mode of the script the prod monitoring task pushes from), so
+  # these series are as fresh as everything else on this box.
+  - job_name: mssql
+    static_configs:
+      - targets: ["mssql-exporter:${mssql_exporter_port}"]
