@@ -39,7 +39,7 @@ resource "aws_ecs_task_definition" "tempo" {
       user      = "10001"
 
       command = [
-        "-config.file=/tempo/config/config.yml",
+        "-config.file=/var/tempo/config/config.yml",
         "-target=all",
       ]
 
@@ -49,7 +49,11 @@ resource "aws_ecs_task_definition" "tempo" {
         { name = "otlp-http", containerPort = 4318, protocol = "tcp" },
       ]
 
-      mountPoints = [{ sourceVolume = "data", containerPath = "/tempo", readOnly = false }]
+      # /var/tempo, NOT /tempo: inside the grafana/tempo image /tempo is the
+      # entrypoint binary, and mounting the EFS volume over it stops the task
+      # at container init — the same collision that kept the dev host's tempo
+      # from ever starting (2026-10-12).
+      mountPoints = [{ sourceVolume = "data", containerPath = "/var/tempo", readOnly = false }]
 
       logConfiguration = local.log_config.tempo
     }

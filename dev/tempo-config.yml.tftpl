@@ -4,6 +4,8 @@
 # Rendered by Terraform (dev/locals.tf), uploaded as the object
 # logging/tempo/config.yml in the host config bucket (dev/host_config.tf) and
 # synced by user_data to /opt/agrovesto/logging/tempo/config.yml on every boot.
+# The host directory is bind-mounted into the container at /var/tempo — never
+# at /tempo, which is the tempo binary's path inside the grafana/tempo image.
 #
 # Do not edit on the host: the next boot re-syncs the Terraform copy over it.
 # Iterate there instead - `docker compose restart tempo` after editing the file
@@ -43,9 +45,9 @@ storage:
   trace:
     backend: local
     local:
-      path: /tempo/blocks
+      path: /var/tempo/blocks
     wal:
-      path: /tempo/wal
+      path: /var/tempo/wal
 
 metrics_generator:
   registry:
@@ -53,7 +55,7 @@ metrics_generator:
       source: tempo
       host: ${hostname}
   storage:
-    path: /tempo/generator/wal
+    path: /var/tempo/generator/wal
     remote_write:
       - url: http://prometheus:9090/api/v1/write
   processor:

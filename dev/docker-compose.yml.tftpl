@@ -376,14 +376,18 @@ services:
     container_name: agrovesto-tempo
     user: "10001"
     command:
-      - -config.file=/tempo/config.yml
+      - -config.file=/var/tempo/config.yml
       - -target=all
     ports:
       - "127.0.0.1:${logging.tempo_port}:3200"
     volumes:
       # The whole directory is writable: config.yml (synced from S3), the WAL,
-      # the blocks and the metrics-generator WAL all live in /tempo.
-      - ${logging_root}/tempo:/tempo
+      # the blocks and the metrics-generator WAL all live in it. It mounts at
+      # /var/tempo, NOT /tempo: inside the grafana/tempo image /tempo is the
+      # entrypoint binary, and binding a directory over it fails container
+      # creation ("not a directory") — this is why tempo never started on the
+      # dev host (2026-10-12).
+      - ${logging_root}/tempo:/var/tempo
     restart: unless-stopped
     cpus: "${lookup(logging.cpu_limits, "tempo", "0.25")}"
     mem_limit: ${lookup(logging.memory_limits_mb, "tempo", 384)}M

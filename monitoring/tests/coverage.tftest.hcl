@@ -99,6 +99,18 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
+    # container_definitions is already a JSON string, so jsonencode escapes it
+    # again: a reverted containerPath "/tempo" appears as \"containerPath\":
+    # \"/tempo\", and the needle has to carry those escaped quotes (\"/tempo\")
+    # to match — a plain "/tempo" never would.
+    condition = (
+      strcontains(jsonencode(aws_ecs_task_definition.tempo[*].container_definitions), "/var/tempo") &&
+      !strcontains(jsonencode(aws_ecs_task_definition.tempo[*].container_definitions), "\\\"/tempo\\\"")
+    )
+    error_message = "Tempo's EFS volume mounts at /var/tempo: /tempo is the entrypoint binary in the grafana/tempo image, and mounting over it stops the task at container init (the dev host's tempo never started for exactly this)."
+  }
+
+  assert {
     condition     = aws_ecs_task_definition.grafana.network_mode == "awsvpc" && contains(aws_ecs_task_definition.grafana.requires_compatibilities, "FARGATE")
     error_message = "Tasks must run on awsvpc Fargate."
   }

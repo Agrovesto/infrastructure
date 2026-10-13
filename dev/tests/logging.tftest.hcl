@@ -309,6 +309,25 @@ run "traces_pipeline" {
 
   assert {
     condition = (
+      strcontains(local.docker_compose, "${local.logging_root}/tempo:/var/tempo") &&
+      strcontains(local.docker_compose, "-config.file=/var/tempo/config.yml") &&
+      !strcontains(local.docker_compose, "tempo:/tempo")
+    )
+    error_message = "Tempo's data directory mounts at /var/tempo: inside the grafana/tempo image /tempo is the entrypoint binary, and binding a directory over it fails container creation — this is why tempo never started on the dev host (2026-10-12)."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.tempo_config, "path: /var/tempo/wal") &&
+      strcontains(local.tempo_config, "path: /var/tempo/blocks") &&
+      strcontains(local.tempo_config, "path: /var/tempo/generator/wal") &&
+      !strcontains(local.tempo_config, "path: /tempo/")
+    )
+    error_message = "Tempo's WAL, blocks and generator paths live under the /var/tempo mount, never under the image's /tempo binary."
+  }
+
+  assert {
+    condition = (
       strcontains(local.grafana_datasources, "uid: agrovesto-tempo") &&
       strcontains(local.grafana_datasources, "datasourceUid: agrovesto-tempo") &&
       strcontains(local.grafana_datasources, "datasourceUid: agrovesto-loki") &&
