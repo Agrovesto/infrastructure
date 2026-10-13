@@ -695,6 +695,12 @@ variable "logging" {
     node_exporter_image = optional(string, "prom/node-exporter:v1.9.1")
     alertmanager_image  = optional(string, "prom/alertmanager:v0.28.1")
 
+    # The SQL Server collector runs the very script the prod DMV task runs
+    # (monitoring/scripts/mssql_metrics.py, serve mode) on the same base image
+    # family prod pins; python-tds installs into it at container start, exactly
+    # like the prod task installs it at task start.
+    mssql_exporter_image = optional(string, "python:3.12-slim")
+
     # Published on 127.0.0.1 on the host only, and the security group has no
     # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
     # The OTLP ports are Alloy's: apps on the compose network reach them as
@@ -711,6 +717,11 @@ variable "logging" {
     cadvisor_port        = optional(number, 8080)
     node_exporter_port   = optional(number, 9100)
     alertmanager_port    = optional(number, 9093)
+
+    # The SQL Server collector is scraped by Prometheus on the compose network
+    # only — unlike every port above it is never published on the host, so it
+    # joins none of the loopback lists.
+    mssql_exporter_port = optional(number, 9399)
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
@@ -771,6 +782,8 @@ variable "logging" {
       cadvisor      = "0.25"
       node-exporter = "0.10"
       alertmanager  = "0.10"
+      # The collector: a handful of DMV queries per scrape, mostly waiting.
+      mssql-exporter = "0.10"
     })
     memory_limits_mb = optional(map(number), {
       loki          = 384
@@ -781,6 +794,8 @@ variable "logging" {
       cadvisor      = 128
       node-exporter = 48
       alertmanager  = 64
+      # python-tds plus the interpreter; the queries return few rows.
+      mssql-exporter = 96
     })
 
     # --- the containers' own logs ---------------------------------------------

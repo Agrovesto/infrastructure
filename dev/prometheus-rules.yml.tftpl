@@ -96,3 +96,46 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} is being CPU throttled"
           description: "{{ $value | printf \"%.0f\" }}% of the last 15 minutes were throttled periods. Raise its cpus limit or find the hot loop."
+
+  # The mssql-exporter container (serve mode of monitoring/scripts/
+  # mssql_metrics.py) being scraped at all is covered by TargetDown above;
+  # these rules evaluate what the collector reports about SQL Server itself.
+  - name: dev-database
+    rules:
+      # mssql_up is the collector's own verdict: 1 means the DMV queries ran,
+      # 0 means SQL Server refused or timed out while the exporter stayed up.
+      - alert: DevMssqlUnreachable
+        expr: mssql_up == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The dev SQL Server is not answering the metrics collector"
+          description: "mssql_up has been 0 for 10 minutes: the exporter runs but its DMV queries fail (docker logs agrovesto-mssql-exporter shows why)."
+
+      - alert: DevMssqlBlockedSessions
+        expr: mssql_blocked_sessions > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} sessions are blocked on the dev SQL Server"
+          description: "Blocking has persisted for 10 minutes. The Live SQL row of the dev-database dashboard shows the chains and the blocker's statement."
+
+      - alert: DevMssqlDeadlockSpike
+        expr: increase(mssql_deadlocks_total[30m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deadlocks in {{ $labels.db }} on the dev SQL Server"
+          description: "{{ $value }} deadlocks in the last 30 minutes."
+
+      - alert: DevMssqlLogSpaceHigh
+        expr: mssql_log_used_bytes / mssql_log_size_bytes > 0.90
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database {{ $labels.db }} has used over 90% of its transaction log"
+          description: "A full transaction log stalls every write. Look for a long-open transaction in the Live SQL row of the dev-database dashboard."

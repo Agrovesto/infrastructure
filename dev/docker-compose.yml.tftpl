@@ -466,6 +466,11 @@ services:
       GF_NEWS_FEED_ENABLED: "false"
       GF_LOG_LEVEL: "warn"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/dev-logs.json"
+      # The provisioned MSSQL datasource expands the SA password from Grafana's
+      # own environment at provisioning time (grafana-datasources.yml.tftpl);
+      # compose fills it from the host .env file — the same secret the mssql
+      # container itself starts with.
+      MSSQL_SA_PASSWORD: "$${MSSQL_SA_PASSWORD}"
     ports:
       - "127.0.0.1:${logging.grafana_port}:3000"
     volumes:
@@ -591,6 +596,40 @@ services:
     restart: unless-stopped
     cpus: "${logging.cpu_limits["node-exporter"]}"
     mem_limit: ${logging.memory_limits_mb["node-exporter"]}M
+
+  # SQL Server metrics: the collector the prod monitoring task runs
+  # (monitoring/scripts/mssql_metrics.py, shipped through this stack's config
+  # bucket as logging/rds/mssql_metrics.py), in serve mode — every Prometheus
+  # scrape re-runs the DMV queries against the mssql container on the compose
+  # network. No published port: only Prometheus talks to it, and python-tds
+  # without a cafile negotiates an unencrypted session, which the dev
+  # container allows (Force Encryption is off) and which never leaves the
+  # box. The script mounts read-only; python-tds installs at container start,
+  # exactly like the prod task installs it at task start.
+  mssql-exporter:
+    image: ${logging.mssql_exporter_image}
+    container_name: agrovesto-mssql-exporter
+    depends_on:
+      - mssql
+    environment:
+      DB_HOST: "mssql"
+      DB_PORT: "1433" # the container port; var.mssql_host_port is only the loopback publish
+      DB_USER: "sa"
+      DB_PASSWORD: "$${MSSQL_SA_PASSWORD}"
+      DB_NAME: "master" # DMVs are server-wide; master is just the connection context
+      SERVE_PORT: "${logging.mssql_exporter_port}"
+    volumes:
+      - ${logging_root}/rds:/rds:ro
+    command: ["sh", "-c", "pip install --quiet --no-cache-dir python-tds && exec python /rds/mssql_metrics.py"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${logging.mssql_exporter_port}/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "mssql-exporter", "0.10")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "mssql-exporter", 96)}M
 %{ endif ~}
 
 # Shared with app deploy pipelines; bootstrap creates it before Compose starts.

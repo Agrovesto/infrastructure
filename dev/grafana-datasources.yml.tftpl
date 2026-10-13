@@ -59,3 +59,21 @@ datasources:
       # Matches scrape_interval in prometheus.yml: anything finer is an
       # evaluation of data that does not exist.
       timeInterval: ${scrape_interval}s
+
+  # Direct SQL access to the dev database for the "Live SQL" panels on the
+  # dev-database dashboard: running requests, blocking chains, file layout.
+  # The URL is the container port on the compose network (always 1433 — the
+  # loopback publish is var.mssql_host_port's business, not Grafana's).
+  # Grafana expands the password from its own environment at provisioning
+  # time: $${...} here renders the literal placeholder, docker compose fills
+  # it from the host .env file — the same secret the mssql container uses.
+  - name: MSSQL
+    uid: agrovesto-mssql
+    type: mssql
+    access: proxy
+    url: mssql:1433
+    database: master
+    user: sa
+    editable: false
+    secureJsonData:
+      password: $${MSSQL_SA_PASSWORD}

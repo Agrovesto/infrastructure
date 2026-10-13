@@ -378,6 +378,8 @@ locals {
     metrics_port       = var.logging.alloy_port
     alertmanager_port  = var.logging.alertmanager_port
     tempo_port         = var.logging.tempo_port
+    # Ninth scrape target: the SQL Server collector container.
+    mssql_exporter_port = var.logging.mssql_exporter_port
   })
 
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
@@ -425,6 +427,10 @@ locals {
   grafana_dashboard_services  = file("${path.module}/grafana/dashboards/dev-services.json")
   grafana_dashboard_traffic   = file("${path.module}/grafana/dashboards/dev-traffic.json")
   grafana_dashboard_infra     = file("${path.module}/grafana/dashboards/dev-infra.json")
+
+  # The SQL Server deep dive: trends from the mssql-exporter container, live
+  # DMV panels through the provisioned MSSQL datasource.
+  grafana_dashboard_database = file("${path.module}/grafana/dashboards/dev-database.json")
 
   # OpenTelemetry ----------------------------------------------------------------
   #
@@ -591,6 +597,18 @@ locals {
       "logging/grafana/dashboards/dev-infra.json" = {
         content      = local.grafana_dashboard_infra
         content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-database.json" = {
+        content      = local.grafana_dashboard_database
+        content_type = "application/json"
+      }
+      # One collector, two stacks: the dev host ships the exact script the prod
+      # monitoring task runs, read across the stack boundary so a fix lands in
+      # both runtimes at once. The mssql-exporter container mounts it at
+      # /rds/mssql_metrics.py.
+      "logging/rds/mssql_metrics.py" = {
+        content      = file("${path.module}/../monitoring/scripts/mssql_metrics.py")
+        content_type = "text/plain"
       }
     } : {},
     var.vault.oidc_enabled ? {
