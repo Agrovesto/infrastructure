@@ -757,11 +757,7 @@ run "disabled" {
 
   assert {
     condition     = length(regexall("mem_limit:", local.docker_compose)) == 9
-<<<<<<< HEAD
     error_message = "Only the eight observability containers remain capped."
-=======
-    error_message = "Only the nine observability containers remain capped: the logging stack plus the mssql exporter."
->>>>>>> a8379f5ef6f2a40610d1d4b0340d5b4b169b0b29
   }
 }
 

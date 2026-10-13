@@ -123,11 +123,7 @@ run "logging_stack_resources" {
 
   assert {
     condition     = length(aws_s3_object.host_config) == 21
-<<<<<<< HEAD
     error_message = "Twenty-three rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 5x dashboards."
-=======
-    error_message = "Twenty-one rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, the SQL Server collector script, 2x grafana provisioning and 6x dashboards."
->>>>>>> a8379f5ef6f2a40610d1d4b0340d5b4b169b0b29
   }
 
   assert {
