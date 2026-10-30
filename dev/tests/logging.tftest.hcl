@@ -122,15 +122,16 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 21
-    error_message = "Twenty-three rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 5x dashboards."
+    condition     = length(aws_s3_object.host_config) == 27
+    error_message = "The test fixture ships 27 host files: five core/blue-green files, three per-service Vault policies, three Vault helper scripts, and sixteen logging files."
   }
 
   assert {
     condition = alltrue([
       for k, o in aws_s3_object.host_config :
       startswith(o.key, "compose/") || startswith(o.key, "nginx/") ||
-      startswith(o.key, "scripts/") || startswith(o.key, "logging/")
+      startswith(o.key, "scripts/") || startswith(o.key, "logging/") ||
+      startswith(o.key, "vault/")
     ])
     error_message = "Every key is a path under /opt/agrovesto, which is the tree the sync lays out."
   }
@@ -778,13 +779,16 @@ run "disabled" {
   # on every boot, logging or not.
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 5 &&
+      length(aws_s3_object.host_config) == 11 &&
       alltrue([
-        for k in ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos_api-active.conf", "nginx/wallet_api-active.conf", "scripts/init-dbs.sql"] :
-        contains(keys(aws_s3_object.host_config), k)
+        for k in concat(
+          ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos_api-active.conf", "nginx/wallet_api-active.conf", "scripts/init-dbs.sql"],
+          [for service in keys(var.apis) : "vault/service-policies/${service}.hcl"],
+          ["scripts/connect-vault-network.sh", "scripts/configure-vault-services.sh", "scripts/write-vault-service-secret.sh"],
+        ) : contains(keys(aws_s3_object.host_config), k)
       ])
     )
-    error_message = "With logging off the bucket keeps exactly the five always-needed files (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql)."
+    error_message = "With logging off, the bucket retains five core files, three service policies and three Vault helper scripts, but no logging assets."
   }
 
   assert {
