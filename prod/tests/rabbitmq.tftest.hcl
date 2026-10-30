@@ -2,15 +2,17 @@ mock_provider "aws" {}
 mock_provider "random" {}
 
 override_resource {
-  target = aws_security_group.rabbitmq_clients[0]
-  values = { id = "sg-0123456789abcdef0" }
+  target          = aws_security_group.rabbitmq_clients[0]
+  override_during = plan
+  values          = { id = "sg-0123456789abcdef0" }
 }
 
 # Pin the shared ECS SG too, so the security-group list in the service local
 # is fully known during this plan-only test.
 override_resource {
-  target = aws_security_group.ecs
-  values = { id = "sg-0123456789abcdef1" }
+  target          = aws_security_group.ecs
+  override_during = plan
+  values          = { id = "sg-0123456789abcdef1" }
 }
 
 override_data {
@@ -29,6 +31,7 @@ override_data {
   target = data.aws_elb_service_account.main
   values = { id = "156460612806" }
 }
+
 variables {
   import_existing = false
   rabbitmq = {
@@ -38,6 +41,7 @@ variables {
 
 run "private_single_broker" {
   command = plan
+
   assert {
     condition = (
       aws_mq_broker.rabbitmq[0].publicly_accessible == false &&
@@ -47,18 +51,22 @@ run "private_single_broker" {
     )
     error_message = "RabbitMQ must be a private single-instance managed broker with automatic minor upgrades."
   }
+
   assert {
     condition = (
       length(aws_security_group.rabbitmq[0].ingress) == 2 &&
       alltrue([for rule in aws_security_group.rabbitmq[0].ingress :
         length(rule.cidr_blocks) == 0 &&
         length(rule.ipv6_cidr_blocks) == 0 &&
-        rule.security_groups == toset([aws_security_group.rabbitmq_clients[0].id]) &&
-        contains([443, 5671], rule.from_port) && rule.from_port == rule.to_port
+        contains(rule.security_groups, aws_security_group.rabbitmq_clients[0].id) &&
+        length(rule.security_groups) == 1 &&
+        contains([443, 5671], rule.from_port) &&
+        rule.from_port == rule.to_port
       ])
     )
     error_message = "RabbitMQ ingress must allow only TCP 443 and 5671 from the client security group, with no CIDR sources."
   }
+
   assert {
     condition = alltrue([
       for service_name in keys(var.services) : contains(
@@ -68,6 +76,7 @@ run "private_single_broker" {
     ])
     error_message = "Every application ECS service must attach the dedicated RabbitMQ client security group."
   }
+
   assert {
     condition = (
       random_password.rabbitmq[0].length >= 32 &&
@@ -79,9 +88,11 @@ run "private_single_broker" {
 
 run "disabled" {
   command = plan
+
   variables {
     rabbitmq = { enabled = false }
   }
+
   assert {
     condition = (
       length(aws_mq_broker.rabbitmq) == 0 &&
