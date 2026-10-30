@@ -6,6 +6,13 @@ override_resource {
   values = { id = "sg-0123456789abcdef0" }
 }
 
+# Pin the shared ECS SG too, so the security-group list in the service local
+# is fully known during this plan-only test.
+override_resource {
+  target = aws_security_group.ecs
+  values = { id = "sg-0123456789abcdef1" }
+}
+
 override_data {
   target = data.aws_availability_zones.available
   values = { names = ["eu-west-1a", "eu-west-1b", "eu-west-1c"] }
@@ -48,12 +55,18 @@ run "private_single_broker" {
         length(rule.ipv6_cidr_blocks) == 0 &&
         rule.security_groups == toset([aws_security_group.rabbitmq_clients[0].id]) &&
         contains([443, 5671], rule.from_port) && rule.from_port == rule.to_port
-      ]) &&
-      alltrue([for service in aws_ecs_service.services :
-        contains(service.network_configuration[0].security_groups, aws_security_group.rabbitmq_clients[0].id)
       ])
     )
-    error_message = "Only application services with the dedicated client SG may connect on 443/5671; no CIDR ingress is permitted."
+    error_message = "RabbitMQ ingress must allow only TCP 443 and 5671 from the client security group, with no CIDR sources."
+  }
+  assert {
+    condition = alltrue([
+      for service_name in keys(var.services) : contains(
+        local.ecs_service_security_groups[service_name],
+        aws_security_group.rabbitmq_clients[0].id
+      )
+    ])
+    error_message = "Every application ECS service must attach the dedicated RabbitMQ client security group."
   }
   assert {
     condition = (

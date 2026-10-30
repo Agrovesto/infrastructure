@@ -80,6 +80,15 @@ locals {
   # Services / DNS
   # ---------------------------------------------------------------------------
 
+  # Shared network identity for each application service. Keep the RabbitMQ
+  # client SG on every task only while the broker is enabled.
+  ecs_service_security_groups = {
+    for service_name in keys(var.services) : service_name => concat(
+      [aws_security_group.ecs.id],
+      var.rabbitmq.enabled ? [aws_security_group.rabbitmq_clients[0].id] : []
+    )
+  }
+
   # <subdomain>.<domain> for every service (+ Vault), e.g. wallet.nomaos.com
   service_fqdns = merge(
     { for k, svc in var.services : k => "${svc.subdomain}.${var.domain_name}" },

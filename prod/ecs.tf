@@ -152,10 +152,7 @@ resource "aws_ecs_service" "services" {
     # Private subnets only — no public IPs on tasks (CKV_AWS_333 friendly).
     # var.single_az_ecs pins every task to the first AZ (single-AZ for now).
     subnets          = var.single_az_ecs ? [aws_subnet.private[0].id] : aws_subnet.private[*].id
-    security_groups = concat(
-      [aws_security_group.ecs.id],
-      var.rabbitmq.enabled ? [aws_security_group.rabbitmq_clients[0].id] : []
-    )
+    security_groups = local.ecs_service_security_groups[each.key]
     assign_public_ip = false
   }
 
