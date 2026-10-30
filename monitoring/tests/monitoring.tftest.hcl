@@ -482,8 +482,8 @@ run "ecs_collector_is_scheduled" {
   }
 
   assert {
-    condition     = strcontains(local.collector_command, "ecs_metrics.py") && strcontains(local.collector_command, "ecs_logs.py")
-    error_message = "The collector must run the ECS metrics script and the log shipper."
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && !strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "The ECS collector reads ECS state only; application logs now arrive through OTLP to Alloy."
   }
 
   assert {
@@ -502,8 +502,17 @@ run "ecs_collector_is_scheduled" {
   }
 
   assert {
-    condition     = strcontains(local.prometheus_ecs_rules, "EcsServiceShortOfTasks") && strcontains(local.prometheus_ecs_rules, "EcsLogShipperStalled")
-    error_message = "The ECS rules must cover task shortfall and stalled log shipping."
+    condition     = strcontains(local.prometheus_ecs_rules, "EcsServiceShortOfTasks") && !strcontains(local.prometheus_ecs_rules, "EcsLogShipperStalled")
+    error_message = "ECS rules cover platform state and no longer alert on the removed CloudWatch log shipper."
+  }
+
+  assert {
+    condition = (
+      !strcontains(jsonencode(aws_iam_role_policy.task.policy), "logs:FilterLogEvents") &&
+      !strcontains(jsonencode(aws_iam_role_policy.task.policy), "logs:GetLogEvents") &&
+      !contains(keys(aws_s3_object.config), "collector/ecs_logs.py")
+    )
+    error_message = "The monitoring collector no longer receives CloudWatch Logs read access or an ECS log-shipping script."
   }
 }
 
@@ -683,8 +692,8 @@ run "extra_collectors_can_be_turned_off" {
   }
 
   assert {
-    condition     = strcontains(local.collector_command, "ecs_metrics.py") && strcontains(local.collector_command, "ecs_logs.py")
-    error_message = "Turning the extras off must not turn the ECS collector or its log shipper off."
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && !strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "Turning the optional extras off leaves ECS state collection on, without a CloudWatch application-log shipper."
   }
 
   assert {
@@ -700,8 +709,8 @@ run "extra_collectors_can_be_turned_off" {
   }
 
   assert {
-    condition     = length(aws_s3_object.config) == 21
-    error_message = "Back to what the ECS collector and its log shipper need."
+    condition     = length(aws_s3_object.config) == 20
+    error_message = "Config publication contains ECS state/metrics files but no CloudWatch ECS log shipper."
   }
 
   assert {
@@ -711,7 +720,7 @@ run "extra_collectors_can_be_turned_off" {
 
   assert {
     condition     = !strcontains(jsonencode(aws_iam_role_policy.task.policy), local.alb_logs_bucket)
-    error_message = "Without the log shipper the task role keeps no access to the access log bucket."
+    error_message = "When ALB log shipping is disabled, the task role keeps no access to the access-log bucket."
   }
 
   assert {

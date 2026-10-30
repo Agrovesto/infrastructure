@@ -84,7 +84,13 @@ services:
     container_name: agrovesto-${name}
     ports:
       - "127.0.0.1:${api.host_port}:${api.host_port}"
+    # The per-API file is written locally after Vault is initialized. It is not
+    # in S3/Compose config; optional keeps the initial host bootstrap working.
+    env_file:
+      - path: /data/vault/services/${name}.env
+        required: false
     environment:
+      Vault__SecretPath: "kv/${name}/staging/appsettings"
 %{ for k, v in api.env ~}
       ${k}: "${v}"
 %{ endfor ~}

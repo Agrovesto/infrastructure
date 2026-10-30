@@ -86,20 +86,19 @@ services = {
 #   OpenTelemetry.Exporter.OpenTelemetryProtocol
 #   OpenTelemetry.Instrumentation.AspNetCore / .HttpClient / .SqlClient
 # and `builder.Services.AddOpenTelemetry().WithTracing(...).WithMetrics(...)`.
-# These variables are the standard ones that SDK reads, so once an image does
-# that, its traces appear with no further infrastructure change.
+# These variables are the standard ones the SDK reads, so once an image loads
+# and configures the SDK, its traces, metrics and application logs can flow with
+# no further infrastructure change.
 otel = {
   enabled  = true
   endpoint = "http://alloy.monitoring.internal:4317"
   protocol = "grpc"
 
-  # Traces and metrics out; logs deliberately not, because the awslogs driver on
-  # the task definition already puts every service log line in CloudWatch Logs.
-  # Exporting them again over OTLP would store each line twice (CloudWatch *and*
-  # Loki). Flip to "otlp" only together with removing that driver.
+  # Traces, metrics and application logs go to Alloy over OTLP. The ECS API task
+  # definitions have no awslogs driver; app images must configure the OTel SDK.
   traces_exporter  = "otlp"
   metrics_exporter = "otlp"
-  logs_exporter    = "none"
+  logs_exporter    = "otlp"
 
   # Sample everything. Five services at one task each is nowhere near the volume
   # where sampling pays for itself, and a sampled-out trace is one nobody can go
@@ -185,10 +184,11 @@ db_size_alarm_enabled = false
 
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds
-# injected from Secrets Manager until Vault is initialized. Bootstrap steps and
-# the switch to vault_secrets_enabled = true are documented in vault.tf.
+# injected from Secrets Manager until Vault is initialized and every per-service
+# path (kv/<service>/prod/appsettings) and AppRole credential is ready.
+# Runbook: docs/prod-vault-service-secrets.md.
 # enable_vault           = false   # to remove the Vault service entirely
-# vault_secrets_enabled  = true    # after `vault operator init` + kv bootstrap
+# vault_secrets_enabled  = true    # only after path payloads + AppRole credentials are ready
 
 # Flip to true once the instance exists and you want Terraform to create the 5
 # databases automatically (runs a one-off Fargate task via the AWS API).

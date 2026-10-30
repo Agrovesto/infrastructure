@@ -133,8 +133,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (service) (rate({source=\"app\"} |= \"level=error\" [5m]))",
-          "legendFormat": "{{service}}"
+          "expr": "sum by (service_name) (rate({source=\"app\", service_name=~\"$service\", level=~\"ERROR|FATAL\"}[5m]))",
+          "legendFormat": "{{service_name}}"
         }
       ],
       "fieldConfig": {
@@ -164,7 +164,7 @@
       },
       "targets": [
         {
-          "expr": "{source=\"app\"} |= \"error\" | line_format \"{{.service}} {{.message}}\""
+          "expr": "{source=\"app\", service_name=~\"$service\", level=~\"ERROR|FATAL\"}"
         }
       ],
       "options": {

@@ -38,9 +38,7 @@ locals {
     "collector/ecs_metrics.py"    = file("${path.module}/scripts/ecs_metrics.py")
     "prometheus/rules/ecs.yml"    = local.prometheus_ecs_rules
     "grafana/dashboards/ecs.json" = file("${path.module}/dashboards/ecs.json")
-    }, var.enable_ecs_log_shipping ? {
-    "collector/ecs_logs.py" = file("${path.module}/scripts/ecs_logs.py")
-  } : {}, local.cloudwatch_metrics_enabled ? {
+    }, local.cloudwatch_metrics_enabled ? {
     "collector/cw_metrics.py"           = file("${path.module}/scripts/cw_metrics.py")
     "prometheus/rules/cloudwatch.yml"   = local.prometheus_cloudwatch_rules
     "grafana/dashboards/resources.json" = file("${path.module}/dashboards/resources.json")

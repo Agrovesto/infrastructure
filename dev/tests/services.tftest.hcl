@@ -1087,3 +1087,46 @@ run "caddy_https_covers_all_enabled_api_hosts" {
     error_message = "Every TLS-enabled API, blue/green or direct, must have a Caddy certificate hostname, HTTP redirect and nginx route."
   }
 }
+
+run "per_service_vault_policies_and_env_files" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for service in keys(var.apis) :
+      contains(keys(local.host_config_files), "vault/service-policies/${service}.hcl") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\"") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\" {\n  capabilities = [\"read\"]") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings/*\" {\n  capabilities = [\"read\"]") &&
+      !strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\" {\n  capabilities = [\"update\"]") &&
+      !strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "\"list\"") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"auth/token/renew-self\"") &&
+      strcontains(local.docker_compose, "path: /data/vault/services/${service}.env")
+    ])
+    error_message = "Each API must receive a unique read-only KV v2 policy and a matching optional host env file."
+  }
+
+  assert {
+    condition = (
+      contains(keys(local.host_config_files), "scripts/configure-vault-services.sh") &&
+      contains(keys(local.host_config_files), "scripts/write-vault-service-secret.sh") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "auth/approle/role/") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "secret_id_ttl=8760h") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "secret-id-accessor/destroy") &&
+      strcontains(local.host_config_files["scripts/write-vault-service-secret.sh"].content, "vault write -format=json") &&
+      !strcontains(local.host_config_files["scripts/write-vault-service-secret.sh"].content, nonsensitive(var.mssql_sa_password))
+    )
+    error_message = "The host scripts must set up per-service AppRoles, rotate SecretIDs, and accept payloads without placing secrets in rendered config."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "required: false") &&
+      strcontains(local.host_config_files["scripts/connect-vault-network.sh"].content, "docker network connect --alias vault") &&
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "connect-vault-network.sh") &&
+      strcontains(file("${path.module}/prepare-vault.sh.tftpl"), "connect-vault-network.sh") &&
+      strcontains(file("${path.module}/ec2.tf"), "bash /opt/agrovesto/scripts/connect-vault-network.sh")
+    )
+    error_message = "Vault must gain an internal DNS route to blue/green APIs after Compose starts, without changing its Compose network definition."
+  }
+}

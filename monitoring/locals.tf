@@ -363,13 +363,6 @@ locals {
             annotations:
               summary: "{{ $labels.service }} tasks are stopping with {{ $labels.stop_code }}"
 
-          - alert: EcsLogShipperStalled
-            expr: time() - ecs_logs_scrape_timestamp_seconds > 900
-            for: 10m
-            labels:
-              severity: warning
-            annotations:
-              summary: "ECS log shipping into Loki has stalled"
   EOT
 
   # Resource alerts on the basic CloudWatch metrics the collector republishes
@@ -708,9 +701,9 @@ locals {
       reporting_enabled: false
   EOT
 
-  # LogQL alerts on what actually reaches Loki: application lines once services
-  # push them (see README), and the ALB access logs the collector ships, where
-  # `status`, `method`, `service` and `kind` are stream labels.
+  # LogQL alerts on OTLP application lines normalized by Alloy and the ALB access
+  # logs the collector ships, where `status`, `method`, `service` and `kind` are
+  # stream labels.
   #
   # Published as loki/rules/fake/application.yml, not loki/rules/application.yml:
   # Loki's local rule storage reads <directory>/<tenant>/<namespace>, and with
@@ -722,7 +715,7 @@ locals {
       - name: application-logs
         rules:
           - alert: ApplicationErrorSpike
-            expr: sum(rate({source="app"} |= "level=error" [10m])) > 1
+            expr: sum(rate({source="app", level=~"ERROR|FATAL"}[10m])) > 1
             for: 10m
             labels:
               severity: warning
@@ -809,7 +802,7 @@ locals {
       format = "logfmt"
     }
 
-    // Logs: Loki push API (Fluent Bit/FireLens, Promtail, or the app itself).
+    // Loki push API retained for batch sources (not the API app log path).
     loki.source.api "push" {
       http {
         listen_address = "0.0.0.0"
@@ -826,7 +819,7 @@ locals {
       }
     }
 
-    // Traces + metrics: OTLP from the OpenTelemetry SDK/SDK-side car in each service.
+    // OTLP traces, metrics and logs from the OpenTelemetry SDK in each service.
     otelcol.receiver.otlp "default" {
       grpc {
         endpoint = "0.0.0.0:4317"
@@ -838,8 +831,35 @@ locals {
 
       output {
         metrics = [otelcol.exporter.prometheus.default.input]
-        logs    = [otelcol.exporter.loki.default.input]
+        logs    = [otelcol.processor.transform.logs_to_loki.input]
         traces  = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+
+    // Normalize OTLP log labels for the existing service dashboards/rules.
+    // The Loki exporter honors these hint attributes and maps service.name to
+    // the low-cardinality service_name stream label.
+    otelcol.processor.transform "logs_to_loki" {
+      error_mode = "ignore"
+
+      log_statements {
+        context = "resource"
+        statements = [
+          `set(attributes["loki.resource.labels"], "service.name, service.namespace")`,
+        ]
+      }
+
+      log_statements {
+        context = "log"
+        statements = [
+          `set(attributes["source"], "app")`,
+          `set(attributes["level"], severity_text)`,
+          `set(attributes["loki.attribute.labels"], "source, level")`,
+        ]
+      }
+
+      output {
+        logs = [otelcol.exporter.loki.default.input]
       }
     }
 

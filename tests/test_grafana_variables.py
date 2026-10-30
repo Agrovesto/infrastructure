@@ -21,6 +21,24 @@ class GrafanaVariablesTests(unittest.TestCase):
         self.assertEqual(service['refresh'], 2)
         self.assertEqual(service['regex'], '')
 
+    def test_prod_log_panels_use_otlp_loki_labels(self):
+        for filename in ('ecs.json', 'services.json'):
+            dashboard = json.loads((ROOT / 'monitoring/dashboards' / filename).read_text())
+            queries = [
+                target.get('expr', '')
+                for panel in dashboard['panels']
+                for target in panel.get('targets', [])
+            ]
+            log_queries = [query for query in queries if 'source="app"' in query]
+            self.assertTrue(log_queries, f'{filename} should include OTLP application-log panels')
+            self.assertTrue(all('service_name=~"$service"' in query for query in log_queries))
+            self.assertFalse(any('EcsLogShipperStalled' in query for query in queries))
+
+    def test_ecs_dashboard_has_no_log_shipper_health_panel(self):
+        dashboard = json.loads((ROOT / 'monitoring/dashboards/ecs.json').read_text())
+        titles = [panel.get('title', '').lower() for panel in dashboard['panels']]
+        self.assertFalse(any('log shipper' in title for title in titles))
+
 
 if __name__ == '__main__':
     unittest.main()

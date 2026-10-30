@@ -4,7 +4,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::=--force-confold
-apt-get install -y docker.io git xfsprogs curl
+apt-get install -y docker.io git xfsprogs curl python3
 apt-get install -y unzip
 curl -sSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
 unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
@@ -207,6 +207,7 @@ ExecStart=/bin/bash -c 'docker network inspect nomaos_data >/dev/null 2>&1 || do
 %{ endif ~}
 ExecStart=/bin/bash -ec 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
 ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
+ExecStart=/bin/bash /opt/agrovesto/scripts/connect-vault-network.sh
 
 [Install]
 WantedBy=multi-user.target
@@ -374,6 +375,7 @@ cd /opt/agrovesto/compose
 aws ecr get-login-password --region "${aws_region}" \
 | docker login --username AWS --password-stdin "${ecr_registry}"
 docker compose up -d
+bash /opt/agrovesto/scripts/connect-vault-network.sh
 
 # wait then init DBs
 sleep 40

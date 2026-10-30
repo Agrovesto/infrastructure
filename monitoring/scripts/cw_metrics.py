@@ -31,8 +31,8 @@ import boto3
 
 REGION = os.environ.get("AWS_REGION", "eu-west-1")
 PUSH = os.environ["PUSHGATEWAY_URL"].rstrip("/")
-# Own variable name: the collector task already sets STATE_FILE for the ECS
-# log shipper, and all three scripts share one container.
+# Each stateful collector has its own checkpoint on the shared EFS volume; all
+# three collector scripts share the scheduled task.
 STATE = os.environ.get("CW_STATE_FILE", "/collector/state/cw_metrics.json")
 
 # Optional pins. Empty means "everything ListMetrics finds in this namespace",

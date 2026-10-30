@@ -40,8 +40,8 @@ PREFIX = os.environ.get("ALB_LOGS_PREFIX", "alb").strip("/")
 ACCOUNT_ID = os.environ.get("ACCOUNT_ID", "")
 LOKI = os.environ["LOKI_URL"].rstrip("/")
 PUSH = os.environ["PUSHGATEWAY_URL"].rstrip("/")
-# Own variable name: the collector task already sets STATE_FILE for the ECS
-# log shipper, and all three scripts share one container.
+# Each stateful collector has its own checkpoint on the shared EFS volume; all
+# three collector scripts share the scheduled task.
 STATE = os.environ.get("ALB_STATE_FILE", "/collector/state/alb_logs.json")
 SERVICE_PREFIX = os.environ.get("SERVICE_PREFIX", "")
 MAX_OBJECTS = int(os.environ.get("MAX_OBJECTS_PER_RUN", "100"))

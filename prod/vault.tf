@@ -7,16 +7,16 @@
 #
 # Day-2 bootstrap (once after the first apply):
 #   1. `vault operator init -key-shares=1 -key-threshold=1`
-#      (auto-unseal is active, so init only yields the ROOT TOKEN — store it in
-#      Secrets Manager as your Vault break-glass admin credential)
-#   2. Enable kv-v2 and write per-service secrets, e.g.:
-#      vault secrets enable -path=kv kv-v2
-#      vault kv put kv/wallet    username=... password=...
-#      vault kv put kv/onboarding ...  (one path per database/service)
-#      (the RDS master credentials output/value can seed these)
-#   3. Set `vault_secrets_enabled = true` in terraform.auto.tfvars and apply:
-#      services stop getting DB_USER/DB_PASSWORD injected from Secrets Manager
-#      and read from Vault instead (they always receive VAULT_ADDR).
+#      (auto-unseal is active, so init yields the ROOT TOKEN — store it
+#      securely as the Vault break-glass admin credential)
+#   2. Run `prod/configure-vault-services.sh` from a private operator workstation
+#      to create one read-only policy/AppRole per ECS API and store each AppRole
+#      credential bundle in its own Secrets Manager secret.
+#   3. Write each API's actual payload at
+#      `kv/<service>/prod/appsettings` (no app schema or password is invented).
+#   4. Set `vault_secrets_enabled = true` in terraform.auto.tfvars and apply:
+#      task definitions receive their AppRole fields from Secrets Manager,
+#      stop injecting the RDS bootstrap credentials, and read their own KV path.
 # =============================================================================
 
 # -- KMS: auto-unseal + EFS encryption ------------------------------------------
@@ -252,6 +252,10 @@ resource "aws_ecs_service" "vault" {
   task_definition = aws_ecs_task_definition.vault[0].arn
   desired_count   = 1
   launch_type     = "FARGATE"
+
+  deployment_controller {
+    type = "ECS"
+  }
 
   # One raft node: a failed deploy must roll back, never run two writers.
   deployment_circuit_breaker {

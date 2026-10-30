@@ -139,6 +139,11 @@ run "service" {
   }
 
   assert {
+    condition     = one(aws_ecs_service.vault[0].deployment_controller).type == "ECS"
+    error_message = "The Vault Fargate service uses the ECS deployment controller."
+  }
+
+  assert {
     condition     = [for lb in aws_ecs_service.vault[0].load_balancer : lb.container_port] == [8200]
     error_message = "The ALB targets Vault on 8200."
   }

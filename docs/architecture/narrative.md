@@ -47,27 +47,26 @@ describe are listed separately at the end.
 
 ### Log path
 
-- Container stdout from every prod API task and every monitoring component goes
-  to CloudWatch Logs through the `awslogs` driver, 30-day retention.
-- Application logs that need log search take a different route: services POST to
-  Alloy in the edge task — Loki push API on 3100 — which forwards to Loki, kept
-  30 days on EFS.
-- The monitoring stack's own logs stay in CloudWatch Logs; they are not
-  duplicated into Loki, so a broken ingest path is still visible.
-- Two prod sources are pulled into Loki on a schedule rather than pushed by the
-  application: the ECS log shipper reads the service log groups from CloudWatch
-  Logs (`FilterLogEvents`, cursor kept on the collector's EFS volume) and the ALB
-  shipper reads new objects out of the access-log bucket, parses each line and
-  pushes one Loki entry per request labelled `source="alb"`, `service`, `status`
-  and `method`. Client IP, user agent, URI and timings stay inside the line,
-  where LogQL unwraps them without indexing every value.
-- Both shippers publish shipped-line counters, a run counter and a newest-event
-  timestamp, so a pipeline that stops delivering is an alert rather than a
-  dashboard that quietly goes empty.
-- Dev is the opposite on purpose: no CloudWatch Logs at all. Alloy on the dev
-  host tails the docker `json-file` logs and journald, pushes them to Loki on
-  `127.0.0.1:3100` of the same box, and Grafana queries that. Nothing is
-  ingested, indexed or charged by AWS (see `dev/README.md`).
+- Prod API tasks emit OpenTelemetry logs directly to Alloy in the monitoring
+  edge task (`alloy.monitoring.internal:4317` gRPC or `:4318` HTTP/protobuf).
+  Alloy labels the OTLP records and forwards them to Loki, retained for 30 days
+  on EFS. API task definitions have no `awslogs` driver or per-service
+  CloudWatch log groups.
+- The OTel SDK must be present and configured in each app image; environment
+  variables alone do not create log records. The apps' `service.name` resource
+  attribute becomes the Loki `service_name` label, while severity is normalized
+  as the `level` label.
+- The CloudWatch-to-Loki ECS log shipper is removed, including its CloudWatch
+  Logs read permissions. Applying the Terraform change also deletes the five
+  per-service CloudWatch log groups and their historical events. Monitoring,
+  Vault and one-off operational task logs still use CloudWatch for diagnostics.
+- ALB access logs still flow from the access-log bucket through the scheduled
+  collector into Loki, one entry per request labelled `source="alb"`, `service`,
+  `status` and `method`. Client IP, user agent, URI and timings stay in the line
+  for LogQL to unwrap.
+- Dev remains different: Alloy on the host tails Docker `json-file` logs and
+  journald into Loki; OTLP app logs are disabled there to avoid duplicate copies.
+  Dev's monitoring data is not sent to CloudWatch Logs.
 
 ### Metric path
 
@@ -78,15 +77,13 @@ describe are listed separately at the end.
 - Traces become metrics: Tempo's metrics-generator remote-writes span metrics to
   Prometheus, so request rates and latencies appear without an agent.
 - Batch work pushes instead of being scraped. One scheduled collector task
-  (`rate(2 minutes)`, 0.25 vCPU / 0.5 GB, ARM64) runs whichever collector
-  scripts are enabled, in sequence, in the same container: ECS
-  `DescribeServices`/`DescribeTasks` over HTTPS, the CloudWatch Logs shipper,
-  `ListMetrics`/`GetMetricData` for the always-free basic metrics (ECS service
-  CPU and memory, RDS CPU/memory/free storage/connections, ALB request count,
-  latency and 5xx, NAT bytes, EFS burst credits) and the ALB access-log shipper.
-  Adding a script costs no extra task, so no extra Fargate spend; Container
-  Insights and X-Ray stay off because the basic metrics are $0 and answer the
-  same questions.
+  (`rate(2 minutes)`, 0.25 vCPU / 0.5 GB, ARM64) runs the enabled scripts in
+  sequence: ECS `DescribeServices`/`DescribeTasks` over HTTPS,
+  `ListMetrics`/`GetMetricData` for the basic metrics (ECS service CPU/memory,
+  RDS CPU/memory/free storage/connections, ALB requests/latency/5xx, NAT bytes,
+  EFS burst credits), and the ALB access-log shipper. Application logs are no
+  longer read from CloudWatch. Adding a script costs no extra task; Container
+  Insights and X-Ray stay off.
 - The SQL Server metrics job (hourly, TDS 1433 DMV read using the master
   secret), the budget job (daily 06:15 UTC) and the monthly report job (08:00
   UTC on the 1st) push to pushgateway on 9091 as their own tasks.
@@ -202,7 +199,7 @@ line).
 | Secrets Manager | Secrets | 1 secret, master credentials, read at task start | — |
 | KMS | Encryption | 2 keys (vault, monitoring) | — |
 | S3 `alb_logs` | Storage | access logs, lifecycle expiry | — |
-| CloudWatch Logs | Logs | 5 log groups, 30-day retention | ≈ $25 with EFS and buckets |
+| CloudWatch Logs | API task ingestion and its five log groups removed; monitoring/support task logs remain | Usage-dependent |
 | Cloud Map | Discovery | private namespace `monitoring.internal`, 5 registrations, 4 CNAME aliases | ≈ $0.60 |
 | SSM Parameter Store | Config | Grafana admin password as SecureString | — |
 | ECR | Images | 5 prod repos, IMMUTABLE, 5 tags kept | — |
@@ -226,7 +223,7 @@ line).
 
 | Node | Service | Key configuration | Cost |
 | --- | --- | --- | ---: |
-| collector task | Batch | `rate(2 minutes)`, 0.25 vCPU / 0.5 GB, runs the enabled collector scripts in sequence: ECS API polling, CloudWatch Logs shipping, basic CloudWatch metrics, ALB access-log shipping | ≈ $3.06 for all four scheduled tasks — the extra scripts add no task |
+| collector task | Batch | `rate(2 minutes)`, 0.25 vCPU / 0.5 GB, runs ECS state polling, basic CloudWatch metrics and ALB access-log shipping; no CloudWatch application-log shipper | ≈ $3.06 for all four scheduled tasks — the extra scripts add no task |
 | mssql-metrics task | Batch | hourly, DMV query through Secrets Manager | included above |
 | budget task | Batch | daily 06:15 UTC, DuckDB over CUR Parquet | included above |
 | report task | Batch | monthly, fpdf2 PDF, SES send | included above |

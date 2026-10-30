@@ -34,6 +34,17 @@ nginx.conf.tftpl ── renders /opt/agrovesto/nginx/nginx.conf
 | moneval | `moneval-api` | `moneval-api-blue` / `-green` | 5015 / 5016 | `dev-moneval-api.nomaos.com` |
 | serviceprovider | `serviceprovider-api` | `serviceprovider-api-blue` / `-green` | 5017 / 5018 | `dev-service-api.nomaos.com` |
 
+Each deployment reads the AppRole environment for its own API from
+`/data/vault/services/<key>.env` on the host. The reference
+[`docs/examples/deploy.sh`](examples/deploy.sh) loads that file before creating
+a slot; keep the app repository's `load_app_env` / deployment wrapper aligned
+with this contract. The file contains only that API's Vault address, KV path,
+RoleID and SecretID—not the secret payload. Its Vault path follows
+`kv/<service>/staging/appsettings`. The app repository's Compose definition must
+pass `Vault__SecretPath` through from `deploy.sh` so ASP.NET configuration sees
+`Vault:SecretPath`; the application must log in with AppRole and read its own KV
+v2 path. See [`docs/vault-service-secrets.md`](vault-service-secrets.md).
+
 Compose services (the placeholder images) hold 5000–5006; the slot pairs start
 above them and never overlap. The slot containers are **not** compose services:
 `deploy.sh` starts them (`--name <app>-<slot>`, on the compose network, with a

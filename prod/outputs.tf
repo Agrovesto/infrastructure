@@ -35,6 +35,34 @@ output "ecs_service_names" {
   )
 }
 
+output "ecs_deployment_controller" {
+  description = "Deployment controller type for the application and Vault ECS services"
+  value       = merge(
+    { for service, ecs_service in aws_ecs_service.services : service => one(ecs_service.deployment_controller).type },
+    var.enable_vault ? { vault = one(aws_ecs_service.vault[0].deployment_controller).type } : {}
+  )
+}
+
+output "vault_service_access" {
+  description = "Non-secret per-service Vault paths, AppRoles, ECS services, and Secrets Manager credential references."
+  value       = var.enable_vault ? {
+    mount                 = local.vault_kv_mount
+    path_environment      = local.vault_path_environment
+    vault_secrets_enabled = var.vault_secrets_enabled
+    cluster               = aws_ecs_cluster.main.name
+    services              = {
+      for service, secret in aws_secretsmanager_secret.vault_service_credentials :
+      service => {
+        secret_path             = local.vault_service_paths[service]
+        policy                  = "prod-${service}-read"
+        approle                 = "prod-${service}"
+        credentials_secret_arn  = secret.arn
+        ecs_service             = aws_ecs_service.services[service].name
+      }
+    }
+  } : null
+}
+
 # -- Vault ------------------------------------------------------------------------
 
 output "vault_url" {

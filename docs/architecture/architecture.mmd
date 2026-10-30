@@ -56,7 +56,7 @@ flowchart LR
       sm["Secrets Manager<br/>mssql master"]
       kms["KMS keys<br/>vault + monitoring"]
       s3logs["S3 bucket<br/>ALB access logs"]
-      cwl["CloudWatch Logs<br/>30-day retention"]
+      cwl["CloudWatch Logs<br/>monitoring/support diagnostics; API groups removed"]
       cloudmap["Cloud Map<br/>monitoring.internal"]
       ssm["SSM Parameter Store<br/>grafana admin"]
     end
@@ -133,8 +133,8 @@ flowchart LR
   grafana -->|"SSM GetParameter"| ssm
   pmon -->|"DNS A records, 10 s TTL"| cloudmap
   papp -->|"HTTPS 443 image pulls"| ecr
+  vaultsvc -->|"awslogs task diagnostics"| cwl
   alb -->|"S3 PutObject access logs"| s3logs
-  papp -->|"awslogs driver"| cwl
   pmon -->|"awslogs driver"| cwl
   dapis -->|"HTTPS 443 image pulls"| decr
   dmssql -->|"S3 PutObject nightly dumps"| ds3

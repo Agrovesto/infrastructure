@@ -93,6 +93,23 @@ output "vault_url" {
   value       = "http://127.0.0.1:${var.vault.host_port}"
 }
 
+output "vault_service_access" {
+  description = "Non-secret Vault KV v2 paths, policies, AppRole names, and per-service host env-file locations. Secret values are provisioned separately on the host."
+  value = {
+    mount    = local.vault_kv_mount
+    env_dir  = local.vault_service_env_dir
+    services = {
+      for service in local.vault_service_names :
+      service => {
+        secret_path = "${local.vault_kv_mount}/${service}/${local.vault_path_environment}/appsettings"
+        policy      = "${var.environment}-${service}-read"
+        approle     = "${var.environment}-${service}"
+        env_file    = "${local.vault_service_env_dir}/${service}.env"
+      }
+    }
+  }
+}
+
 output "vault_auto_unseal_key_arn" {
   description = "Dedicated KMS key for a MANUAL Shamir-to-awskms seal migration. Empty until prepare_vault_kms_auto_unseal is enabled. Do not delete this key after migration."
   value       = var.prepare_vault_kms_auto_unseal ? aws_kms_key.vault_unseal[0].arn : ""

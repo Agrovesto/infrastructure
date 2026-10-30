@@ -70,5 +70,6 @@ ExecStart=
 ExecStart=/usr/local/bin/aws s3 sync s3://${bucket}/ /opt/agrovesto --region ${region} --only-show-errors
 ExecStart=/bin/bash /opt/agrovesto/scripts/prepare-vault.sh
 ${oidc_exec}ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
+ExecStart=/bin/bash /opt/agrovesto/scripts/connect-vault-network.sh
 UNIT
 systemctl daemon-reload

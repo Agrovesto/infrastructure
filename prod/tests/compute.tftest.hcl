@@ -1,5 +1,5 @@
 # =============================================================================
-# PROD — ECS Fargate cluster, task definitions, services, IAM, log groups
+# PROD — ECS Fargate cluster, task definitions, services, IAM, OTLP logging
 # =============================================================================
 
 mock_provider "aws" {
@@ -292,8 +292,8 @@ run "otel_environment" {
     condition = {
       for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment :
       e.name => e.value
-    }["OTEL_LOGS_EXPORTER"] == "none"
-    error_message = "Logs stay on the awslogs driver; exporting them over OTLP as well would store every line twice."
+    }["OTEL_LOGS_EXPORTER"] == "otlp"
+    error_message = "Application log records use the OTLP exporter to reach Alloy and Loki."
   }
 
   assert {
@@ -378,6 +378,32 @@ run "services" {
     condition     = one(aws_ecs_service.services["wallet"].deployment_circuit_breaker).enable == true
     error_message = "Prod services need the circuit breaker (auto-rollback on failed deploys)."
   }
+
+  assert {
+    condition     = one(aws_ecs_service.services["wallet"].deployment_controller).type == "ECS"
+    error_message = "Production APIs use the ECS deployment controller, not CodeDeploy."
+  }
+
+  assert {
+    condition = alltrue([for controller in values(output.ecs_deployment_controller) : controller == "ECS"]) &&
+      length(output.ecs_deployment_controller) == length(var.services) + 1
+    error_message = "The deployment-controller output reports ECS for every API and the enabled Vault service."
+  }
+
+  assert {
+    condition     = aws_ecs_cluster.main.name == "agrovesto-prod"
+    error_message = "The production ECS cluster name is agrovesto-prod."
+  }
+
+  assert {
+    condition     = length(aws_secretsmanager_secret.vault_service_credentials) == length(var.services)
+    error_message = "Each production API has a separate empty Secrets Manager container for its future AppRole credential bundle."
+  }
+
+  assert {
+    condition     = local.vault_service_paths["wallet"] == "kv/wallet/prod/appsettings"
+    error_message = "Prod Vault paths follow kv/<service>/prod/appsettings."
+  }
 }
 
 run "services_single_az_pin" {
@@ -390,29 +416,6 @@ run "services_single_az_pin" {
   assert {
     condition     = length(one(aws_ecs_service.services["wallet"].network_configuration).subnets) == 1
     error_message = "single_az_ecs = true pins every task to the first private subnet."
-  }
-}
-
-# -----------------------------------------------------------------------------
-# Log groups
-# -----------------------------------------------------------------------------
-
-run "log_groups" {
-  command = plan
-
-  assert {
-    condition     = length(aws_cloudwatch_log_group.services) == 5
-    error_message = "One log group per service."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_log_group.services["wallet"].name == "/ecs/${var.project}-${var.environment}/wallet"
-    error_message = "Log group naming must follow /ecs/<project>-<env>/<service>."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_log_group.services["wallet"].retention_in_days == 30
-    error_message = "Service log retention must follow var.log_retention_days (30)."
   }
 }
 
@@ -472,8 +475,8 @@ run "container_definitions" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].logConfiguration.logDriver == "awslogs"
-    error_message = "Containers must log to CloudWatch via awslogs."
+    condition     = !contains(keys(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0]), "logConfiguration")
+    error_message = "API containers must not use the awslogs driver; application logs go to Alloy over OTLP."
   }
 
   assert {
@@ -500,9 +503,34 @@ run "container_definitions_with_vault_secrets" {
   }
 
   assert {
-    condition     = length(jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets) == 0
-    error_message = "vault_secrets_enabled = true must stop injecting DB creds from Secrets Manager."
+    condition = contains(
+      [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
+      "VAULT_ROLE_ID"
+    ) && contains(
+      [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
+      "VAULT_SECRET_ID"
+    ) && !contains(
+      [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
+      "DB_PASSWORD"
+    )
+    error_message = "Vault mode injects only this service's AppRole fields, not RDS bootstrap credentials."
   }
+
+  assert {
+    condition     = contains([for e in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].environment : e.value if try(e.name, "") == "Vault__SecretPath"], "kv/wallet/prod/appsettings")
+    error_message = "Each Vault-enabled ECS service receives its exact appsettings path through .NET configuration."
+  }
+}
+
+run "vault_secrets_require_vault_service" {
+  command = plan
+
+  variables {
+    enable_vault          = false
+    vault_secrets_enabled = true
+  }
+
+  expect_failures = [aws_ecs_cluster.main]
 }
 
 # -----------------------------------------------------------------------------
@@ -732,8 +760,8 @@ run "iam_documents_and_wiring" {
   }
 
   assert {
-    condition     = [for s in data.aws_iam_policy_document.ecs_execution_secrets.statement : s.sid] == ["ReadMssqlMasterSecret", "DecryptMssqlMasterSecret"]
-    error_message = "Execution role reads only the master secret and decrypts it."
+    condition     = [for s in data.aws_iam_policy_document.ecs_execution_secrets.statement : s.sid] == ["ReadTaskStartupSecrets", "DecryptTaskStartupSecrets"]
+    error_message = "Execution role reads startup credentials and decrypts them through Secrets Manager."
   }
 
   assert {

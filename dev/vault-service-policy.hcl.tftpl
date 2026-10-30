@@ -1,0 +1,23 @@
+# Per-service KV v2 policy. The KV paths are read-only; the self-token paths
+# allow the application to renew, inspect or revoke only its own Vault token.
+# The Vault UI path is ${kv_mount}/${service}/${path_environment}/appsettings;
+# KV v2 stores values behind the /data API path. No listing or secret writes.
+path "${kv_mount}/data/${service}/${path_environment}/appsettings" {
+  capabilities = ["read"]
+}
+
+path "${kv_mount}/data/${service}/${path_environment}/appsettings/*" {
+  capabilities = ["read"]
+}
+
+path "auth/token/renew-self" {
+  capabilities = ["update"]
+}
+
+path "auth/token/lookup-self" {
+  capabilities = ["read"]
+}
+
+path "auth/token/revoke-self" {
+  capabilities = ["update"]
+}
