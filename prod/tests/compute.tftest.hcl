@@ -123,7 +123,7 @@ override_data {
 }
 
 variables {
-  rabbitmq = { enabled = false }
+  rabbitmq        = { enabled = false }
   import_existing = false
 
   # Test the new-instance defaults, not the adoption values in terraform.auto.tfvars.
@@ -385,8 +385,10 @@ run "services" {
   }
 
   assert {
-    condition = alltrue([for controller in values(output.ecs_deployment_controller) : controller == "ECS"]) &&
+    condition = (
+      alltrue([for controller in values(output.ecs_deployment_controller) : controller == "ECS"]) &&
       length(output.ecs_deployment_controller) == length(var.services) + 1
+    )
     error_message = "The deployment-controller output reports ECS for every API and the enabled Vault service."
   }
 
@@ -506,10 +508,10 @@ run "container_definitions_with_vault_secrets" {
     condition = contains(
       [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
       "VAULT_ROLE_ID"
-    ) && contains(
+      ) && contains(
       [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
       "VAULT_SECRET_ID"
-    ) && !contains(
+      ) && !contains(
       [for s in jsondecode(aws_ecs_task_definition.services["wallet"].container_definitions)[0].secrets : s.name],
       "DB_PASSWORD"
     )

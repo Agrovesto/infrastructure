@@ -36,7 +36,7 @@ override_data {
 }
 
 variables {
-  rabbitmq = { enabled = false }
+  rabbitmq        = { enabled = false }
   import_existing = false
 
   domain_name     = "nomaos.com"

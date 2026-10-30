@@ -6,6 +6,10 @@ override_resource {
   values = { id = "sg-0123456789abcdef0" }
 }
 
+override_resource {
+  target = aws_security_group.ecs
+  values = { id = "sg-0123456789abcdef1" }
+}
 override_data {
   target = data.aws_availability_zones.available
   values = { names = ["eu-west-1a", "eu-west-1b", "eu-west-1c"] }
@@ -44,8 +48,8 @@ run "private_single_broker" {
     condition = (
       length(aws_security_group.rabbitmq[0].ingress) == 2 &&
       alltrue([for rule in aws_security_group.rabbitmq[0].ingress :
-        length(rule.cidr_blocks) == 0 &&
-        length(rule.ipv6_cidr_blocks) == 0 &&
+        try(length(rule.cidr_blocks), 0) == 0 &&
+        try(length(rule.ipv6_cidr_blocks) == 0, true) &&
         rule.security_groups == toset([aws_security_group.rabbitmq_clients[0].id]) &&
         contains([443, 5671], rule.from_port) && rule.from_port == rule.to_port
       ]) &&

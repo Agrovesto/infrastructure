@@ -10,7 +10,7 @@
 locals {
   vault_kv_mount         = "kv"
   vault_path_environment = "prod"
-  vault_service_paths    = {
+  vault_service_paths = {
     for service in keys(var.services) :
     service => "${local.vault_kv_mount}/${service}/${local.vault_path_environment}/appsettings"
   }

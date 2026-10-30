@@ -110,7 +110,7 @@ resource "aws_ecs_task_definition" "services" {
           name      = "VAULT_SECRET_ID"
           valueFrom = "${aws_secretsmanager_secret.vault_service_credentials[each.key].arn}:secret_id::"
         }
-      ] : [
+        ] : [
         { name = "DB_USER", valueFrom = "${local.mssql_master_secret_arn}:username::" },
         { name = "DB_PASSWORD", valueFrom = "${local.mssql_master_secret_arn}:password::" }
       ]
@@ -151,7 +151,7 @@ resource "aws_ecs_service" "services" {
   network_configuration {
     # Private subnets only — no public IPs on tasks (CKV_AWS_333 friendly).
     # var.single_az_ecs pins every task to the first AZ (single-AZ for now).
-    subnets          = var.single_az_ecs ? [aws_subnet.private[0].id] : aws_subnet.private[*].id
+    subnets = var.single_az_ecs ? [aws_subnet.private[0].id] : aws_subnet.private[*].id
     security_groups = concat(
       [aws_security_group.ecs.id],
       var.rabbitmq.enabled ? [aws_security_group.rabbitmq_clients[0].id] : []
