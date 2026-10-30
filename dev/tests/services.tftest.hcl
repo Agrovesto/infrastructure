@@ -594,7 +594,7 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 23 &&
+      length(aws_s3_object.host_config) == 28 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )

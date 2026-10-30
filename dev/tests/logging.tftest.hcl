@@ -122,8 +122,8 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 21
-    error_message = "Twenty-three rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 5x dashboards."
+    condition     = length(aws_s3_object.host_config) == 27
+    error_message = "Twenty-seven rendered files ship to the host: the five always-needed (compose, nginx.conf, one blue/green slot file per opted-in API — nomaos and wallet here — and init-dbs.sql), then loki and its ruler rules, tempo, alloy, prometheus, its host rules, alertmanager, 2x grafana provisioning and 5x dashboards."
   }
 
   assert {
@@ -778,7 +778,7 @@ run "disabled" {
   # on every boot, logging or not.
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 5 &&
+      length(aws_s3_object.host_config) == 11 &&
       alltrue([
         for k in ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos_api-active.conf", "nginx/wallet_api-active.conf", "scripts/init-dbs.sql"] :
         contains(keys(aws_s3_object.host_config), k)
