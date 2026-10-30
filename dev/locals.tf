@@ -497,7 +497,7 @@ locals {
     for service in local.vault_service_names :
     "vault/service-policies/${service}.hcl" => {
       content_type = "text/plain"
-      content      = templatefile("${path.module}/vault-service-policy.hcl.tftpl", {
+      content = templatefile("${path.module}/vault-service-policy.hcl.tftpl", {
         kv_mount         = local.vault_kv_mount
         path_environment = local.vault_path_environment
         service          = service
@@ -512,7 +512,7 @@ locals {
     }
     "scripts/configure-vault-services.sh" = {
       content_type = "text/x-shellscript"
-      content      = templatefile("${path.module}/configure-vault-services.sh.tftpl", {
+      content = templatefile("${path.module}/configure-vault-services.sh.tftpl", {
         environment      = var.environment
         kv_mount         = local.vault_kv_mount
         path_environment = local.vault_path_environment
@@ -522,7 +522,7 @@ locals {
     }
     "scripts/write-vault-service-secret.sh" = {
       content_type = "text/x-shellscript"
-      content      = templatefile("${path.module}/write-vault-service-secret.sh.tftpl", {
+      content = templatefile("${path.module}/write-vault-service-secret.sh.tftpl", {
         path_environment = local.vault_path_environment
         kv_mount         = local.vault_kv_mount
         services         = local.vault_service_names

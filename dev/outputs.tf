@@ -96,8 +96,8 @@ output "vault_url" {
 output "vault_service_access" {
   description = "Non-secret Vault KV v2 paths, policies, AppRole names, and per-service host env-file locations. Secret values are provisioned separately on the host."
   value = {
-    mount    = local.vault_kv_mount
-    env_dir  = local.vault_service_env_dir
+    mount   = local.vault_kv_mount
+    env_dir = local.vault_service_env_dir
     services = {
       for service in local.vault_service_names :
       service => {
