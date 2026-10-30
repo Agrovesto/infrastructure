@@ -68,6 +68,9 @@ limits_config:
   max_entries_limit_per_query: ${max_entries}
 
   allow_structured_metadata: true
+
+  # Log deletion API mode (a per-tenant limit in Loki 3.x, not a compactor field).
+  deletion_mode: filter-and-delete
 %{ if length(retention_streams) > 0 ~}
 
   # Per-stream overrides, applied by priority (higher priority wins). The
@@ -75,7 +78,7 @@ limits_config:
   retention_stream:
 %{ for s in retention_streams ~}
     - priority: 1
-      label_selector: ${jsonencode(s.selector)}
+      selector: ${jsonencode(s.selector)}
       period: ${s.period}h
 %{ endfor ~}
 %{ endif ~}
@@ -85,7 +88,27 @@ compactor:
   retention_enabled: true
   delete_request_store: filesystem
   compaction_interval: 10m
-  deletion_mode: filter-and-delete
+
+# Loki evaluates its own LogQL alert rules and hands anything firing to the
+# Alertmanager on this network, which publishes to the dev SNS alerts topic, the
+# same path a Prometheus alert takes. This is what makes "the applications
+# are logging errors" and "nginx is answering 5xx" alertable without a metric.
+#
+# Rules are read from <directory>/<tenant>/<namespace>, and with auth_enabled
+# false the tenant every line is ingested under is literally "fake", so the rule
+# file in the host config bucket is logging/loki/rules/fake/application.yml. One
+# level higher and the ruler loads nothing and says nothing about it.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://alertmanager:${alertmanager_port}
+  enable_api: true
+  ring:
+    kvstore:
+      store: inmemory
 
 querier:
   max_concurrent: ${querier_max_concurrent}

@@ -441,13 +441,7 @@ variable "enable_traces" {
 # --- ECS platform monitoring -----------------------------------------------------
 
 variable "enable_ecs_monitoring" {
-  description = "Run the scheduled ECS collector (cluster and service state, service logs)"
-  type        = bool
-  default     = true
-}
-
-variable "enable_ecs_log_shipping" {
-  description = "Also ship the prod ECS task logs from CloudWatch Logs into Loki"
+  description = "Run the scheduled ECS collector (cluster and service state); application logs arrive at Loki through Alloy/OTLP"
   type        = bool
   default     = true
 }
@@ -458,20 +452,67 @@ variable "ecs_cluster_name" {
   default     = ""
 }
 
-variable "ecs_log_group_prefix" {
-  description = "Log group prefix whose groups are shipped to Loki. Empty means /ecs/<project>-<environment>"
-  type        = string
-  default     = ""
-}
-
 variable "collector_schedule_expression" {
   description = "How often the ECS collector runs"
   type        = string
   default     = "rate(2 minutes)"
 }
 
-variable "ecs_log_lookback_minutes" {
-  description = "How far back the log shipper may read after a cold start"
+# --- Basic CloudWatch metrics ----------------------------------------------------
+#
+# Container Insights, enhanced monitoring and Performance Insights stay off. The
+# collector reads the standard metrics every AWS resource publishes for free and
+# republishes them as Prometheus series, so per-service CPU and memory, load
+# balancer traffic, database resources, NAT throughput and EFS usage are
+# dashboards and alerts in Grafana like everything else. GetMetricData costs
+# about $0.01 per 1,000 metrics requested, which at this cadence and scale is a
+# few cents a month; ListMetrics is free.
+
+variable "enable_cloudwatch_metrics" {
+  description = "Also collect the free basic CloudWatch metrics (ECS CPU/memory, ALB, RDS, NAT gateway, EFS)"
+  type        = bool
+  default     = true
+}
+
+variable "cloudwatch_metric_delay_seconds" {
+  description = "How far behind now the collector reads, because basic CloudWatch metrics land a few minutes late"
   type        = number
-  default     = 15
+  default     = 300
+}
+
+variable "cloudwatch_max_window_minutes" {
+  description = "Longest window one run may read, after a cold start or a long collector outage"
+  type        = number
+  default     = 30
+}
+
+# --- ALB access logs -------------------------------------------------------------
+#
+# prod/alb.tf already writes one access log line per request into S3; nothing
+# read them. The collector parses the new objects into Loki, which is what makes
+# request volume per service, the status mix, latency and client IPs queryable
+# in Grafana. Needs the prod stack applied (the bucket lives there).
+
+variable "enable_alb_log_shipping" {
+  description = "Ship the prod ALB access logs from S3 into Loki (request volume, status, latency, client IPs)"
+  type        = bool
+  default     = true
+}
+
+variable "alb_access_logs_bucket" {
+  description = "Bucket the ALB writes access logs to. Empty means <project>-<environment>-alb-logs-<account id>, which is what prod/alb.tf creates"
+  type        = string
+  default     = ""
+}
+
+variable "alb_access_logs_prefix" {
+  description = "Key prefix inside that bucket (prod/alb.tf uses alb)"
+  type        = string
+  default     = "alb"
+}
+
+variable "alb_log_max_objects_per_run" {
+  description = "How many log objects one collector run may ship, so a cold start cannot stall the task"
+  type        = number
+  default     = 100
 }

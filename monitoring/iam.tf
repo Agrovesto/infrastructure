@@ -157,18 +157,29 @@ resource "aws_iam_role_policy" "task" {
           ]
         }
       ] : [],
-      var.enable_ecs_log_shipping ? [
+      local.cloudwatch_metrics_enabled ? [
         {
-          Sid      = "ListLogGroups"
+          # The two read actions the free basic metrics need. Dimension sets are
+          # discovered with ListMetrics, so the collector never needs a describe
+          # permission for ECS, ELB, RDS, EC2 or EFS.
+          Sid      = "ReadBasicCloudWatchMetrics"
           Effect   = "Allow"
-          Action   = ["logs:DescribeLogGroups"]
+          Action   = ["cloudwatch:ListMetrics", "cloudwatch:GetMetricData"]
           Resource = ["*"]
+        }
+      ] : [],
+      local.alb_log_shipping_enabled ? [
+        {
+          Sid      = "ListAlbAccessLogs"
+          Effect   = "Allow"
+          Action   = ["s3:ListBucket"]
+          Resource = ["arn:aws:s3:::${local.alb_logs_bucket}"]
         },
         {
-          Sid      = "ReadServiceLogs"
+          Sid      = "ReadAlbAccessLogs"
           Effect   = "Allow"
-          Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
-          Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
+          Action   = ["s3:GetObject"]
+          Resource = ["arn:aws:s3:::${local.alb_logs_bucket}/${var.alb_access_logs_prefix}*"]
         }
     ] : [])
   })
@@ -192,6 +203,38 @@ resource "aws_iam_role_policy" "task_database_secret" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = [local.mssql_secret_id != "" && startswith(local.mssql_secret_id, "arn:") ? local.mssql_secret_id : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.mssql_secret_id != "" ? local.mssql_secret_id : "rds!db-"}*"]
+      },
+      {
+        Sid      = "DecryptDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}
+
+# ECS resolves the Grafana task's MSSQL credentials from the database master
+# secret (`secrets.valueFrom` in grafana.tf), and secret resolution runs under
+# the EXECUTION role — its own inline policy for the same Condition-unification
+# reason as task_database_secret above.
+resource "aws_iam_role_policy" "execution_database_secret" {
+  count = local.mssql_grafana_enabled ? 1 : 0
+
+  name = "${local.name}-execution-database-secret-policy"
+  role = aws_iam_role.execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadDatabaseSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [local.mssql_secret_id]
       },
       {
         Sid      = "DecryptDatabaseSecret"

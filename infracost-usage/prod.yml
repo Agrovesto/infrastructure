@@ -98,10 +98,3 @@ resource_usage:
     storage_gb: 0.1
     monthly_data_ingested_gb: 0.1
     monthly_data_scanned_gb: 0
-
-  # 5 API services, ~300 MB of container logs each (1.5 GB in total), 30-day
-  # retention.
-  'aws_cloudwatch_log_group.services[*]':
-    storage_gb: 0.3
-    monthly_data_ingested_gb: 0.3
-    monthly_data_scanned_gb: 0

@@ -86,20 +86,19 @@ services = {
 #   OpenTelemetry.Exporter.OpenTelemetryProtocol
 #   OpenTelemetry.Instrumentation.AspNetCore / .HttpClient / .SqlClient
 # and `builder.Services.AddOpenTelemetry().WithTracing(...).WithMetrics(...)`.
-# These variables are the standard ones that SDK reads, so once an image does
-# that, its traces appear with no further infrastructure change.
+# These variables are the standard ones the SDK reads, so once an image loads
+# and configures the SDK, its traces, metrics and application logs can flow with
+# no further infrastructure change.
 otel = {
   enabled  = true
   endpoint = "http://alloy.monitoring.internal:4317"
   protocol = "grpc"
 
-  # Traces and metrics out; logs deliberately not, because the awslogs driver on
-  # the task definition already puts every service log line in CloudWatch Logs.
-  # Exporting them again over OTLP would store each line twice (CloudWatch *and*
-  # Loki). Flip to "otlp" only together with removing that driver.
+  # Traces, metrics and application logs go to Alloy over OTLP. The ECS API task
+  # definitions have no awslogs driver; app images must configure the OTel SDK.
   traces_exporter  = "otlp"
   metrics_exporter = "otlp"
-  logs_exporter    = "none"
+  logs_exporter    = "otlp"
 
   # Sample everything. Five services at one task each is nowhere near the volume
   # where sampling pays for itself, and a sampled-out trace is one nobody can go
@@ -185,10 +184,11 @@ db_size_alarm_enabled = false
 
 # --- Vault ----------------------------------------------------------------------
 # Vault (secrets store) is provisioned by default; services still get DB creds
-# injected from Secrets Manager until Vault is initialized. Bootstrap steps and
-# the switch to vault_secrets_enabled = true are documented in vault.tf.
+# injected from Secrets Manager until Vault is initialized and every per-service
+# path (kv/<service>/prod/appsettings) and AppRole credential is ready.
+# Runbook: docs/prod-vault-service-secrets.md.
 # enable_vault           = false   # to remove the Vault service entirely
-# vault_secrets_enabled  = true    # after `vault operator init` + kv bootstrap
+# vault_secrets_enabled  = true    # only after path payloads + AppRole credentials are ready
 
 # Flip to true once the instance exists and you want Terraform to create the 5
 # databases automatically (runs a one-off Fargate task via the AWS API).
@@ -202,14 +202,21 @@ db_size_alarm_enabled = false
 # extra_a_records = {
 #   "dev-wallet-api"          = "<dev EC2 Elastic IP>"
 #   "dev-onboarding-api"      = "<dev EC2 Elastic IP>"
-#   "dev-input.api"           = "<dev EC2 Elastic IP>"
+#   "dev-input-api"           = "<dev EC2 Elastic IP>"
 #   "dev-moneval-api"         = "<dev EC2 Elastic IP>"
-#   "dev-serviceprovider-api" = "<dev EC2 Elastic IP>"
-#   "dev-vault"                = "<dev EC2 Elastic IP>"
+#   # dev-service-api (not dev-serviceprovider-api): every dev API serves its
+#   # blue/green deploys on its own hostname (dev/nginx.conf.tftpl) — the deploy
+#   # pipeline flips the active slot behind it, and its health checks use this
+#   # name. No separate deployment records like the old dev-api-test.
+#   "dev-service-api"         = "<dev EC2 Elastic IP>"
+#   "dev-agx-api"             = "<dev EC2 Elastic IP>"
+#   # dev-vault is already pointed manually; keep dev-mode Vault tunnel-only.
+#   # Once persistent Vault + OIDC is migrated, manage DNS deliberately here if desired.
 #   # The dev logging stack's Grafana (nginx vhost on the dev host). Without this
 #   # record the UI is still reachable through the SSH tunnel printed by
 #   # `terraform -chdir=../dev output logging_access`.
-#   "dev-logs"                 = "<dev EC2 Elastic IP>"
+#   "dev-rabbitmq"                = "<dev EC2 Elastic IP>"
+#   "dev-grafana"                 = "<dev EC2 Elastic IP>"
 #   # Dev SonarQube. Not dev-prefixed on purpose: sonar.nomaos.com is the name the
 #   # SONAR_HOST_URL secret and the sonar-project-*.properties files use, and it
 #   # is served by nginx on the dev EC2 host (dev/terraform.auto.tfvars ->
@@ -219,6 +226,8 @@ db_size_alarm_enabled = false
 #   "sonar"                    = "<dev EC2 Elastic IP>"
 # }
 # extra_cname_records = {
+#   # Once the agx frontend has a real build and publish_dns=true in dev:
+#   # "dev-agx" = "dev.<agx Amplify default domain>"
 #   "landing.dev"    = "dev.<landing Amplify default domain>"
 #   "onboarding.dev" = "dev.<onboarding Amplify default domain>"
 # }
@@ -274,3 +283,12 @@ public_subnet_map_public_ip       = true
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Private, single-node Amazon MQ. No infrastructure is created until apply.
+# Confirm engine/instance availability and cost in eu-west-1 before applying.
+# AMQP and management are private: only authorized ECS application services.
+rabbitmq = {
+  enabled        = true
+  engine_version = "4.2"
+  instance_type  = "mq.m7g.large"
+}

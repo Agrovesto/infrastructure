@@ -181,11 +181,12 @@ Native (non-monitoring) alerts, currently OFF
   five ASP.NET API containers (wallet 5001, onboarding 5002, input 5003, moneval
   5004, serviceprovider 5005 — placeholder images today), a SQL Server
   container holding the five databases (wallet, onboarding, input, moneval,
-  serviceprovider), a Vault container, and the on-host logging and metrics stack
-  — Alloy tailing the docker logs and journald into Loki, Grafana, Prometheus
-  with cAdvisor and node-exporter. Same compose project, no CloudWatch Logs or
-  Container Insights anywhere in dev. Grafana is the only one of them nginx
-  serves publicly (`dev-logs`, IP-allowlisted); the rest bind 127.0.0.1.
+  serviceprovider), a Vault container, and the on-host logging, metrics and
+  trace stack — Alloy tailing the docker logs and journald into Loki and taking
+  the APIs' OTLP on 4317/4318 into Tempo, Grafana, Prometheus with cAdvisor and
+  node-exporter. Same compose project, no CloudWatch Logs, Container Insights or
+  X-Ray anywhere in dev. Grafana is the only one of them nginx serves publicly
+  (`dev-grafana`, IP-allowlisted); the rest bind 127.0.0.1.
 - EventBridge Scheduler keeps cost down: start 08:00, stop 20:00, Monday to
   Friday, Africa/Lagos — roughly 260 running hours a month.
 - ECR repos agrovesto-dev-<svc> ×5 (MUTABLE tags, 3 kept); Amplify hosts two

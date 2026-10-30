@@ -17,7 +17,7 @@ locals {
     "prometheus/rules/cost.yml"                        = local.prometheus_cost_rules
     "alertmanager/alertmanager.yml"                    = local.alertmanager_config
     "loki/config.yml"                                  = local.loki_config
-    "loki/rules/application.yml"                       = local.loki_rules
+    "loki/rules/fake/application.yml"                  = local.loki_rules
     "tempo/config.yml"                                 = local.tempo_config
     "alloy/config.alloy"                               = local.alloy_config
     "blackbox/blackbox.yml"                            = local.blackbox_config
@@ -29,16 +29,23 @@ locals {
   }
 
   rds_config_parameters = local.mssql_enabled ? {
-    "rds/mssql_metrics.py"          = file("${path.module}/scripts/mssql_metrics.py")
-    "prometheus/rules/database.yml" = local.prometheus_rds_rules
+    "rds/mssql_metrics.py"             = file("${path.module}/scripts/mssql_metrics.py")
+    "prometheus/rules/database.yml"    = local.prometheus_rds_rules
+    "grafana/dashboards/database.json" = file("${path.module}/dashboards/database.json")
   } : {}
 
   collector_config_parameters = local.collector_enabled ? merge({
     "collector/ecs_metrics.py"    = file("${path.module}/scripts/ecs_metrics.py")
     "prometheus/rules/ecs.yml"    = local.prometheus_ecs_rules
     "grafana/dashboards/ecs.json" = file("${path.module}/dashboards/ecs.json")
-    }, var.enable_ecs_log_shipping ? {
-    "collector/ecs_logs.py" = file("${path.module}/scripts/ecs_logs.py")
+    }, local.cloudwatch_metrics_enabled ? {
+    "collector/cw_metrics.py"           = file("${path.module}/scripts/cw_metrics.py")
+    "prometheus/rules/cloudwatch.yml"   = local.prometheus_cloudwatch_rules
+    "grafana/dashboards/resources.json" = file("${path.module}/dashboards/resources.json")
+  } : {}, local.alb_log_shipping_enabled ? {
+    "collector/alb_logs.py"           = file("${path.module}/scripts/alb_logs.py")
+    "prometheus/rules/alb.yml"        = local.prometheus_alb_rules
+    "grafana/dashboards/traffic.json" = file("${path.module}/dashboards/traffic.json")
   } : {}) : {}
 
   config_parameters = merge(local.base_config_parameters, local.rds_config_parameters, local.collector_config_parameters)

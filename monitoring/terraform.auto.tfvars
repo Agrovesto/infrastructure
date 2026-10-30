@@ -51,12 +51,16 @@ probe_targets = {
   grafana         = "https://grafana.nomaos.com/api/health"
 }
 
-# RDS: the adopted prod instance. Host, port and the ARN of its RDS-managed
-# master secret are read from the instance (data source), so no credentials
-# are copied into this state. The metrics task runs hourly with no CloudWatch,
+# RDS: the adopted prod instance. Host and port are read from the instance
+# (data source). Its master secret is NOT RDS-managed — prod/rds.tf keeps
+# mssql_manage_master_user_password false so adoption never rotated the live
+# password — so the data source returns none and the secret id is set here:
+# the same nomaosDBcredentials ARN prod/ injects into the app tasks, as a full
+# ARN because Grafana's datasource credentials go through ECS valueFrom, which
+# only accepts ARNs. The metrics task runs hourly with no CloudWatch,
 # Performance Insights or enhanced monitoring involved.
 enable_rds_monitoring     = true
-mssql_secret_name         = "" # superseded by the RDS-managed secret of the adopted instance
+mssql_secret_name         = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-GIwHiK"
 mssql_instance_identifier = "migration-prod"
 mssql_database            = "master"
 

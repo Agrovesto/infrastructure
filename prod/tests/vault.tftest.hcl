@@ -30,6 +30,7 @@ override_data {
 }
 
 variables {
+  rabbitmq = { enabled = false }
   import_existing = false
 
   domain_name        = "nomaos.com"
@@ -135,6 +136,11 @@ run "service" {
   assert {
     condition     = one(aws_ecs_service.vault[0].deployment_circuit_breaker).rollback == true
     error_message = "A failed Vault deploy must roll back."
+  }
+
+  assert {
+    condition     = one(aws_ecs_service.vault[0].deployment_controller).type == "ECS"
+    error_message = "The Vault Fargate service uses the ECS deployment controller."
   }
 
   assert {

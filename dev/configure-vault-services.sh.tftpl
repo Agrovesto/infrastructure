@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# Configure one read-only Vault AppRole and one private env file per API.
+# Secret values are deliberately NOT provisioned by Terraform or this script.
+set -Eeuo pipefail
+umask 077
+
+readonly environment="${environment}"
+readonly kv_mount="${kv_mount}"
+readonly path_environment="${path_environment}"
+readonly env_dir="${env_dir}"
+readonly policy_dir="/opt/agrovesto/vault/service-policies"
+readonly vault_container="agrovesto-vault"
+readonly vault_addr="http://vault:8200"
+
+services=(
+%{ for service in services ~}
+  "${service}"
+%{ endfor ~}
+)
+
+fail() { printf 'Vault service setup refused: %s\n' "$1" >&2; exit 1; }
+
+if [[ "$${EUID}" -ne 0 ]]; then
+  fail "run as root so AppRole credentials can be written with restricted ownership"
+fi
+
+if [[ -z "$${VAULT_TOKEN:-}" ]]; then
+  [[ -r /dev/tty ]] || fail "set VAULT_TOKEN through a secure administrative session"
+  read -r -s -p "Vault administrator token: " VAULT_TOKEN </dev/tty
+  printf '\n' >/dev/tty
+fi
+[[ -n "$${VAULT_TOKEN:-}" ]] || fail "an administrator token is required"
+export VAULT_TOKEN
+
+command -v docker >/dev/null || fail "Docker is not installed"
+command -v python3 >/dev/null || fail "python3 is required"
+command -v mountpoint >/dev/null || fail "mountpoint is required"
+getent group docker >/dev/null || fail "the docker group does not exist"
+mountpoint -q /data/vault || fail "/data/vault is not a mounted persistent Vault volume"
+[[ "$(docker inspect -f '{{.State.Running}}' "$vault_container" 2>/dev/null || true)" == true ]] || fail "the Vault container is not running"
+
+vault_cli() {
+  docker exec -i -e VAULT_TOKEN "$vault_container" vault "$@"
+}
+
+# Vault status exits non-zero while sealed; parse its JSON to give one clear,
+# fail-closed check without printing tokens or secret values.
+status_json="$(vault_cli status -format=json 2>/dev/null || true)"
+if ! python3 - "$status_json" <<'PY'
+import json
+import sys
+try:
+    status = json.loads(sys.argv[1])
+except (IndexError, json.JSONDecodeError):
+    raise SystemExit(1)
+raise SystemExit(0 if status.get("initialized") and not status.get("sealed") else 1)
+PY
+then
+  fail "Vault must be initialized and unsealed before configuring service access"
+fi
+
+bash /opt/agrovesto/scripts/connect-vault-network.sh
+install -d -o root -g docker -m 0750 "$env_dir"
+
+# Create KV v2 only when the mount is absent. Never silently reinterpret an
+# existing mount or change its version.
+mounts_json="$(vault_cli secrets list -format=json)"
+mount_state="$(python3 - "$kv_mount/" "$mounts_json" <<'PY'
+import json
+import sys
+try:
+    mounts = json.loads(sys.argv[2])
+except (IndexError, json.JSONDecodeError):
+    raise SystemExit("invalid")
+mount = mounts.get(sys.argv[1])
+if mount is None:
+    print("missing")
+elif mount.get("type") == "kv" and str(mount.get("options", {}).get("version", "")) == "2":
+    print("kv-v2")
+else:
+    print("incompatible")
+PY
+)"
+case "$mount_state" in
+  missing)
+    vault_cli secrets enable -path="$kv_mount" kv-v2 >/dev/null
+    ;;
+  kv-v2)
+    ;;
+  *)
+    fail "the $kv_mount/ mount exists but is not KV version 2"
+    ;;
+esac
+
+# AppRole is enabled only if absent; a different auth method at this path is an
+# operator-managed conflict and must not be overwritten.
+auth_json="$(vault_cli auth list -format=json)"
+auth_state="$(python3 - "$auth_json" <<'PY'
+import json
+import sys
+try:
+    methods = json.loads(sys.argv[1])
+except (IndexError, json.JSONDecodeError):
+    raise SystemExit("invalid")
+method = methods.get("approle/")
+if method is None:
+    print("missing")
+elif method.get("type") == "approle":
+    print("approle")
+else:
+    print("incompatible")
+PY
+)"
+case "$auth_state" in
+  missing)
+    vault_cli auth enable approle >/dev/null
+    ;;
+  approle)
+    ;;
+  *)
+    fail "auth/approle exists but is not the AppRole auth method"
+    ;;
+esac
+
+is_known_service() {
+  local candidate
+  for candidate in "$${services[@]}"; do
+    [[ "$candidate" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+should_rotate() {
+  local selected
+  [[ "$rotate_all" == true ]] && return 0
+  for selected in "$${rotate_services[@]}"; do
+    [[ "$selected" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+read_env_value() {
+  local key="$1" file="$2" count
+  count="$(grep -c "^$${key}=" "$file" || true)"
+  [[ "$count" == 1 ]] || return 1
+  sed -n "s/^$${key}=//p" "$file"
+}
+
+rotate_all=false
+declare -a rotate_services=()
+while [[ "$${#}" -gt 0 ]]; do
+  case "$1" in
+    --rotate)
+      [[ "$${#}" -ge 2 ]] || fail "--rotate requires a service name"
+      is_known_service "$2" || fail "unknown service '$2'"
+      rotate_services+=("$2")
+      shift 2
+      ;;
+    --rotate-all)
+      rotate_all=true
+      shift
+      ;;
+    -h|--help)
+      printf 'Usage: %s [--rotate <service>] [--rotate-all]\n' "$0"
+      exit 0
+      ;;
+    *)
+      fail "unknown option '$1' (use --help)"
+      ;;
+  esac
+done
+
+for service in "$${services[@]}"; do
+  policy="${environment}-$${service}-read"
+  role="${environment}-$${service}"
+  policy_file="$${policy_dir}/$${service}.hcl"
+  env_file="$${env_dir}/$${service}.env"
+  accessor_file="$${env_dir}/.$${service}.secret-id-accessor"
+
+  [[ -r "$policy_file" ]] || fail "missing rendered policy $policy_file; sync host config first"
+  vault_cli policy write "$policy" - <"$policy_file" >/dev/null
+
+  # A one-hour service token is renewable up to 24 hours. The AppRole SecretID
+  # lasts one year to support blue/green slots and restarts; rotate it explicitly.
+  vault_cli write "auth/approle/role/$role" \
+    "token_policies=$policy" \
+    token_no_default_policy=true \
+    token_ttl=1h \
+    token_max_ttl=24h \
+    secret_id_ttl=8760h \
+    secret_id_num_uses=0 >/dev/null
+
+  role_id="$(vault_cli read -field=role_id "auth/approle/role/$role/role-id")"
+  [[ "$role_id" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Vault returned an invalid role ID for $service"
+
+  old_accessor=""
+  if [[ -e "$accessor_file" ]]; then
+    [[ -f "$accessor_file" && ! -L "$accessor_file" ]] || fail "invalid SecretID accessor file for $service"
+    old_accessor="$(<"$accessor_file")"
+  fi
+
+  existing_role_id=""
+  existing_secret_id=""
+  if [[ -e "$env_file" ]]; then
+    [[ -f "$env_file" && ! -L "$env_file" ]] || fail "invalid env file for $service"
+    existing_role_id="$(read_env_value VAULT_ROLE_ID "$env_file" || true)"
+    existing_secret_id="$(read_env_value VAULT_SECRET_ID "$env_file" || true)"
+  fi
+  if [[ -n "$existing_secret_id" && -z "$old_accessor" ]]; then
+    if [[ "$existing_role_id" != "$role_id" ]] || should_rotate "$service"; then
+      fail "cannot rotate $service because its prior SecretID accessor is missing; revoke it manually before replacing the env file"
+    fi
+    printf 'WARNING: %s has no saved SecretID accessor; future rotations will need manual revocation.\n' "$service" >&2
+  fi
+
+  secret_id=""
+  new_accessor=""
+  if [[ -n "$existing_role_id" && -n "$existing_secret_id" && "$existing_role_id" == "$role_id" ]] && ! should_rotate "$service"; then
+    secret_id="$existing_secret_id"
+    new_accessor="$old_accessor"
+  else
+    secret_json="$(vault_cli write -format=json -f "auth/approle/role/$role/secret-id")"
+    secret_id="$(printf '%s' "$secret_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["secret_id"])')"
+    new_accessor="$(printf '%s' "$secret_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["secret_id_accessor"])')"
+    unset secret_json
+  fi
+  [[ "$secret_id" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Vault returned an invalid SecretID for $service"
+
+  tmp_env="$(mktemp "$${env_dir}/.$${service}.env.XXXXXX")"
+  {
+    printf 'VAULT_ADDR=%s\n' "$vault_addr"
+    printf 'VAULT_KV_MOUNT=%s\n' "$kv_mount"
+    printf 'VAULT_SECRET_PATH=%s/%s/%s/appsettings\n' "$kv_mount" "$service" "$path_environment"
+    printf 'VAULT_ROLE_ID=%s\n' "$role_id"
+    printf 'VAULT_SECRET_ID=%s\n' "$secret_id"
+  } >"$tmp_env"
+  chown root:docker "$tmp_env"
+  chmod 0640 "$tmp_env"
+  mv -f "$tmp_env" "$env_file"
+
+  if [[ -n "$new_accessor" ]]; then
+    tmp_accessor="$(mktemp "$${env_dir}/.$${service}.accessor.XXXXXX")"
+    printf '%s\n' "$new_accessor" >"$tmp_accessor"
+    chown root:root "$tmp_accessor"
+    chmod 0600 "$tmp_accessor"
+    mv -f "$tmp_accessor" "$accessor_file"
+  fi
+
+  # Replace the on-disk file first. Existing application tokens remain valid;
+  # newly started slots now receive the new SecretID. The old accessor is never
+  # printed and is revoked only after the new file is safely in place.
+  if [[ -n "$old_accessor" && -n "$new_accessor" && "$old_accessor" != "$new_accessor" ]]; then
+    if ! printf '{"secret_id_accessor":"%s"}' "$old_accessor" | \
+      vault_cli write -format=json "auth/approle/role/$role/secret-id-accessor/destroy" - >/dev/null; then
+      printf 'WARNING: old SecretID for %s could not be revoked; review Vault audit output.\n' "$service" >&2
+    fi
+  fi
+
+  printf 'Configured %s: policy=%s, KV path=%s/%s/%s/appsettings, env=%s\n' \
+    "$service" "$policy" "$kv_mount" "$service" "$path_environment" "$env_file"
+done
+
+unset VAULT_TOKEN
+printf '\nService auth is configured. Populate each KV path with that service\047s actual secrets using write-vault-service-secret.sh.\n'
+printf 'Credential files are stored on the encrypted Vault volume, not in Git, Terraform state, or the host-config S3 bucket.\n'

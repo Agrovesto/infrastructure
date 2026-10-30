@@ -72,6 +72,7 @@ output "frontend_default_domains" {
 }
 
 output "frontend_default_urls" {
+  description = "Amplify branch URLs; manual placeholders such as agx have no deployed page yet."
   value = {
     for k, v in aws_amplify_branch.this :
     k => "https://${v.branch_name}.${aws_amplify_app.this[k].default_domain}"
@@ -79,7 +80,8 @@ output "frontend_default_urls" {
 }
 
 output "frontend_custom_domains" {
-  value = { for k, v in var.amplify_apps : k => "${v.subdomain}.${var.domain_name}" }
+  description = "Configured hostnames, including reserved placeholders without DNS records or deployments."
+  value       = { for k, v in var.amplify_apps : k => "${v.subdomain}.${var.domain_name}" }
 }
 
 output "backend_domains" {
@@ -89,6 +91,33 @@ output "backend_domains" {
 output "vault_url" {
   description = "Vault is local to the host; use SSH/SSM port forwarding to reach this loopback endpoint"
   value       = "http://127.0.0.1:${var.vault.host_port}"
+}
+
+output "vault_service_access" {
+  description = "Non-secret Vault KV v2 paths, policies, AppRole names, and per-service host env-file locations. Secret values are provisioned separately on the host."
+  value = {
+    mount   = local.vault_kv_mount
+    env_dir = local.vault_service_env_dir
+    services = {
+      for service in local.vault_service_names :
+      service => {
+        secret_path = "${local.vault_kv_mount}/${service}/${local.vault_path_environment}/appsettings"
+        policy      = "${var.environment}-${service}-read"
+        approle     = "${var.environment}-${service}"
+        env_file    = "${local.vault_service_env_dir}/${service}.env"
+      }
+    }
+  }
+}
+
+output "vault_auto_unseal_key_arn" {
+  description = "Dedicated KMS key for a MANUAL Shamir-to-awskms seal migration. Empty until prepare_vault_kms_auto_unseal is enabled. Do not delete this key after migration."
+  value       = var.prepare_vault_kms_auto_unseal ? aws_kms_key.vault_unseal[0].arn : ""
+}
+
+output "vault_browser_login_url" {
+  description = "HTTPS browser login for the existing file-storage Vault (only after OIDC is enabled and verified)."
+  value       = var.vault.oidc_enabled ? "https://${local.vault_fqdn_for_oidc}/ui/vault/auth?with=oidc" : ""
 }
 
 output "ecr_repository_urls" {
@@ -141,8 +170,8 @@ output "sonarqube_access" {
     ssh_tunnel = local.sonarqube_nginx.enabled && length(var.sonarqube.allowed_cidrs) == 0 ? "ssh -N -L ${var.sonarqube.host_port}:127.0.0.1:${var.sonarqube.host_port} ubuntu@${local.ec2_public_ip}" : "(allow list is not empty; use the URL directly)"
     local_url  = "http://localhost:${var.sonarqube.host_port}  (first login is admin/admin and SonarQube forces a password change)"
     dns_record = "add \"${var.sonarqube.subdomain}\" = \"${local.ec2_public_ip}\" to extra_a_records in prod/terraform.auto.tfvars"
-    database   = "${var.sonarqube.database_name} on the on-host SQL Server, collation ${var.sonarqube.database_collation}, login ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)"
-    first_boot = "SonarQube starts before init-dbs.sql has run, fails to reach its database and is restarted by compose until the schema exists. Expect a few restarts and 2-5 minutes before the UI answers on a 1 GB heap."
+    database   = var.sonarqube.database_engine == "postgres" ? "${var.sonarqube.database_name} on the agrovesto-sonarqube-db PostgreSQL container (data in ${var.sonarqube.data_dir}/postgres), user ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)" : "${var.sonarqube.database_name} on the on-host SQL Server, collation ${var.sonarqube.database_collation}, login ${var.sonarqube.database_username} (password in SSM /${local.name}/sonarqube_db_password)"
+    first_boot = var.sonarqube.database_engine == "postgres" ? "SonarQube waits for sonarqube-db, then creates its schema. Expect 2-5 minutes before the UI answers on a 1 GB heap." : "SonarQube starts before init-dbs.sql has run, fails to reach its database and is restarted by compose until the schema exists. Expect a few restarts and 2-5 minutes before the UI answers on a 1 GB heap."
     scanner_ip = length(var.sonarqube.allowed_cidrs) == 0 ? "WARNING: sonarqube.allowed_cidrs is empty, so the nginx vhost answers 127.0.0.1 only and GitHub Actions runners are denied. Add your runner or NAT egress CIDR before pointing CI at this server." : "allowed: ${join(", ", var.sonarqube.allowed_cidrs)}"
   } : null
 }
@@ -151,7 +180,7 @@ output "sonarqube_authentication" {
   description = "Configured SonarQube login methods and GitHub App callback"
   value = var.sonarqube.enabled ? {
     github_enabled        = local.sonarqube_github_sso_enabled
-    github_callback_url   = "https://${local.sonar_fqdn}"
+    github_callback_url   = "https://${local.sonar_fqdn}/oauth2/callback/github"
     allowed_organizations = var.sonarqube_github_organizations
     github_team_roles = {
       "Agrovesto/Backend"        = "Reader"
@@ -205,9 +234,10 @@ output "grafana_authentication" {
 output "logging_access" {
   description = "How to reach the UI and the raw APIs from a laptop"
   value = var.logging.enabled ? {
-    ssh_tunnel = "ssh -N -L ${var.logging.grafana_port}:127.0.0.1:${var.logging.grafana_port} -L ${var.logging.loki_port}:127.0.0.1:${var.logging.loki_port} -L ${var.logging.prometheus_port}:127.0.0.1:${var.logging.prometheus_port} ubuntu@${local.ec2_public_ip}"
+    ssh_tunnel = "ssh -N -L ${var.logging.grafana_port}:127.0.0.1:${var.logging.grafana_port} -L ${var.logging.loki_port}:127.0.0.1:${var.logging.loki_port} -L ${var.logging.prometheus_port}:127.0.0.1:${var.logging.prometheus_port} -L ${var.logging.tempo_port}:127.0.0.1:${var.logging.tempo_port} ubuntu@${local.ec2_public_ip}"
     grafana    = "http://localhost:${var.logging.grafana_port}  (user ${var.logging.grafana_admin_user}; password is var.logging.grafana_admin_password)"
     loki_query = "http://localhost:${var.logging.loki_port}/loki/api/v1/query_range?query=%7Bjob%3D%22docker%22%7D&limit=20"
+    tempo_api  = "http://localhost:${var.logging.tempo_port}  (OTLP in on 4317/4318, trace query API on 3200)"
     alloy_ui   = "http://localhost:${var.logging.alloy_port}/  (component graph - the way to see whether a collector is actually reading)"
   } : null
 }
@@ -218,6 +248,7 @@ output "logging_summary" {
     data_dir             = local.logging_root
     volume_gb            = var.logging.volume_size_gb
     loki_retention       = "${var.logging.loki_retention_days}d (journald + nginx: ${var.logging.system_retention_days}d)"
+    traces_retention     = "${var.logging.traces_retention_hours}h"
     prometheus_retention = "${var.logging.prometheus_retention}, ${var.logging.prometheus_retention_size} cap"
     parsed_as_json       = local.logging_json_services
     grafana_cidrs        = local.logging_grafana.cidrs
@@ -245,4 +276,14 @@ output "rekognition" {
     video_queue_url           = aws_sqs_queue.rekognition_video.id
     liveness_identity_pool_id = one(aws_cognito_identity_pool.liveness[*].id)
   }
+}
+
+output "rabbitmq_access" {
+  description = "Private broker endpoint and HTTPS management URL. No credentials are exposed."
+  value = var.rabbitmq.enabled ? {
+    endpoint           = "rabbitmq:5672"
+    vhost              = "nomaos"
+    management_url     = "https://${var.rabbitmq.subdomain}.${var.domain_name}"
+    password_parameter = local.rabbitmq_password_parameter
+  } : null
 }

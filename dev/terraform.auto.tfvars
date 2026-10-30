@@ -9,8 +9,26 @@ domain_name = "nomaos.com"
 # ...and creates no Route53 zone/records of its own.
 manage_dns = false
 
+# Keep UI HTTPS routes stable even on local applies without OAuth credentials.
+# GitHub SSO still requires its own credential variables on every apply.
+ui_https_enabled = true
+
+# Prepare the KMS key/role grants and opt into fresh dedicated-volume setup.
+# manage_fresh_vault delivers config and starts Vault; initialization stays manual.
+# Never enable fresh setup as an automatic migration of existing Vault data.
+# Keep both enabled for the lifetime of this Vault installation.
+prepare_vault_kms_auto_unseal = true
+manage_fresh_vault            = true
+
+# Public HTTPS + GitHub browser login. Supply the three DEV_VAULT_* secrets
+# and explicitly acknowledge restart readiness; missing prerequisites fail plans.
+vault = {
+  subdomain    = "dev-vault"
+  oidc_enabled = true
+}
+
 # --- App host ------------------------------------------------------------------
-# t3.large (2 vCPU / 8 GiB): the box runs nginx + 5 API containers + Vault + SQL
+# t3.large (2 vCPU / 8 GiB): the box runs nginx + 6 API containers + Vault + SQL
 # Server + Redis + SonarQube + the logging stack below, all in one docker compose
 # project. Rough budget at the caps set in this file: SQL Server ~2 GiB, logging
 # ~1.3 GiB, SonarQube up to 3 GiB, Redis ~0.4 GiB, leaving ~1.3 GiB for the five
@@ -53,42 +71,88 @@ amplify_apps = {
 # there is no security group rule, no public endpoint and nothing to look up. In
 # ASP.NET terms this is what goes into
 # ConnectionStrings:Redis / IConnectionMultiplexer.Connect("redis:6379").
+# Caddy obtains and renews certificates for every dev API below. DNS must
+# resolve each hostname to this host before ACME validation can succeed.
 apis = {
-    nomaos = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5001
-    subdomain = "noma-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+  agx = {
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5006
+    subdomain     = "dev-agx-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5006", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5019
+      green_port = 5020
+    }
+  }
+  nomaos = {
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5000
+    subdomain     = "dev-noma-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5000", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    # Blue/green slots, managed by the app repo's deploy.sh (--app nomaos-api).
+    blue_green = {
+      blue_port  = 5007
+      green_port = 5008
+    }
   }
   wallet = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5001
-    subdomain = "dev-wallet-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5001
+    subdomain     = "dev-wallet-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5001", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5009
+      green_port = 5010
+    }
   }
   onboarding = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5002
-    subdomain = "dev-onboarding-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5002
+    subdomain     = "dev-onboarding-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5002", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5011
+      green_port = 5012
+    }
   }
   input = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5003
-    subdomain = "dev-input-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5003
+    subdomain     = "dev-input-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5003", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5013
+      green_port = 5014
+    }
   }
   moneval = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5004
-    subdomain = "dev-moneval-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5004
+    subdomain     = "dev-moneval-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5004", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5015
+      green_port = 5016
+    }
   }
+  # "service" not "serviceprovider" in the hostname: the shorter name is what
+  # the API is called by its deployment vhost and its prod DNS record.
   serviceprovider = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5005
-    subdomain = "dev-serviceprovider-api"
-    env       = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    image         = "public.ecr.aws/nginx/nginx:alpine"
+    host_port     = 5005
+    subdomain     = "dev-service-api"
+    tls_via_caddy = true
+    env           = { ASPNETCORE_ENVIRONMENT = "Development", ASPNETCORE_URLS = "http://+:5005", REDIS_HOST = "redis", REDIS_PORT = "6379" }
+    blue_green = {
+      blue_port  = 5017
+      green_port = 5018
+    }
   }
 }
 
@@ -97,7 +161,9 @@ apis = {
 # requires and still lands in the nightly backup loop. Listing it here as well
 # would be harmless (the union is deduplicated) but would create the database
 # with the wrong collation if the two ever disagreed.
-mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+# Removing a name stops managing its creation; it does not DROP a live database.
+# This list also feeds backup scripts generated during host bootstrap.
+mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
 # --- Redis (shared cache for the APIs) -----------------------------------------
 # Reachable from every API container as redis:6379 over the compose network; the
@@ -134,10 +200,11 @@ ecr_images_to_keep       = 3         # tagged images retained per repo
 # Prometheus/cAdvisor/node-exporter carry the metrics. No CloudWatch, no AWS
 # ingestion or per-query charges.
 #
-# Grafana is served by nginx at dev-logs.nomaos.com. The prod stack owns DNS, so
+# Grafana is served by nginx at dev-grafana.nomaos.com. The prod stack owns DNS, so
 # add the A record there (see the extra_a_records block in
 # prod/terraform.auto.tfvars) or leave it tunnel-only.
 logging = {
+  grafana_subdomain = "dev-grafana"
   # Short and cheap on purpose: retention is the whole cost of a log store, and
   # the volume below is what it has to fit in (Loki chunks + Prometheus TSDB +
   # Grafana's sqlite share it).
@@ -156,7 +223,7 @@ logging = {
   # something better here - the file is public like the rest of this repo.
   # GitHub login is enabled automatically when DEV_GRAFANA_GITHUB_CLIENT_ID and
   # DEV_GRAFANA_GITHUB_CLIENT_SECRET are both configured as repository secrets.
-  # Its callback is https://dev-logs.nomaos.com/login/github; setup is in
+  # Its callback is https://dev-grafana.nomaos.com/login/github; setup is in
   # docs/github-sso.md. Infrastructure is Admin, team-leads is Editor, and
   # Backend/Frontend/mobile are Viewer. Unlisted teams are denied; the local
   # admin remains available for break-glass use.
@@ -217,9 +284,8 @@ sonarqube = {
   # and no part of the login name.
   # database_password = "..."
 
-  # Local-login-only deployments retain HTTP. Supplying the four
-  # SONARQUBE_GITHUB_* repository secrets adds a Caddy TLS edge, changes the
-  # canonical URL to https://sonar.nomaos.com, and enables GitHub App login.
+  # ui_https_enabled keeps https://sonar.nomaos.com active independently of SSO.
+  # Supplying the four SONARQUBE_GITHUB_* credentials enables GitHub App login.
   # GitHub team membership sync is enabled; run the shipped permission bootstrap
   # once with a separate SonarQube admin token (docs/github-sso.md).
   # Caddy's certificate data survives on the SonarQube EBS volume.
@@ -238,3 +304,11 @@ public_subnet_cidrs = ["172.96.0.0/24"]
 # Each address gets an AWS confirmation email; alerts start once it is clicked.
 alert_emails   = ["tech@agrovesto.com"]
 app_sns_topics = ["notifications"]
+
+# Password must be provisioned in SSM before boot; see docs/rabbitmq.md.
+# Management is HTTPS but denied until trusted operator CIDRs are supplied.
+rabbitmq = {
+  enabled       = false # Enable after provisioning SSM, DNS, and operator CIDRs.
+  subdomain     = "dev-rabbitmq"
+  allowed_cidrs = []
+}

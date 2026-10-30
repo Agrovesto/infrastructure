@@ -48,7 +48,7 @@ resource "aws_ssm_parameter" "grafana_admin_password" {
 }
 
 # SonarQube's own SQL login, so the analysis server never holds `sa` over the
-# five application databases. Read once at boot by user_data, which writes it
+# five managed application databases. Read once at boot by user_data, which writes it
 # into compose/.env and passes it to CREATE LOGIN as a sqlcmd variable — it is
 # deliberately not rendered into scripts/init-dbs.sql, because that file is an
 # object in the config bucket below.

@@ -8,21 +8,32 @@
 # the host is one `docker compose up -d` away, see dev/README.md.
 #
 # The services after `vault` are the on-host logging & metrics stack (Loki,
-# Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of this
-# compose project on purpose: they share the docker network with the apps, which
-# is how Grafana reaches Loki and how Alloy reaches the docker daemon. No AWS
+# Tempo, Alloy, Grafana, Prometheus, cAdvisor, node-exporter). They are part of
+# this compose project on purpose: they share the docker network with the apps,
+# which is how Grafana reaches Loki and Tempo, how Alloy reaches the docker
+# daemon, and how the APIs' OTEL_* env block finds Alloy's OTLP receiver. No AWS
 # service is involved in any of it.
 # =============================================================================
 services:
   nginx:
     image: nginx:1.27-alpine
     container_name: agrovesto-nginx
+    # Keep access to Compose services and the independently deployed API slots.
+    networks:
+      - default
+      - nomaos_edge
 %{ if !sso_proxy.enabled ~}
     ports:
       - "80:80"
 %{ endif ~}
     volumes:
-      - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /opt/agrovesto/nginx/nginx.conf:/etc/nginx/nginx.conf
+      # Blue/green slot: Terraform ships the default (blue), the deploy
+      # pipeline rewrites the host file to flip slots, then reloads nginx.
+      # The file defines the slot as a map over $nomaos_api_backend, which the
+      # vhost proxies to by variable — resolved at request time, so a missing
+      # slot container 502s its vhost instead of keeping nginx from starting.
+      - /opt/nomaos/nginx/upstreams:/etc/nginx/upstreams
     restart: unless-stopped
     depends_on:
 %{ for name, api in apis ~}
@@ -38,12 +49,18 @@ services:
 %{ endif ~}
 %{ if sso_proxy.enabled ~}
 
-  # TLS edge for the GitHub OAuth callbacks. Caddy manages public certificates
-  # automatically and forwards to nginx, which remains the application router
-  # and source-IP authorization edge. Certificate state is on persistent EBS.
+  # TLS edge for the GitHub OAuth callbacks, Vault OIDC's Dex issuer (/dex) and
+  # API vhosts that opted into HTTPS (apis.<name>.tls_via_caddy). Caddy manages
+  # public certificates automatically and forwards to nginx, which remains the
+  # application router and source-IP authorization edge. Certificate state is
+  # on persistent EBS.
   edge:
     image: ${sso_proxy.image}
     container_name: agrovesto-edge
+    # Caddy admin API is disabled. Recreate the edge when its config changes,
+    # since updating a bind-mounted file alone does not reload running Caddy.
+    labels:
+      com.agrovesto.caddy-config-sha256: "${sso_proxy.config_hash}"
     ports:
       - "80:80"
       - "443:443"
@@ -54,6 +71,9 @@ services:
     restart: unless-stopped
     depends_on:
       - nginx
+%{ if vault.oidc_enabled ~}
+      - dex
+%{ endif ~}
     cpus: "${sso_proxy.cpu_limit}"
     mem_limit: ${sso_proxy.memory_limit_mb}M
 %{ endif ~}
@@ -64,7 +84,13 @@ services:
     container_name: agrovesto-${name}
     ports:
       - "127.0.0.1:${api.host_port}:${api.host_port}"
+    # The per-API file is written locally after Vault is initialized. It is not
+    # in S3/Compose config; optional keeps the initial host bootstrap working.
+    env_file:
+      - path: /data/vault/services/${name}.env
+        required: false
     environment:
+      Vault__SecretPath: "kv/${name}/staging/appsettings"
 %{ for k, v in api.env ~}
       ${k}: "${v}"
 %{ endfor ~}
@@ -90,13 +116,76 @@ services:
     cap_add:
       - IPC_LOCK
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: "$${VAULT_DEV_ROOT_TOKEN}"
-      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
       VAULT_ADDR: "http://127.0.0.1:8200"
     ports:
       - "127.0.0.1:${vault.host_port}:8200"
-    command: server -dev
+    # The official image adds -config=/vault/config for the server subcommand.
+    # Passing the file again loads its KMS seal twice and prevents startup.
+    command: server
+    volumes:
+      - type: bind
+        source: /data/vault/data
+        target: /vault/file
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /data/vault/config/vault.hcl
+        target: /vault/config/vault.hcl
+        bind:
+          create_host_path: false
+%{ if vault.oidc_enabled ~}
+    # OIDC discovery may need a local route to Caddy instead of the EC2 EIP.
+    # Enabling this changes the Vault task and restarts it. Before a seal
+    # migration, 3 Shamir shares are needed; afterward verify KMS auto-unseal.
+    # Only enable after a backup and a maintenance window.
+    extra_hosts:
+      - "${vault.subdomain}.${domain}:host-gateway"
+%{ endif ~}
     restart: unless-stopped
+%{ if vault.oidc_enabled ~}
+
+  dex:
+    image: ghcr.io/dexidp/dex:v2.43.0
+    container_name: agrovesto-dex
+    command: dex serve /etc/dex/config.yml
+    environment:
+      GITHUB_CLIENT_ID: "$${VAULT_GITHUB_CLIENT_ID}"
+      GITHUB_CLIENT_SECRET: "$${VAULT_GITHUB_CLIENT_SECRET}"
+      VAULT_OIDC_CLIENT_SECRET: "$${VAULT_OIDC_CLIENT_SECRET}"
+    volumes:
+      - /opt/agrovesto/vault/dex.yml:/etc/dex/config.yml:ro
+      - /data/vault/dex:/data
+    restart: unless-stopped
+    mem_limit: 128M
+%{ endif ~}
+%{ if rabbitmq.enabled ~}
+  # AMQP and management are never published on the host. nginx reaches the UI
+  # over default; API slots reach AMQP over nomaos_data, not the edge network.
+  rabbitmq:
+    image: ${rabbitmq.image}
+    container_name: agrovesto-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+      RABBITMQ_DEFAULT_USER: nomaos-admin
+      RABBITMQ_DEFAULT_PASS: $${RABBITMQ_PASSWORD:?RabbitMQ SSM password is required}
+      RABBITMQ_DEFAULT_VHOST: nomaos
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.4 disk_free_limit 1073741824"
+    volumes:
+      - ${rabbitmq.data_dir}:/var/lib/rabbitmq
+    networks:
+      - default
+      - nomaos_data
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    cpus: "${rabbitmq.cpu_limit}"
+    mem_limit: ${rabbitmq.memory_limit_mb}M
+%{ endif ~}
 %{ if redis.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -169,12 +258,36 @@ services:
   #
   # The caps below are the whole argument about running this here. SonarSource's
   # own guidance is 4 GB of RAM for a small installation; this is a t3.large
-  # (8 GiB) that also runs SQL Server, five APIs, Vault and the logging stack.
+  # (8 GiB) that also runs SQL Server, seven APIs, Vault and the logging stack.
   # So Elasticsearch gets a 1 GB heap and the container is capped, which means a
   # heavy analysis makes *this* container slow — or gets it killed by its own
   # cgroup — instead of letting the kernel OOM-kill SQL Server. Raise
   # instance_type before raising these numbers.
   # ─────────────────────────────────────────────────────────────────────────
+%{ if sonarqube.on_postgres ~}
+  # SonarQube's own PostgreSQL (sonarqube.database_engine = "postgres"). Data
+  # lives on the SonarQube EBS volume, so it survives an instance replacement.
+  # Not published on the host at all: only SonarQube reaches it, over the
+  # compose network. The image's entrypoint chowns the data dir itself.
+  sonarqube-db:
+    image: ${sonarqube.postgres_image}
+    container_name: agrovesto-sonarqube-db
+    environment:
+      POSTGRES_DB: "${sonarqube.database_name}"
+      POSTGRES_USER: "${sonarqube.database_username}"
+      POSTGRES_PASSWORD: "$${SONAR_DB_PASSWORD}"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ${sonarqube.data_dir}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${sonarqube.database_username} -d ${sonarqube.database_name}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 512M
+
+%{ endif ~}
   sonarqube:
     image: ${sonarqube.image}
     container_name: agrovesto-sonarqube
@@ -188,19 +301,20 @@ services:
       SONAR_WEB_JAVA_OPTS: "${sonarqube.web_java_opts}"
       SONAR_CE_JAVA_OPTS: "${sonarqube.ce_java_opts}"
       SONAR_TELEMETRY_ENABLE: "false"
-      # Must match the public hostname or SonarQube builds wrong links in its
-      # UI and, more importantly, rejects OAuth redirects (GitHub login).
+      # Informational only: SonarQube has no sonar.web.baseurl property. The
+      # setting that actually drives links and the GitHub OAuth redirect_uri is
+      # sonar.core.serverBaseURL, written to the mounted sonar.properties by
+      # user_data (or Administration > General > Server base URL).
       SONAR_WEB_BASEURL: "${sonar_web_baseurl}"
     ports:
       - "127.0.0.1:${sonarqube.host_port}:9000"
     volumes:
-      # data/ holds the Elasticsearch indices, extensions/ the installed plugins.
-      # Both on the dedicated volume (dev/sonarqube.tf), which is not
-      # delete_on_termination, so replacing the instance keeps the analyses.
-      # conf/ is deliberately not mounted: the image generates it, and a bind
-      # mount would pin an empty directory over the generated one.
+      # data/ holds the Elasticsearch indices. extensions/ is deliberately NOT
+      # mounted: the image ships the community branch plugin in
+      # /opt/sonarqube/extensions/plugins and its -javaagent points at that
+      # exact file, so a bind mount would hide it and the web server would not
+      # start. Plugins come from the image; change them by changing the image.
       - ${sonarqube.data_dir}/data:/opt/sonarqube/data
-      - ${sonarqube.data_dir}/extensions:/opt/sonarqube/extensions
       - ${sonarqube.data_dir}/logs:/opt/sonarqube/logs
 %{ if sonarqube.github_sso_enabled ~}
       # Generated from SSM SecureStrings at boot (never uploaded to the config
@@ -222,16 +336,21 @@ services:
       # Start order only. On the very first boot this still races the database
       # bootstrap that user_data runs after `docker compose up`, so SonarQube
       # exits and the restart policy brings it back once init-dbs.sql has landed.
+%{ if sonarqube.on_postgres ~}
+      - sonarqube-db
+%{ else ~}
       - mssql
+%{ endif ~}
     cpus: "${sonarqube.cpu_limit}"
     mem_limit: ${sonarqube.memory_limit_mb}M
 %{ endif ~}
 %{ if logging.enabled ~}
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Logging & metrics. Every published port is on 127.0.0.1: the security group
-  # has no ingress for them either, so access is `ssh -L` or the Grafana vhost
-  # in nginx.conf. Each container is limited so it cannot starve SQL Server.
+  # Logging, metrics & traces. Every published port is on 127.0.0.1: the
+  # security group has no ingress for them either, so access is `ssh -L` or the
+  # Grafana vhost in nginx.conf. Each container is limited so it cannot starve
+  # SQL Server.
   # ─────────────────────────────────────────────────────────────────────────
 
   # Log store: single binary, filesystem storage on the logging volume, its own
@@ -254,6 +373,31 @@ services:
     cpus: "${logging.cpu_limits["loki"]}"
     mem_limit: ${logging.memory_limits_mb["loki"]}M
 
+  # Trace store: OTLP in on 4317/4318, blocks and WAL beside Loki's chunks on
+  # the logging volume, retention in config.yml (traces_retention_hours), span
+  # metrics remote-written to Prometheus. Also no shell in the image, so no
+  # health check — same trade-off as prod's monitoring/tempo.tf.
+  tempo:
+    image: ${logging.tempo_image}
+    container_name: agrovesto-tempo
+    user: "10001"
+    command:
+      - -config.file=/var/tempo/config.yml
+      - -target=all
+    ports:
+      - "127.0.0.1:${logging.tempo_port}:3200"
+    volumes:
+      # The whole directory is writable: config.yml (synced from S3), the WAL,
+      # the blocks and the metrics-generator WAL all live in it. It mounts at
+      # /var/tempo, NOT /tempo: inside the grafana/tempo image /tempo is the
+      # entrypoint binary, and binding a directory over it fails container
+      # creation ("not a directory") — this is why tempo never started on the
+      # dev host (2026-10-12).
+      - ${logging_root}/tempo:/var/tempo
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "tempo", "0.25")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "tempo", 384)}M
+
   # The collector: tails docker logs + journald, parses them, pushes to Loki.
   # Runs as root: the docker socket has to be writable and the sealed journal
   # files are only readable by root and the systemd-journal group. Both host
@@ -265,13 +409,18 @@ services:
     user: "0"
     command:
       - run
+      - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
     ports:
       # 12345: Prometheus scrape + Alloy's debug UI.
       # 3101: the Loki push API, for an app that would rather send its own logs.
+      # 4317/4318: OTLP gRPC/HTTP for the apps' spans — loopback publish only;
+      # containers on the compose network reach alloy:4317 directly.
       - "127.0.0.1:${logging.alloy_port}:12345"
       - "127.0.0.1:${logging.alloy_push_port}:3101"
+      - "127.0.0.1:${logging.alloy_otlp_grpc_port}:4317"
+      - "127.0.0.1:${logging.alloy_otlp_http_port}:4318"
     volumes:
       - ${logging_root}/alloy/config.alloy:/etc/alloy/config.alloy:ro
       # Positions file, so a container restart resumes instead of re-reading.
@@ -285,6 +434,7 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      - tempo
     cpus: "${logging.cpu_limits["alloy"]}"
     mem_limit: ${logging.memory_limits_mb["alloy"]}M
 
@@ -322,6 +472,11 @@ services:
       GF_NEWS_FEED_ENABLED: "false"
       GF_LOG_LEVEL: "warn"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/dev-logs.json"
+      # The provisioned MSSQL datasource expands the SA password from Grafana's
+      # own environment at provisioning time (grafana-datasources.yml.tftpl);
+      # compose fills it from the host .env file — the same secret the mssql
+      # container itself starts with.
+      MSSQL_SA_PASSWORD: "$${MSSQL_SA_PASSWORD}"
     ports:
       - "127.0.0.1:${logging.grafana_port}:3000"
     volumes:
@@ -338,6 +493,7 @@ services:
     depends_on:
       - loki
       - prometheus
+      - tempo
     cpus: "${logging.cpu_limits["grafana"]}"
     mem_limit: ${logging.memory_limits_mb["grafana"]}M
 
@@ -352,6 +508,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${logging.prometheus_retention}
       - --storage.tsdb.retention.size=${logging.prometheus_retention_size}
+      # The receive side of every remote_write in this stack: Tempo's span
+      # metrics and the OTLP metrics Alloy fans out. Same flag as the prod
+      # monitoring stack's Prometheus.
+      - --web.enable-remote-write-receiver
     ports:
       - "127.0.0.1:${logging.prometheus_port}:9090"
     volumes:
@@ -403,7 +563,6 @@ services:
       - --store_container_labels=false
       - --housekeeping_interval=30s
       - --max_housekeeping_interval=2m
-      - --event_ttl=10m
     ports:
       - "127.0.0.1:${logging.cadvisor_port}:8080"
     volumes:
@@ -443,4 +602,51 @@ services:
     restart: unless-stopped
     cpus: "${logging.cpu_limits["node-exporter"]}"
     mem_limit: ${logging.memory_limits_mb["node-exporter"]}M
+
+  # SQL Server metrics: the collector the prod monitoring task runs
+  # (monitoring/scripts/mssql_metrics.py, shipped through this stack's config
+  # bucket as logging/rds/mssql_metrics.py), in serve mode — every Prometheus
+  # scrape re-runs the DMV queries against the mssql container on the compose
+  # network. No published port: only Prometheus talks to it, and python-tds
+  # without a cafile negotiates an unencrypted session, which the dev
+  # container allows (Force Encryption is off) and which never leaves the
+  # box. The script mounts read-only; python-tds installs at container start,
+  # exactly like the prod task installs it at task start.
+  mssql-exporter:
+    image: ${logging.mssql_exporter_image}
+    container_name: agrovesto-mssql-exporter
+    depends_on:
+      - mssql
+    environment:
+      DB_HOST: "mssql"
+      DB_PORT: "1433" # the container port; var.mssql_host_port is only the loopback publish
+      DB_USER: "sa"
+      DB_PASSWORD: "$${MSSQL_SA_PASSWORD}"
+      DB_NAME: "master" # DMVs are server-wide; master is just the connection context
+      SERVE_PORT: "${logging.mssql_exporter_port}"
+    volumes:
+      - ${logging_root}/rds:/rds:ro
+    command: ["sh", "-c", "pip install --quiet --no-cache-dir python-tds && exec python /rds/mssql_metrics.py"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${logging.mssql_exporter_port}/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    cpus: "${lookup(logging.cpu_limits, "mssql-exporter", "0.10")}"
+    mem_limit: ${lookup(logging.memory_limits_mb, "mssql-exporter", 96)}M
+%{ endif ~}
+
+# Shared with app deploy pipelines; bootstrap creates it before Compose starts.
+# External ownership prevents Compose teardown from removing the slots' network.
+networks:
+  default: {}
+  nomaos_edge:
+    external: true
+    name: nomaos_edge
+%{ if rabbitmq.enabled ~}
+  nomaos_data:
+    external: true
+    name: nomaos_data
 %{ endif ~}

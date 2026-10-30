@@ -2,8 +2,9 @@
 # RDS enhanced-monitoring agent: a scheduled Fargate task runs DMV queries over
 # TDS and pushes the results to Pushgateway, where Prometheus scrapes them.
 
-# Adopted instance (docs/import-runbook.md): credentials live in the RDS-managed
-# secret, read by ARN at runtime - nothing sensitive is copied into this state.
+# Adopted instance (docs/import-runbook.md): the master credentials live in the
+# existing nomaosDBcredentials secret — the instance has no RDS-managed one —
+# and are read by ARN at runtime; nothing sensitive is copied into this state.
 data "aws_db_instance" "mssql" {
   count = var.mssql_instance_identifier != "" ? 1 : 0
 
@@ -13,10 +14,24 @@ data "aws_db_instance" "mssql" {
 locals {
   mssql_enabled = var.enable_rds_monitoring && (var.mssql_secret_name != "" || var.mssql_instance_identifier != "")
 
+  # The RDS-managed master secret, when the instance has one. The adopted
+  # migration-prod does NOT: prod/rds.tf keeps mssql_manage_master_user_password
+  # false so adoption never rotated the live password, which leaves the data
+  # source's master_user_secret empty — var.mssql_secret_name carries the
+  # existing nomaosDBcredentials ARN instead (see terraform.auto.tfvars).
+  mssql_managed_secret_arn = var.mssql_instance_identifier != "" ? try(data.aws_db_instance.mssql[0].master_user_secret[0].secret_arn, "") : ""
+
   # Secret id handed to the task (name or ARN both work with GetSecretValue).
-  mssql_secret_id = var.mssql_instance_identifier != "" ? try(data.aws_db_instance.mssql[0].master_user_secret[0].secret_arn, "") : var.mssql_secret_name
+  mssql_secret_id = local.mssql_managed_secret_arn != "" ? local.mssql_managed_secret_arn : var.mssql_secret_name
   mssql_host      = var.mssql_instance_identifier != "" ? try(data.aws_db_instance.mssql[0].address, "") : ""
   mssql_port      = var.mssql_instance_identifier != "" ? try(tostring(data.aws_db_instance.mssql[0].port), "1433") : ""
+
+  # Grafana's provisioned MSSQL datasource (the "Live SQL" panels on the
+  # Database dashboard) needs credentials ECS can resolve: `secrets.valueFrom`
+  # only accepts a full ARN with the `:key::` suffix, never a bare secret name,
+  # plus a host to point at. Without an ARN the datasource is left out and the
+  # trend panels (Pushgateway path) still work.
+  mssql_grafana_enabled = local.mssql_enabled && startswith(local.mssql_secret_id, "arn:") && local.mssql_host != ""
 
   mssql_log_config = {
     logDriver = "awslogs"
@@ -65,7 +80,10 @@ resource "aws_ecs_task_definition" "mssql_metrics" {
       essential = true
       dependsOn = [{ containerName = "config", condition = "SUCCESS" }]
 
-      command = ["sh", "-c", "pip install --quiet --no-cache-dir pytds boto3 && python /rds/config/mssql_metrics.py"]
+      # The PyPI distribution is python-tds (the import name is pytds; a
+      # distribution actually called "pytds" exists but ships no files, so
+      # installing it fails and the task never reaches the collector).
+      command = ["sh", "-c", "pip install --quiet --no-cache-dir python-tds boto3 && python /rds/config/mssql_metrics.py"]
 
       environment = [
         { name = "DB_SECRET_NAME", value = local.mssql_secret_id },

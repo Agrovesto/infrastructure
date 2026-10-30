@@ -57,12 +57,15 @@ override_data {
 }
 
 variables {
-  import_existing = false
+  ui_https_enabled   = false
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
   apis = {
     nomaos = {
@@ -93,11 +96,24 @@ variables {
     serviceprovider = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5005
-      subdomain = "dev-serviceprovider-api"
+      subdomain = "dev-service-api"
+    }
+    agx = {
+      image         = "public.ecr.aws/nginx/nginx:alpine"
+      host_port     = 5006
+      subdomain     = "dev-agx-api"
+      tls_via_caddy = true
     }
   }
 
   amplify_apps = {
+    agx = {
+      name              = "agx-frontend"
+      branch            = "dev"
+      subdomain         = "dev-agx"
+      enable_auto_build = false
+      publish_dns       = false
+    }
     landing = {
       repository = "https://github.com/Agrovesto/nomaos-landingpage"
       branch     = "dev"
@@ -262,8 +278,25 @@ run "ecr" {
   command = plan
 
   assert {
-    condition     = length(aws_ecr_repository.apis) == 6
+    condition     = length(aws_ecr_repository.apis) == 7
     error_message = "One repository per API."
+  }
+
+  assert {
+    condition     = aws_ecr_repository.apis["agx"].name == "${var.project}-${var.environment}-agx"
+    error_message = "The agx API gets its own ECR repository."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "agrovesto-agx") &&
+      strcontains(local.docker_compose, "127.0.0.1:5006:5006") &&
+      strcontains(local.nginx_conf, "server_name dev-agx-api.nomaos.com;") &&
+      strcontains(local.nginx_conf, "proxy_pass http://agx:5006;") &&
+      strcontains(local.caddyfile, "dev-agx-api.nomaos.com") &&
+      !contains(local.mssql_all_databases, "agx")
+    )
+    error_message = "The agx API is routed by nginx, loopback-published by Compose, served over HTTPS at the Caddy edge, and does not create a database over the migrated agx database."
   }
 
   assert {
@@ -282,7 +315,7 @@ run "ecr" {
   }
 
   assert {
-    condition     = length(aws_ecr_lifecycle_policy.apis) == 6
+    condition     = length(aws_ecr_lifecycle_policy.apis) == 7
     error_message = "Every repository needs a lifecycle policy."
   }
 }
@@ -295,8 +328,8 @@ run "amplify" {
   command = plan
 
   assert {
-    condition     = length(aws_amplify_app.this) == 2
-    error_message = "One Amplify app per entry in var.amplify_apps."
+    condition     = length(aws_amplify_app.this) == 3
+    error_message = "One Amplify app per entry in var.amplify_apps, including the manual agx placeholder."
   }
 
   assert {
@@ -315,6 +348,17 @@ run "amplify" {
   }
 
   assert {
+    condition = (
+      var.amplify_apps["agx"].repository == null &&
+      aws_amplify_app.this["agx"].name == "agx-frontend" &&
+      aws_amplify_branch.this["agx"].branch_name == "dev" &&
+      !aws_amplify_branch.this["agx"].enable_auto_build &&
+      !contains(keys(local.cname_records), "dev-agx")
+    )
+    error_message = "The agx frontend is a manual Amplify placeholder, not an auto-building or DNS-published app."
+  }
+
+  assert {
     condition     = length(aws_amplify_domain_association.this) == 0
     error_message = "Custom domains stay off unless amplify_enable_custom_domain = true."
   }
@@ -328,8 +372,8 @@ run "amplify_custom_domains" {
   }
 
   assert {
-    condition     = length(aws_amplify_domain_association.this) == 2
-    error_message = "Custom domain associations are created per app when enabled."
+    condition     = length(aws_amplify_domain_association.this) == 2 && !contains(keys(aws_amplify_domain_association.this), "agx")
+    error_message = "Custom domain associations exclude unpublished placeholder apps."
   }
 }
 
@@ -372,20 +416,20 @@ run "dns_managed_by_dev" {
     error_message = "manage_dns = true creates the zone for var.domain_name."
   }
 
-  # 5 APIs + mssql; plus sonarqube when enabled and exposed. Vault is deliberately not exposed via public DNS.
+  # 7 APIs + mssql; plus sonarqube when enabled and exposed. Vault has no public DNS.
   assert {
-    condition     = length(aws_route53_record.a) == 7 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
+    condition     = length(aws_route53_record.a) == 8 + (var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? 1 : 0)
     error_message = "Only the APIs, mssql, and optionally sonarqube get A records to the EC2 host."
   }
 
   assert {
-    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-serviceprovider-api", "dev-wallet-api", "dev-noma-api","mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
+    condition     = toset(keys(aws_route53_record.a)) == toset(concat(["dev-agx-api", "dev-input-api", "dev-moneval-api", "dev-onboarding-api", "dev-service-api", "dev-wallet-api", "dev-noma-api", "mssql"], var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? [var.sonarqube.subdomain] : []))
     error_message = "A record keys are the API subdomains and mssql, excluding Vault."
   }
 
   assert {
     condition     = length(aws_route53_record.cname) == 2
-    error_message = "One CNAME per Amplify app."
+    error_message = "Only published Amplify apps get CNAMEs; the agx placeholder stays offline."
   }
 }
 

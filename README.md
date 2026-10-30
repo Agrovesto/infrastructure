@@ -5,7 +5,7 @@ Comprehensive technical documentation for the Agrovesto AWS infrastructure. This
 ## 📌 Project Overview
 
 Agrovesto infrastructure is split into three primary logical blocks:
-- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 5 APIs, SQL Server, Redis, SonarQube, Vault, and a local observability stack.
+- **Dev (`dev/`)**: A cost-efficient single-EC2 environment running Docker Compose for 7 APIs, SQL Server, Redis, SonarQube, Vault, and a local observability stack.
 - **Prod (`prod/`)**: A production-grade ECS Fargate environment with RDS SQL Server, HashiCorp Vault, and authoritative DNS. Services export OpenTelemetry traces and metrics to the monitoring stack.
 - **Monitoring (`monitoring/`)**: An open-source observability stack (Prometheus, Loki, Tempo, Grafana) running in the Prod account to monitor production services without AWS-native costs.
 
@@ -42,12 +42,12 @@ Agrovesto infrastructure is split into three primary logical blocks:
 ### 🛠 Component Details
 
 #### 1. Compute
-- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 5 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 7 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
+- **Dev**: Runs on a single `t3.large` instance. Services are containerized via Docker Compose: nginx, 7 APIs, SQL Server, **Redis**, **SonarQube**, Vault and 8 observability containers. The host is managed by a start/stop scheduler (08:00-20:00 Africa/Lagos) to save cost.
 - **Prod**: 5 ECS Fargate services (ASPNETCORE APIs) running on Graviton (ARM64) for better price-performance. Scaling is managed via Application Auto Scaling (min 1, max 4).
 - **Monitoring**: 5 always-on Fargate tasks (Prometheus, Loki, Tempo, Grafana, Edge) plus several scheduled batch jobs.
 
 #### 2. Databases (SQL Server)
-- **Dev**: SQL Server 2022 running as a container on the EC2 host. Six databases: the five services plus `sonar`, which is created with a `CS_AS` collation and `READ_COMMITTED_SNAPSHOT` because SonarQube requires both. Backups are synced to S3.
+- **Dev**: SQL Server 2022 runs as a container on the EC2 host for the five managed API databases, backed up to S3. The migrated `agx` database is not created by this stack; confirm separately whether it lives on this SQL host and needs inclusion in backups. SonarQube currently uses its own PostgreSQL container (the optional MSSQL path creates `sonar` with the required CS_AS collation and snapshot isolation).
 - **Prod**: RDS SQL Server **Express** (`db.t3.micro`).
     - **Note**: Express has a 10GB per-database cap and no Multi-AZ support.
     - **Scaling**: Upgrade path to Web/Standard on `db.m7i.large` when Multi-AZ or >10GB is required.
@@ -55,18 +55,23 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 #### 3. Caching & Code Quality (Dev)
 - **Redis**: `redis:6379` on the compose network for the APIs, published on the host's loopback only. Bounded at 256 MB with `allkeys-lru` eviction, because SQL Server shares the box and an unbounded cache is what takes the APIs down. No AUTH and no persistence by default; both are one flag away (`var.redis`).
-- **SonarQube**: Community Build on its own EBS volume, backed by the on-host SQL Server. This is the server CI pushes to via `SONAR_HOST_URL`. Served by nginx at `sonar.nomaos.com`, IP-gated the same way the Grafana vhost is.
+- **SonarQube**: Community Build on its own EBS volume, backed by its on-host PostgreSQL container. This is the server CI pushes to via `SONAR_HOST_URL`. Served by nginx at `sonar.nomaos.com`, IP-gated the same way the Grafana vhost is.
     - **Memory**: SonarSource asks for 4 GB; this host has 8 GiB and SQL Server is on it. Elasticsearch therefore runs on a 1 GB heap inside a 3 GB cgroup limit, so a heavy analysis kills SonarQube rather than the kernel OOM-killing the database. `t3.xlarge` is the fix if that starts happening.
     - **Kernel**: `vm.max_map_count=262144` is written to `/etc/sysctl.d` at boot — Elasticsearch fails a hard bootstrap check without it.
 
 #### 4. Secrets (HashiCorp Vault)
 - Both environments use HashiCorp Vault.
-- **Prod**: Fargate-based Vault with Raft storage on EFS and AWS KMS auto-unseal.
-- **Migration**: Services can source secrets from AWS Secrets Manager (bootstrap) or switch to Vault (`vault_secrets_enabled = true`).
+- **Dev**: After the instance rebuild, the checked-in configuration opts into a fresh Vault with a protected, encrypted dedicated EBS volume, KMS auto-unseal configuration and daily crash-consistent snapshots. Terraform/SSM prepares the host but never initializes Vault or captures recovery keys. Apply and verify before initializing; see the [fresh setup and recovery runbook](docs/vault-fresh-setup.md). Existing root-disk installations must not enable this as a migration.
+- **Dev API access**: The Vault service runbook provisions an isolated read-only KV v2 policy, AppRole and persistent per-service env file for every API in `var.apis`; paths follow `kv/<service>/staging/appsettings`. Actual payloads are operator-provided. See [Dev Vault service secrets](docs/vault-service-secrets.md).
+- **Prod**: Fargate-based Vault with Raft storage on EFS and AWS KMS auto-unseal. The five ECS APIs use `kv/<service>/prod/appsettings`, isolated AppRoles, and credential bundles in per-service AWS Secrets Manager secrets. See [Prod ECS Vault service access](docs/prod-vault-service-secrets.md).
+- **Migration**: Prod tasks remain on Secrets Manager bootstrap DB credentials until Vault is initialized, each AppRole credential is provisioned, every KV path is populated, and `vault_secrets_enabled = true` is applied.
 
 #### 5. Networking & DNS
 - **Prod** account is authoritative for the root domain `nomaos.com`.
 - **ALB**: Prod uses an internet-facing ALB with an ACM wildcard certificate.
+- **Dev blue/green deploys**: every dev API serves its deploys on its own hostname — `deploy.sh` (`--app <key>-api`) flips slots behind `dev-wallet-api.nomaos.com` & co; Terraform ships the default blue slot file per API and boot seeds it. Port table, slot-file contract and `deploy.sh` requirements: `docs/blue-green-deployments.md`.
+- **Dev agx API**: `agx` is an additional Compose service on port 5006, routed by nginx at `dev-agx-api.nomaos.com`, with its own ECR repository. The agx database was already migrated; this stack does not create a new one. Its image is still the placeholder nginx image; replace it with the real API image and add `dev-agx-api` to prod-managed `extra_a_records` to make the name resolve.
+- **Dev agx frontend**: `agx-frontend` is a manual Amplify placeholder on the `dev` branch. There is no source repository or deployed build yet, so auto-build and DNS publication for the reserved `dev-agx.nomaos.com` hostname are disabled. When the real frontend exists, set its `repository`, enable auto-build, set `publish_dns = true`, and add the CNAME in the prod-owned zone (or deploy artifacts manually).
 - **NAT**: A single NAT Gateway is used in Prod to balance cost and redundancy.
 - **Dev DNS**: Dev services are exposed via the Prod ALB or records in the Prod Route53 zone pointing to the Dev EIP.
 
@@ -76,17 +81,21 @@ Agrovesto infrastructure is split into three primary logical blocks:
 
 The project uses CloudWatch alarms for Dev and Prod infrastructure alerts, while the monitoring stack uses open-source tooling for application metrics, logs, traces, and alert routing. Container Insights and X-Ray are not enabled:
 
-- **Metrics**: Prometheus scrapes targets and stores metrics on EFS. Prod services also push their own OTLP metrics through Alloy into Prometheus (remote write).
-- **Logs**: Loki ingest logs from Docker (Dev) and CloudWatch Logs via a collector (Prod).
-- **Traces**: Tempo handles OTLP traces. The receiving side has always been there; the sending side is now wired too — every prod ECS task definition carries `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.internal:4317` and the sampler/exporter settings, so traces flow the moment an image loads an OTel SDK. See `var.otel` in `prod/variables.tf`.
-    - **Still required in the application image**: the OTLP exporter is a library, not a sidecar. For the ASP.NET APIs that means `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Exporter.OpenTelemetryProtocol` and the ASP.NET Core / HttpClient / SqlClient instrumentation packages. The environment variables are inert until then.
-    - **Logs stay on the awslogs driver** (`OTEL_LOGS_EXPORTER=none`): exporting them over OTLP as well would store every line in CloudWatch *and* Loki.
-- **Dashboards**: Grafana OSS provides unified visualization, with trace-to-log jumps from Tempo to Loki already wired.
-- **Alerts**: Alertmanager routes alerts to Email/Webhooks.
+- **Metrics**: Prometheus scrapes targets and stores metrics on EFS. Prod services also push their own OTLP metrics through Alloy into Prometheus (remote write). One scheduled Fargate collector (`rate(2 min)`, ARM64, 0.25 vCPU / 0.5 GB) runs the enabled collector scripts in sequence and pushes to pushgateway: ECS service and task state, the always-free basic CloudWatch metrics (ECS service CPU/memory, RDS CPU/memory/disk/connections, ALB requests/latency/5xx, NAT bytes, EFS burst credits) and its own health. Container Insights and X-Ray stay off — the basic metrics answer the same questions at $0, and the extra scripts run in the task that already existed.
+- **Logs**: Dev Alloy tails Docker/journald logs into Loki. Prod application logs use the OTLP log exporter in the app SDK and go directly to Alloy (`alloy.monitoring.internal:4317` gRPC, or `:4318` HTTP), which labels them and forwards them to Loki; API task definitions have no `awslogs` driver, the per-service CloudWatch log groups are removed, and the CloudWatch ECS-log shipper is removed. ALB access logs still flow from S3 to Loki.
+- **Traces**: Tempo handles OTLP traces. Prod ECS tasks use Alloy at `http://alloy.monitoring.internal:4317` (gRPC by default; `:4318` for HTTP/protobuf) and the configured sampler/exporter settings. The app image must load an OTel SDK.
+    - **Still required in the application image**: `OTEL_LOGS_EXPORTER=otlp` is an endpoint setting, not an SDK. ASP.NET apps need `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Exporter.OpenTelemetryProtocol`, the appropriate instrumentation, and an OTel logging provider. Until the image emits logs, no app log records reach Loki.
+    - **CloudWatch**: API tasks no longer use `awslogs`; the per-service log groups and CloudWatch-to-Loki ECS log shipper/read permission are removed. Applying this change deletes the historical contents of those five API log groups. Monitoring, Vault and one-off operational tasks retain their own CloudWatch logs for diagnostics.
+    - **Dev mirrors telemetry on the host**: Compose APIs get `OTEL_*` pointed at `http://alloy:4317` (`local.otel_environment` in `dev/locals.tf`); Alloy forwards traces to on-host Tempo, while its Docker/journald tail remains Dev's log path. Grafana's Tempo↔Loki links are provisioned.
+- **Dashboards**: Grafana OSS provides unified visualization, with trace-to-log jumps from Tempo to Loki already wired. Dashboards are provisioned from this repo as JSON files and Grafana re-reads them every 30 s, so an edit made in the UI is reverted — dashboard changes land as a commit.
+    - **Prod**: `platform`, `services`, `cost`, `ecs` (per-service CPU/memory and task state), `resources` (ECS, EC2, RDS, NAT, EFS, ALB), `traffic` (requests per service, status classes, latency, client IPs, user agents), `database` (per-database size against the Express 10 GB cap, log headroom, sessions, transactions, deadlocks, read/write I/O with latency, a Performance-Insights-style workload row — active sessions, load by wait type, sessions per login — and "Live SQL" tables queried straight from SQL Server: running requests, who is connected (login, host, program, client IP), blocking chains, top statements by time and reads. PI itself does not exist for SQL Server Express — this is its replacement).
+    - **Dev**: `dev-host`, `dev-logs`, `dev-services` (per-container CPU, memory against limit, throttling, restarts), `dev-traffic` (nginx request volume by vhost, URI, client and user agent), `dev-infra` (the dockerized data tier — MSSQL, Redis, RabbitMQ, SonarQube, Vault — plus the observability containers themselves), `dev-database` (the same per-database SQL Server deep dive including I/O, waits and the live tables, collected by the `mssql-exporter` container — the serve mode of the very script the prod DMV task runs).
+- **Alerts**: Prometheus evaluates the resource rules and Loki's ruler evaluates the log rules in both stacks; Alertmanager groups, inhibits and routes. Delivery is SNS with sigv4 — prod to `agrovesto-prod-alerts` (`var.alertmanager_sns_topic`), dev to the dev alerts topic, which e-mails `var.alert_emails` (`tech@agrovesto.com`). The SMTP and webhook receivers stay empty on purpose.
+    - **Loki rule files must sit in the tenant directory**: the local rule store reads `<rules dir>/<tenant>/<namespace>.yml`, and with `auth_enabled: false` the tenant is literally `fake`. Both stacks therefore publish `loki/rules/fake/application.yml`; a file one level up is never loaded and the ruler stays silent about it.
 
 ### Accessing Logs
 - **Prod**: Reachable at `https://grafana.nomaos.com` (IP allowlisted via `grafana_allowed_cidrs`).
-- **Dev**: Reachable at `http://dev-logs.nomaos.com` without SSO, `https://dev-logs.nomaos.com` when GitHub SSO is configured, or via SSH tunnel:
+- **Dev**: Reachable at `http://dev-grafana.nomaos.com` without SSO, `https://dev-grafana.nomaos.com` when GitHub SSO is configured, or via SSH tunnel:
   ```bash
   ssh -N -L 3000:127.0.0.1:3000 -L 3100:127.0.0.1:3100 -L 9090:127.0.0.1:9090 ubuntu@<DEV_EIP>
   ```

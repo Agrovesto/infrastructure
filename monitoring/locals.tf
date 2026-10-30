@@ -282,13 +282,22 @@ locals {
             annotations:
               summary: "{{ $value }} sessions are blocked on the prod SQL Server"
 
+          - alert: MssqlLogSpaceHigh
+            expr: mssql_log_used_bytes / mssql_log_size_bytes > 0.90
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db }} has used over 90% of its transaction log"
+              description: "A full log stalls every write, and on Express the log counts toward the 10 GB per-database cap. Look for a long-open transaction or a stuck log backup (Live SQL row, Database dashboard)."
+
           - alert: MssqlDeadlockSpike
             expr: increase(mssql_deadlocks_total[15m]) > 5
             for: 5m
             labels:
               severity: warning
             annotations:
-              summary: "Deadlocks on the prod SQL Server"
+              summary: "Deadlocks in {{ $labels.db }} on the prod SQL Server"
               description: "{{ $value }} deadlocks in the last 15m"
 
           - alert: MssqlDatabaseNearSizeLimit
@@ -354,13 +363,199 @@ locals {
             annotations:
               summary: "{{ $labels.service }} tasks are stopping with {{ $labels.stop_code }}"
 
-          - alert: EcsLogShipperStalled
-            expr: time() - ecs_logs_scrape_timestamp_seconds > 900
+  EOT
+
+  # Resource alerts on the basic CloudWatch metrics the collector republishes
+  # (collector/cw_metrics.py). Thresholds are literals like the rest of the rule
+  # files; every series here is a window total or an average, so `for:` is what
+  # keeps a single bad window from paging anyone.
+  prometheus_cloudwatch_rules = <<-EOT
+    groups:
+      - name: cloudwatch
+        rules:
+          - alert: CloudwatchCollectorFailing
+            expr: cloudwatch_collector_up == 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The CloudWatch metric collector cannot read basic metrics"
+
+          - alert: CloudwatchMetricsStale
+            expr: time() - cloudwatch_collector_timestamp_seconds > 900
             for: 10m
             labels:
               severity: warning
             annotations:
-              summary: "ECS log shipping into Loki has stalled"
+              summary: "Basic CloudWatch metrics have not been refreshed for 15m"
+
+          - alert: EcsServiceHighCpu
+            expr: ecs_service_cpu_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is above 85% CPU"
+              description: "{{ $labels.service }} on {{ $labels.cluster }} averaged {{ $value | printf \"%.0f\" }}% of its task CPU for 15 minutes."
+
+          - alert: EcsServiceHighMemory
+            expr: ecs_service_memory_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is above 85% memory"
+              description: "{{ $labels.service }} on {{ $labels.cluster }} averaged {{ $value | printf \"%.0f\" }}% of its task memory for 15 minutes. Past 100% Fargate kills the task."
+
+          - alert: EcsServiceMemoryCritical
+            expr: ecs_service_memory_utilization_percent_max > 95
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.service }} is about to be OOM-killed"
+              description: "Peak memory reached {{ $value | printf \"%.0f\" }}% of the task limit."
+
+          - alert: AlbUnhealthyTargets
+            expr: alb_unhealthy_hosts > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.target_group }} has unhealthy targets"
+              description: "{{ $value }} target(s) failing health checks behind {{ $labels.load_balancer }}."
+
+          - alert: AlbNoHealthyTargets
+            expr: alb_healthy_hosts == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.target_group }} has no healthy target"
+              description: "Every target behind {{ $labels.load_balancer }} is failing health checks; that service is down."
+
+          - alert: AlbRejectingConnections
+            expr: alb_rejected_connections > 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The load balancer is rejecting connections"
+              description: "{{ $value }} connection(s) rejected in the window - targets are at their connection limit."
+
+          - alert: AlbTargetErrorSpike
+            expr: sum by (service, load_balancer) (alb_target_5xx_count) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is returning 5xx through the load balancer"
+              description: "Target 5xx responses in five consecutive windows on {{ $labels.load_balancer }}."
+
+          - alert: AlbSlowResponses
+            expr: alb_target_response_time_seconds > 2
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.load_balancer }} responses average over 2s"
+              description: "Average target response time is {{ $value | printf \"%.2f\" }}s."
+
+          - alert: RdsHighCpu
+            expr: rds_cpu_utilization_percent > 85
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} is above 85% CPU"
+              description: "Average CPU {{ $value | printf \"%.0f\" }}% for 15 minutes."
+
+          - alert: RdsLowFreeMemory
+            expr: rds_freeable_memory_bytes < 268435456
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} has under 256MB freeable memory"
+              description: "{{ $value | humanize1024 }}B freeable; SQL Server starts paging and queries slow down."
+
+          - alert: RdsLowDiskSpace
+            expr: rds_free_storage_space_bytes < 5368709120
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Database {{ $labels.db_instance }} has under 5GB of free storage"
+              description: "{{ $value | humanize1024 }}B free on the volume."
+
+          - alert: RdsBurstBalanceLow
+            expr: rds_burst_balance_percent < 20
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database {{ $labels.db_instance }} is running out of I/O burst balance"
+              description: "{{ $value | printf \"%.0f\" }}% burst balance left; gp2 throughput drops to baseline at zero."
+
+          - alert: NatGatewayPortExhaustion
+            expr: nat_gateway_error_port_allocation > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "NAT gateway {{ $labels.nat_gateway }} failed to allocate a port"
+              description: "{{ $value }} allocation error(s): outbound connections are being dropped."
+
+          - alert: EfsBurstCreditsLow
+            expr: efs_burst_credit_balance_bytes < 1073741824
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "EFS {{ $labels.file_system }} is low on burst credits"
+              description: "{{ $value | humanize1024 }}B of credits left; bursting throughput is throttled to baseline once they run out."
+  EOT
+
+  # Alerts on the ALB access log shipper (collector/alb_logs.py) and on what it
+  # delivers. Health checks alone keep the stream alive, so an hour without any
+  # line means the pipeline broke rather than that nobody visited.
+  prometheus_alb_rules = <<-EOT
+    groups:
+      - name: alb-logs
+        rules:
+          - alert: AlbLogShipperFailing
+            expr: alb_logs_shipper_up == 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "The ALB access log shipper cannot read the log bucket"
+
+          - alert: AlbLogShipperStalled
+            expr: time() - alb_logs_scrape_timestamp_seconds > 900
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ALB access log shipping into Loki has stalled"
+
+          - alert: AlbAccessLogsMissing
+            expr: time() - alb_logs_newest_event_timestamp_seconds > 3600
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "No ALB access log line has reached Loki for an hour"
+              description: "Health checks are logged too, so an empty hour means delivery or shipping broke."
+
+          - alert: AlbLogParseErrors
+            expr: alb_logs_parse_errors_total - alb_logs_parse_errors_total offset 30m > 100
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "ALB access log lines are failing to parse"
+              description: "{{ $value }} unparseable line(s) in 30 minutes; the log format may have changed."
   EOT
 
   prometheus_cost_rules = <<-EOT
@@ -506,18 +701,46 @@ locals {
       reporting_enabled: false
   EOT
 
-  # LogQL alerts on application/ALB logs once services push them (see README).
+  # LogQL alerts on OTLP application lines normalized by Alloy and the ALB access
+  # logs the collector ships, where `status`, `method`, `service` and `kind` are
+  # stream labels.
+  #
+  # Published as loki/rules/fake/application.yml, not loki/rules/application.yml:
+  # Loki's local rule storage reads <directory>/<tenant>/<namespace>, and with
+  # auth_enabled=false the tenant every line is ingested under is literally
+  # "fake" (pkg/loki/modules.go injects it). A file one level higher is never
+  # loaded, and the ruler stays silent about it.
   loki_rules = <<-EOT
     groups:
       - name: application-logs
         rules:
           - alert: ApplicationErrorSpike
-            expr: sum(rate({source="app"} |= "level=error" [10m])) > 1
+            expr: sum(rate({source="app", level=~"ERROR|FATAL"}[10m])) > 1
             for: 10m
             labels:
               severity: warning
             annotations:
               summary: "Error-rate spike in application logs"
+
+      - name: alb-traffic
+        rules:
+          - alert: AlbRequestErrorSpike
+            expr: sum by (service) (rate({source="alb", kind="request", status=~"5.."}[10m])) > 0.05
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.service }} is answering 5xx at the load balancer"
+              description: "Sustained above three 5xx responses a minute in the access logs."
+
+          - alert: AlbClientErrorFlood
+            expr: sum(rate({source="alb", kind="request", status=~"4.."}[10m])) > 10
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Unusual 4xx volume at the load balancer"
+              description: "More than 600 client errors a minute: usually scanning, or a client release calling a route that moved."
   EOT
 
   # --- Tempo -----------------------------------------------------------------------
@@ -549,16 +772,16 @@ locals {
       trace:
         backend: local
         local:
-          path: /tempo/blocks
+          path: /var/tempo/blocks
         wal:
-          path: /tempo/wal
+          path: /var/tempo/wal
 
     metrics_generator:
       registry:
         external_labels:
           source: tempo
       storage:
-        path: /tempo/generator/wal
+        path: /var/tempo/generator/wal
         remote_write:
           - url: ${local.endpoints.prometheus}/api/v1/write
       processor:
@@ -579,7 +802,7 @@ locals {
       format = "logfmt"
     }
 
-    // Logs: Loki push API (Fluent Bit/FireLens, Promtail, or the app itself).
+    // Loki push API retained for batch sources (not the API app log path).
     loki.source.api "push" {
       http {
         listen_address = "0.0.0.0"
@@ -596,7 +819,7 @@ locals {
       }
     }
 
-    // Traces + metrics: OTLP from the OpenTelemetry SDK/SDK-side car in each service.
+    // OTLP traces, metrics and logs from the OpenTelemetry SDK in each service.
     otelcol.receiver.otlp "default" {
       grpc {
         endpoint = "0.0.0.0:4317"
@@ -608,8 +831,35 @@ locals {
 
       output {
         metrics = [otelcol.exporter.prometheus.default.input]
-        logs    = [otelcol.exporter.loki.default.input]
+        logs    = [otelcol.processor.transform.logs_to_loki.input]
         traces  = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+
+    // Normalize OTLP log labels for the existing service dashboards/rules.
+    // The Loki exporter honors these hint attributes and maps service.name to
+    // the low-cardinality service_name stream label.
+    otelcol.processor.transform "logs_to_loki" {
+      error_mode = "ignore"
+
+      log_statements {
+        context = "resource"
+        statements = [
+          `set(attributes["loki.resource.labels"], "service.name, service.namespace")`,
+        ]
+      }
+
+      log_statements {
+        context = "log"
+        statements = [
+          `set(attributes["source"], "app")`,
+          `set(attributes["level"], severity_text)`,
+          `set(attributes["loki.attribute.labels"], "source, level")`,
+        ]
+      }
+
+      output {
+        logs = [otelcol.exporter.loki.default.input]
       }
     }
 
@@ -703,6 +953,26 @@ locals {
           tracesToLogsV2:
             datasourceUid: loki
             filterByTraceID: true
+%{ if local.mssql_grafana_enabled ~}
+
+      # Direct SQL access to the prod database: the "Live SQL" panels on the
+      # Database dashboard (running requests, blocking chains, file layout)
+      # query DMVs through this datasource, while the trends come from the
+      # hourly DMV task via Pushgateway. ECS resolves the two keys of the
+      # RDS-managed master secret into MSSQL_USER / MSSQL_PASSWORD at task
+      # start (valueFrom in grafana.tf); Grafana expands the placeholders
+      # from its own environment when it reads this file.
+      - name: MSSQL
+        uid: mssql
+        type: mssql
+        access: proxy
+        url: ${local.mssql_host}:${local.mssql_port}
+        database: master
+        user: $${MSSQL_USER}
+        editable: false
+        secureJsonData:
+          password: $${MSSQL_PASSWORD}
+%{ endif ~}
   EOT
 
   grafana_dashboards_provider = <<-EOT

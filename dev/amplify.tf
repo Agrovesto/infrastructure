@@ -9,14 +9,15 @@ resource "aws_amplify_app" "this" {
   repository = each.value.repository
   platform   = each.value.platform
 
-  access_token = var.github_access_token != "" ? var.github_access_token : null
+  # Manual placeholders have no source provider to authorize.
+  access_token = each.value.repository != null && var.github_access_token != "" ? var.github_access_token : null
 
   enable_branch_auto_build    = each.value.enable_auto_build
   enable_branch_auto_deletion = true
 
   environment_variables = each.value.environment_variables
 
-  build_spec = each.value.build_spec != null ? each.value.build_spec : <<-EOT
+  build_spec = each.value.repository == null ? null : each.value.build_spec != null ? each.value.build_spec : <<-EOT
       version: 1
       frontend:
         phases:
@@ -59,7 +60,7 @@ resource "aws_amplify_branch" "this" {
 # Off by default: Route53 CNAMEs are used instead of Amplify domain association
 # so multiple apps can share one parent domain without colliding.
 resource "aws_amplify_domain_association" "this" {
-  for_each = var.amplify_enable_custom_domain ? var.amplify_apps : {}
+  for_each = var.amplify_enable_custom_domain ? { for k, app in var.amplify_apps : k => app if app.publish_dns } : {}
 
   app_id      = aws_amplify_app.this[each.key].id
   domain_name = var.domain_name

@@ -1,5 +1,5 @@
 # =============================================================================
-# DEV — on-host logging & metrics (Loki + Alloy + Grafana + Prometheus)
+# DEV — on-host logging, metrics & traces (Loki + Tempo + Alloy + Grafana + Prometheus)
 #
 # The stack is containers on the app host, so most of what there is to assert
 # lives in the rendered files rather than in AWS resources: the compose project,
@@ -48,23 +48,34 @@ override_data {
 }
 
 variables {
-  import_existing = false
+  ui_https_enabled   = false
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
   apis = {
     nomaos = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5000
-    subdomain = "noma-wallet-api"
+      image     = "public.ecr.aws/nginx/nginx:alpine"
+      host_port = 5000
+      subdomain = "noma-wallet-api"
+      blue_green = {
+        blue_port  = 5007
+        green_port = 5008
+      }
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
       subdomain = "dev-wallet-api"
+      blue_green = {
+        blue_port  = 5009
+        green_port = 5010
+      }
     }
     onboarding = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
@@ -111,15 +122,16 @@ run "logging_stack_resources" {
   }
 
   assert {
-    condition     = length(aws_s3_object.host_config) == 12
-    error_message = "Ten rendered files ship to the host: compose, nginx.conf, init-dbs.sql, then loki, alloy, prometheus, 2x grafana provisioning and 2x dashboards."
+    condition     = length(aws_s3_object.host_config) == 27
+    error_message = "The test fixture ships 27 host files: five core/blue-green files, three per-service Vault policies, three Vault helper scripts, and sixteen logging files."
   }
 
   assert {
     condition = alltrue([
       for k, o in aws_s3_object.host_config :
       startswith(o.key, "compose/") || startswith(o.key, "nginx/") ||
-      startswith(o.key, "scripts/") || startswith(o.key, "logging/")
+      startswith(o.key, "scripts/") || startswith(o.key, "logging/") ||
+      startswith(o.key, "vault/")
     ])
     error_message = "Every key is a path under /opt/agrovesto, which is the tree the sync lays out."
   }
@@ -130,11 +142,11 @@ run "logging_stack_resources" {
     condition = (
       aws_s3_object.host_config["compose/docker-compose.yml"].content == local.docker_compose &&
       aws_s3_object.host_config["nginx/nginx.conf"].content == local.nginx_conf &&
+      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content &&
       aws_s3_object.host_config["logging/loki/config.yml"].content == local.loki_config
     )
     error_message = "Objects must be the rendered files verbatim; user_data syncs them without editing."
   }
-
   assert {
     condition = (
       aws_s3_bucket_public_access_block.host_config.block_public_acls &&
@@ -152,7 +164,7 @@ run "logging_stack_resources" {
 }
 
 # -----------------------------------------------------------------------------
-# compose: the six containers, loopback-only, inside everyone's limits
+# compose: the observability containers, loopback-only, inside everyone's limits
 # -----------------------------------------------------------------------------
 
 run "compose_services" {
@@ -162,11 +174,13 @@ run "compose_services" {
     condition = alltrue([
       for image in [
         var.logging.loki_image,
+        var.logging.tempo_image,
         var.logging.alloy_image,
         var.logging.grafana_image,
         var.logging.prometheus_image,
         var.logging.cadvisor_image,
         var.logging.node_exporter_image,
+        var.logging.mssql_exporter_image,
       ] : strcontains(local.docker_compose, "image: ${image}")
     ])
     error_message = "Every pinned observability image must reach the compose file."
@@ -179,7 +193,7 @@ run "compose_services" {
 
   assert {
     condition = alltrue([
-      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port, var.logging.alertmanager_port] :
+      for port in [var.logging.grafana_port, var.logging.loki_port, var.logging.tempo_port, var.logging.prometheus_port, var.logging.cadvisor_port, var.logging.node_exporter_port, var.logging.alloy_port, var.logging.alloy_otlp_grpc_port, var.logging.alloy_otlp_http_port, var.logging.alertmanager_port] :
       strcontains(local.docker_compose, "127.0.0.1:${port}:")
     ])
     error_message = "No component of this stack publishes a non-loopback port; the security group stays as it was."
@@ -191,11 +205,11 @@ run "compose_services" {
   }
 
   assert {
-    # 7 observability containers, plus Redis and SonarQube when they are on: the
+    # 9 observability containers, plus Redis and SonarQube when they are on: the
     # count has to follow what is enabled, or disabling either service turns this
     # into a false failure.
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0)
-    error_message = "Every capped container carries a memory limit — the seven observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 9 + (var.redis.enabled ? 1 : 0) + (var.sonarqube.enabled ? 1 : 0) + (local.sonarqube_on_postgres ? 1 : 0)
+    error_message = "Every capped container carries a memory limit — the nine observability ones, plus Redis and SonarQube when enabled — so none of them can starve SQL Server."
   }
 
   assert {
@@ -248,8 +262,10 @@ run "alloy_pipeline" {
       strcontains(local.alloy_config, "loki.source.journal"),
       strcontains(local.alloy_config, "loki.source.api"),
       strcontains(local.alloy_config, "loki.write"),
+      strcontains(local.alloy_config, "otelcol.receiver.otlp"),
+      strcontains(local.alloy_config, "otelcol.exporter.otlp \"tempo\""),
     ])
-    error_message = "Three inputs (containers, journald, push API) and one output (Loki) must all be wired."
+    error_message = "Three log inputs (containers, journald, push API), the OTLP receiver and their outputs (Loki, Tempo) must all be wired."
   }
 
   assert {
@@ -265,6 +281,244 @@ run "alloy_pipeline" {
   assert {
     condition     = strcontains(local.alloy_config, "/loki/api/v1/push")
     error_message = "Loki is written over its push API on the compose network, not through a published port."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Traces: OTLP in, Tempo on the volume, spans queryable in Grafana
+# -----------------------------------------------------------------------------
+
+run "traces_pipeline" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "container_name: agrovesto-tempo") &&
+      strcontains(local.docker_compose, "image: ${var.logging.tempo_image}") &&
+      aws_s3_object.host_config["logging/tempo/config.yml"].content == local.tempo_config
+    )
+    error_message = "Tempo runs as a capped container with its rendered config shipped through the host config bucket, like every other component."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.tempo_config, "block_retention: ${var.logging.traces_retention_hours}h") &&
+      strcontains(local.tempo_config, "endpoint: 0.0.0.0:4317") &&
+      strcontains(local.tempo_config, "url: http://prometheus:9090/api/v1/write")
+    )
+    error_message = "Tempo keeps traces for traces_retention_hours, accepts OTLP on the standard ports and remote-writes span metrics to Prometheus."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "${local.logging_root}/tempo:/var/tempo") &&
+      strcontains(local.docker_compose, "-config.file=/var/tempo/config.yml") &&
+      !strcontains(local.docker_compose, "tempo:/tempo")
+    )
+    error_message = "Tempo's data directory mounts at /var/tempo: inside the grafana/tempo image /tempo is the entrypoint binary, and binding a directory over it fails container creation — this is why tempo never started on the dev host (2026-10-12)."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.tempo_config, "path: /var/tempo/wal") &&
+      strcontains(local.tempo_config, "path: /var/tempo/blocks") &&
+      strcontains(local.tempo_config, "path: /var/tempo/generator/wal") &&
+      !strcontains(local.tempo_config, "path: /tempo/")
+    )
+    error_message = "Tempo's WAL, blocks and generator paths live under the /var/tempo mount, never under the image's /tempo binary."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: agrovesto-tempo") &&
+      strcontains(local.grafana_datasources, "datasourceUid: agrovesto-tempo") &&
+      strcontains(local.grafana_datasources, "datasourceUid: agrovesto-loki") &&
+      strcontains(local.grafana_datasources, "$${__value.raw}")
+    )
+    error_message = "Grafana gets a Tempo datasource, a Loki log-line -> trace link and the trace -> logs jump back."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_config, "job_name: tempo") &&
+      strcontains(local.docker_compose, "--web.enable-remote-write-receiver")
+    )
+    error_message = "Prometheus scrapes Tempo's own metrics and has the remote-write receiver on for Tempo's span metrics."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "OTEL_EXPORTER_OTLP_ENDPOINT") &&
+      strcontains(local.docker_compose, "OTEL_SERVICE_NAME: \"nomaos\"") &&
+      strcontains(local.docker_compose, "127.0.0.1:${var.logging.alloy_otlp_grpc_port}:4317")
+    )
+    error_message = "Every compose API carries the OTEL env block (service name = API key) and Alloy's OTLP receiver is loopback-published."
+  }
+
+  assert {
+    condition     = contains(local.logging_own_services, "tempo")
+    error_message = "Tempo's own logs are dropped by the collector like the rest of the stack's containers."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Dashboards: what the metrics, logs and traces are looked at through
+# -----------------------------------------------------------------------------
+
+run "grafana_dashboards" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for name, content in {
+        "dev-logs"     = local.grafana_dashboard_logs
+        "dev-host"     = local.grafana_dashboard_host
+        "dev-services" = local.grafana_dashboard_services
+        "dev-traffic"  = local.grafana_dashboard_traffic
+        "dev-infra"    = local.grafana_dashboard_infra
+      } :
+      aws_s3_object.host_config["logging/grafana/dashboards/${name}.json"].content == content &&
+      aws_s3_object.host_config["logging/grafana/dashboards/${name}.json"].content_type == "application/json"
+    ])
+    error_message = "Every dashboard in dev/grafana/dashboards ships to the host verbatim, as JSON, under the directory the file provider reads."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_services, "agrovesto-dev-services"),
+      strcontains(local.grafana_dashboard_services, "container_cpu_usage_seconds_total"),
+      strcontains(local.grafana_dashboard_services, "container_spec_memory_limit_bytes"),
+      strcontains(local.grafana_dashboard_services, "container_spec_cpu_quota"),
+      strcontains(local.grafana_dashboard_services, "container_oom_events_total"),
+    ])
+    error_message = "The services dashboard answers CPU and memory per app, measured against each container's own compose limit, plus restarts and OOM kills."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_traffic, "agrovesto-dev-traffic"),
+      strcontains(local.grafana_dashboard_traffic, "count_over_time"),
+      strcontains(local.grafana_dashboard_traffic, "[1d]"),
+      strcontains(local.grafana_dashboard_traffic, "remote_addr"),
+      strcontains(local.grafana_dashboard_traffic, "http_user_agent"),
+      strcontains(local.grafana_dashboard_traffic, "quantile_over_time"),
+    ])
+    error_message = "The traffic dashboard counts requests per day per vhost and breaks them down by client IP, URI and user agent out of the nginx JSON access log."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.grafana_dashboard_infra, "agrovesto-dev-infra"),
+      strcontains(local.grafana_dashboard_infra, "node_filesystem_avail_bytes"),
+      strcontains(local.grafana_dashboard_infra, "node_network_receive_bytes_total"),
+      strcontains(local.grafana_dashboard_infra, "container_spec_memory_limit_bytes"),
+      strcontains(local.grafana_dashboard_infra, "tempo_distributor_spans_received_total"),
+      strcontains(local.grafana_dashboard_infra, "traces_span_metrics_calls_total"),
+      strcontains(local.grafana_dashboard_infra, "ALERTS"),
+    ])
+    error_message = "The infrastructure dashboard covers the host, what the containers do to it, the observability stack watching both, and the alerts."
+  }
+
+  assert {
+    condition     = strcontains(local.grafana_dashboards_provider, "path: /var/lib/grafana/dashboards")
+    error_message = "The file provider still points at the directory the sync fills, so adding a dashboard is a file in this repository and nothing else."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Alerts: resource rules in Prometheus, log rules in Loki's own ruler
+# -----------------------------------------------------------------------------
+
+run "container_resource_alerts" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "HostHighCpu"),
+      strcontains(local.prometheus_rules, "ContainerDown"),
+      strcontains(local.prometheus_rules, "ContainerRestarting"),
+      strcontains(local.prometheus_rules, "ContainerNearMemoryLimit"),
+      strcontains(local.prometheus_rules, "ContainerHighCpu"),
+      strcontains(local.prometheus_rules, "ContainerCpuThrottled"),
+    ])
+    error_message = "The host rules must cover the box and the containers on it: down, restarting, memory near the limit, CPU near the limit, and CPU throttling."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_memory_percent}"),
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_cpu_percent}"),
+      strcontains(local.prometheus_rules, "> ${var.alert_rules.container_throttled_percent}"),
+    ])
+    error_message = "Container thresholds come from var.alert_rules, not from the template, so they can be raised without editing it."
+  }
+
+  assert {
+    condition     = aws_s3_object.host_config["logging/prometheus/rules/host.yml"].content == local.prometheus_rules
+    error_message = "The rendered rules ship to the host verbatim."
+  }
+}
+
+run "log_alerts" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      strcontains(local.loki_rules, "AppErrorSpike"),
+      strcontains(local.loki_rules, "NginxErrorSpike"),
+      strcontains(local.loki_rules, "NginxUpstreamRefused"),
+    ])
+    error_message = "Loki alerts on what the applications logged, on 5xx at nginx, and on an upstream that never answered - the case ContainerDown cannot see."
+  }
+
+  assert {
+    condition     = aws_s3_object.host_config["logging/loki/rules/fake/application.yml"].content == local.loki_rules
+    error_message = "The rendered rules ship to the host verbatim."
+  }
+
+  # The tenant directory is the part that fails silently: Loki's local rule
+  # storage reads <directory>/<tenant>/<namespace>, and with auth_enabled false
+  # the tenant is literally "fake".
+  assert {
+    condition     = endswith(aws_s3_object.host_config["logging/loki/rules/fake/application.yml"].key, "/loki/rules/fake/application.yml")
+    error_message = "Rules must land in the fake tenant directory or Loki's ruler loads nothing and stays quiet about it."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.loki_config, "ruler:"),
+      strcontains(local.loki_config, "directory: /loki/rules"),
+      strcontains(local.loki_config, "alertmanager_url: http://alertmanager:${var.logging.alertmanager_port}"),
+    ])
+    error_message = "Loki's ruler reads /loki/rules and hands anything firing to the Alertmanager on the compose network."
+  }
+
+  assert {
+    condition     = strcontains(file("${path.module}/user_data.sh.tftpl"), "loki/rules/fake")
+    error_message = "The bootstrap creates the tenant directory, so the sync lands in a directory the loki user owns."
+  }
+}
+
+run "alert_thresholds_are_configurable" {
+  command = plan
+
+  variables {
+    alert_rules = {
+      container_memory_percent = 70
+      log_error_rate           = 5
+      nginx_5xx_rate           = 2
+      log_rule_window          = "5m"
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_rules, "> 70"),
+      strcontains(local.loki_rules, "[5m]"),
+      strcontains(local.loki_rules, "> 5"),
+      strcontains(local.loki_rules, "> 2"),
+    ])
+    error_message = "Both rule files take their window and thresholds from var.alert_rules."
   }
 }
 
@@ -318,7 +572,7 @@ run "retention" {
   }
 
   assert {
-    condition     = strcontains(local.loki_config, "label_selector")
+    condition     = strcontains(local.loki_config, "selector: ")
     error_message = "The shorter per-stream retention (journald, nginx) must be in the config while system_retention_days < loki_retention_days."
   }
 
@@ -358,7 +612,7 @@ run "nginx_vhost_defaults_to_loopback" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "server_name dev-logs.nomaos.com;")
+    condition     = strcontains(local.nginx_conf, "server_name dev-grafana.nomaos.com;")
     error_message = "Grafana is served from logging.grafana_subdomain through nginx, like every other dev host."
   }
 
@@ -375,6 +629,15 @@ run "nginx_vhost_defaults_to_loopback" {
   assert {
     condition     = strcontains(local.nginx_conf, "proxy_read_timeout 300s;")
     error_message = "A LogQL query across two weeks of logs must not be killed by a 60s proxy timeout."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "set $grafana_backend grafana:${local.logging_grafana.port};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$grafana_backend;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://grafana:")
+    )
+    error_message = "The Grafana vhost resolves at request time through the Docker resolver: a recreating or crashed Grafana must 502 its own vhost, never keep nginx from starting (host not found in upstream, 2026-10-12)."
   }
 
   assert {
@@ -397,12 +660,11 @@ run "nginx_allowlist" {
   }
 
   assert {
-    # There are two IP-gated vhosts now — Grafana and SonarQube — and they take
-    # the same fallback rule, so an explicit list has to remove the loopback line
-    # from both. Asserting on the whole file is what catches one of them being
-    # left on the 127.0.0.1 default by mistake.
-    condition     = !strcontains(local.nginx_conf, "allow 127.0.0.1;")
-    error_message = "An explicit list replaces the loopback fallback instead of adding to it."
+    # Grafana and SonarQube replace their loopback fallback with the explicit
+    # list. The one remaining loopback allow belongs to the separate, internal
+    # Vault vhost while OIDC is disabled.
+    condition     = length(regexall("allow 127\\.0\\.0\\.1;", local.nginx_conf)) == 1
+    error_message = "An explicit Grafana/SonarQube allowlist replaces their loopback fallback; only the internal Vault vhost keeps its loopback allow."
   }
 
   assert {
@@ -512,25 +774,111 @@ run "disabled" {
     error_message = "Nothing is provisioned for logging when it is switched off - including the volume."
   }
 
-  # The bucket itself does NOT go away with the logging stack: compose and
-  # nginx.conf come from it on every boot, logging or not.
+  # The bucket itself does NOT go away with the logging stack: compose,
+  # nginx.conf, the per-API blue/green slot files and init-dbs.sql come from it
+  # on every boot, logging or not.
   assert {
-    condition     = length(aws_s3_object.host_config) == 3
-    error_message = "With logging off the bucket keeps exactly the three always-needed files (compose, nginx.conf, init-dbs.sql)."
+    condition = (
+      length(aws_s3_object.host_config) == 11 &&
+      alltrue([
+        for k in concat(
+          ["compose/docker-compose.yml", "nginx/nginx.conf", "nginx/nomaos_api-active.conf", "nginx/wallet_api-active.conf", "scripts/init-dbs.sql"],
+          [for service in keys(var.apis) : "vault/service-policies/${service}.hcl"],
+          ["scripts/connect-vault-network.sh", "scripts/configure-vault-services.sh", "scripts/write-vault-service-secret.sh"],
+        ) : contains(keys(aws_s3_object.host_config), k)
+      ])
+    )
+    error_message = "With logging off, the bucket retains five core files, three service policies and three Vault helper scripts, but no logging assets."
   }
 
   assert {
-    condition     = !strcontains(local.docker_compose, "container_name: agrovesto-grafana") && !strcontains(local.docker_compose, "container_name: agrovesto-node-exporter")
+    condition     = !strcontains(local.docker_compose, "container_name: agrovesto-grafana") && !strcontains(local.docker_compose, "container_name: agrovesto-node-exporter") && !strcontains(local.docker_compose, "container_name: agrovesto-tempo")
     error_message = "The compose project must not carry any observability container."
   }
 
   assert {
-    condition     = !strcontains(local.nginx_conf, "dev-logs")
+    condition     = !strcontains(local.docker_compose, "OTEL_EXPORTER_OTLP_ENDPOINT")
+    error_message = "With logging off there is no Alloy to receive spans, so the APIs keep exactly their own env — no OTEL block."
+  }
+
+  assert {
+    condition     = !strcontains(local.nginx_conf, "dev-grafana")
     error_message = "No Grafana vhost, so no new listener on port 80."
   }
 
   assert {
     condition     = length(aws_security_group.ec2.ingress) == 3
     error_message = "The security group is untouched: the stack adds no ingress rule, it rides on nginx's port 80."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# The SQL Server collector pipeline
+# -----------------------------------------------------------------------------
+
+run "database_pipeline" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "container_name: agrovesto-mssql-exporter") &&
+      strcontains(local.docker_compose, "image: ${var.logging.mssql_exporter_image}") &&
+      strcontains(local.docker_compose, "pip install --quiet --no-cache-dir python-tds") &&
+      strcontains(local.docker_compose, "DB_HOST: \"mssql\"") &&
+      strcontains(local.docker_compose, "SERVE_PORT: \"${var.logging.mssql_exporter_port}\"") &&
+      !strcontains(local.docker_compose, "127.0.0.1:${var.logging.mssql_exporter_port}:")
+    )
+    error_message = "The SQL Server collector runs the shared script in serve mode against the mssql container on the compose network, and publishes no host port."
+  }
+
+  assert {
+    # One collector, two stacks: what ships to the host IS the file the prod
+    # monitoring task runs — not a copy that can drift.
+    condition = (
+      aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content == file("../monitoring/scripts/mssql_metrics.py") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "python-tds") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_log_used_bytes") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_io_read_bytes_total") &&
+      strcontains(aws_s3_object.host_config["logging/rds/mssql_metrics.py"].content, "mssql_wait_time_seconds_total")
+    )
+    error_message = "The host config bucket ships the monitoring stack's collector script verbatim, with the per-database metrics, the I/O and wait-stat sections and the correct PyPI distribution name."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_config, "job_name: mssql") &&
+      strcontains(local.prometheus_config, "mssql-exporter:${var.logging.mssql_exporter_port}")
+    )
+    error_message = "Prometheus scrapes the collector as its ninth job."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: agrovesto-mssql") &&
+      strcontains(local.grafana_datasources, "type: mssql") &&
+      strcontains(local.grafana_datasources, "url: mssql:1433") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_SA_PASSWORD}") &&
+      strcontains(local.docker_compose, "MSSQL_SA_PASSWORD: \"$${MSSQL_SA_PASSWORD}\"")
+    )
+    error_message = "Grafana gets a provisioned MSSQL datasource whose password expands from its own environment, which compose fills from the host .env file."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_rules, "- name: dev-database") &&
+      strcontains(local.prometheus_rules, "DevMssqlUnreachable") &&
+      strcontains(local.prometheus_rules, "DevMssqlDeadlockSpike") &&
+      strcontains(local.prometheus_rules, "mssql_log_used_bytes / mssql_log_size_bytes > 0.90")
+    )
+    error_message = "The dev database alerts evaluate the collector's series: reachability, blocking, deadlocks and log headroom."
+  }
+
+  assert {
+    condition = (
+      aws_s3_object.host_config["logging/grafana/dashboards/dev-database.json"].content == local.grafana_dashboard_database &&
+      strcontains(local.grafana_dashboard_database, "agrovesto-dev-database") &&
+      strcontains(local.grafana_dashboard_database, "agrovesto-mssql")
+    )
+    error_message = "The dev-database dashboard ships through the host config bucket and queries both provisioned datasources."
   }
 }

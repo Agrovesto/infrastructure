@@ -62,3 +62,80 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} keeps restarting"
           description: "{{ $labels.name }} restarted {{ $value }} times in 15 minutes."
+
+      # Resource alerts are per container and measured against the container's
+      # own compose limits, not against the host: a container can be pinned at
+      # its mem_limit while the box still has memory free, and that container is
+      # the one the kernel is about to kill.
+      - alert: ContainerNearMemoryLimit
+        expr: container_memory_working_set_bytes{name=~"agrovesto-.+"} / on(id, name) group_left container_spec_memory_limit_bytes{name=~"agrovesto-.+"} * 100 > ${container_memory_percent}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is near its memory limit"
+          description: "{{ $value | printf \"%.0f\" }}% of mem_limit for 10 minutes. At 100% the kernel kills it and ContainerRestarting follows."
+
+      - alert: ContainerHighCpu
+        expr: 100 * sum by (name) (rate(container_cpu_usage_seconds_total{name=~"agrovesto-.+"}[5m])) / (max by (name) (container_spec_cpu_quota{name=~"agrovesto-.+"} > 0) / max by (name) (container_spec_cpu_period{name=~"agrovesto-.+"})) > ${container_cpu_percent}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is near its CPU limit"
+          description: "{{ $value | printf \"%.0f\" }}% of its cpus limit for 15 minutes. Containers without a cpus limit are not evaluated."
+
+      # Throttling is the sharper signal: the cgroup wanted more CPU than its
+      # quota allowed in that period, so the work waited whether or not the host
+      # was busy.
+      - alert: ContainerCpuThrottled
+        expr: rate(container_cpu_cfs_throttled_periods_total{name=~"agrovesto-.+"}[5m]) / rate(container_cpu_cfs_periods_total{name=~"agrovesto-.+"}[5m]) * 100 > ${container_throttled_percent}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is being CPU throttled"
+          description: "{{ $value | printf \"%.0f\" }}% of the last 15 minutes were throttled periods. Raise its cpus limit or find the hot loop."
+
+  # The mssql-exporter container (serve mode of monitoring/scripts/
+  # mssql_metrics.py) being scraped at all is covered by TargetDown above;
+  # these rules evaluate what the collector reports about SQL Server itself.
+  - name: dev-database
+    rules:
+      # mssql_up is the collector's own verdict: 1 means the DMV queries ran,
+      # 0 means SQL Server refused or timed out while the exporter stayed up.
+      - alert: DevMssqlUnreachable
+        expr: mssql_up == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The dev SQL Server is not answering the metrics collector"
+          description: "mssql_up has been 0 for 10 minutes: the exporter runs but its DMV queries fail (docker logs agrovesto-mssql-exporter shows why)."
+
+      - alert: DevMssqlBlockedSessions
+        expr: mssql_blocked_sessions > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} sessions are blocked on the dev SQL Server"
+          description: "Blocking has persisted for 10 minutes. The Live SQL row of the dev-database dashboard shows the chains and the blocker's statement."
+
+      - alert: DevMssqlDeadlockSpike
+        expr: increase(mssql_deadlocks_total[30m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deadlocks in {{ $labels.db }} on the dev SQL Server"
+          description: "{{ $value }} deadlocks in the last 30 minutes."
+
+      - alert: DevMssqlLogSpaceHigh
+        expr: mssql_log_used_bytes / mssql_log_size_bytes > 0.90
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database {{ $labels.db }} has used over 90% of its transaction log"
+          description: "A full transaction log stalls every write. Look for a long-open transaction in the Live SQL row of the dev-database dashboard."

@@ -23,6 +23,11 @@ variable "project" {
 variable "environment" {
   type    = string
   default = "dev"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$", var.environment))
+    error_message = "environment must be a lowercase path-safe identifier (letters, numbers and internal hyphens)."
+  }
 }
 
 variable "domain_name" {
@@ -149,7 +154,31 @@ variable "apis" {
     host_port = number
     subdomain = string
     env       = optional(map(string), {})
+    # Serve this API's vhost over HTTPS at the Caddy TLS edge (port 80 redirects
+    # to https with 308). The checked-in dev configuration enables this for
+    # every API. False retains HTTP through the edge's :80 catch-all for explicit
+    # legacy configurations. nginx keeps routing the vhost either way.
+    tls_via_caddy = optional(bool, false)
+    # Blue/green deployment, deployed by the app repo's deploy.sh
+    # (--app <key>-api). Setting this routes the API's OWN vhost
+    # (<subdomain>.<domain_name>) to whichever slot container
+    # (<key>-api-blue / <key>-api-green) the pipeline's slot file names, and
+    # ships that slot file's blue default — no separate deployment hostname and
+    # no extra DNS record: the API's existing name serves the deploys. The
+    # slots are NOT compose services — the pipeline creates them — so the ports
+    # here only need to stay clear of the compose host ports and of every
+    # other slot pair. Leave null to keep the vhost routed to the compose
+    # service.
+    blue_green = optional(object({
+      blue_port  = number
+      green_port = number
+    }))
   }))
+
+  validation {
+    condition     = alltrue([for service in keys(var.apis) : can(regex("^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$", service))])
+    error_message = "API service keys must be lowercase, path-safe identifiers (letters, numbers and internal hyphens)."
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -208,15 +237,67 @@ variable "mssql_subdomain" {
 
 variable "vault" {
   type = object({
-    image     = optional(string, "hashicorp/vault:1.15")
-    host_port = optional(number, 8200)
-    subdomain = optional(string, "vault")
+    image        = optional(string, "hashicorp/vault:1.15")
+    host_port    = optional(number, 8200)
+    subdomain    = optional(string, "vault")
+    oidc_enabled = optional(bool, false) # opt-in: requires three OAuth credentials and a planned Vault restart
   })
   default = {
     image     = "hashicorp/vault:1.15"
     host_port = 8200
     subdomain = "vault"
   }
+}
+
+# Prepare a dedicated AWS KMS key and grant the EC2 instance role permission
+# to use it. Does NOT change the running Vault configuration or restart Vault.
+# A one-time operator-led Shamir -> awskms seal migration is required; see
+# docs/vault-auto-unseal.md. Keep this off until backup/key custody is agreed.
+variable "prepare_vault_kms_auto_unseal" {
+  description = "Provision dedicated AWS KMS key and EC2 role grants for a manual Vault seal migration; does not enable the seal on the host"
+  type        = bool
+  default     = false
+}
+
+# GitHub browser login uses Dex (GitHub OAuth -> OIDC -> Vault), NOT the Vault
+# GitHub PAT auth method. Set these as CI secrets, never in tfvars or source.
+variable "vault_github_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "vault_github_client_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "vault_oidc_client_secret" {
+  description = "Independent random secret for the Vault <-> Dex OIDC client"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# An OIDC apply changes the live Vault service's Compose definition and will
+# restart it. The operator must verify a root-volume backup and the CURRENT
+# seal's restart procedure: three Shamir shares before migration, or a tested
+# KMS auto-unseal after migration (with the recovery shares still in custody).
+variable "vault_oidc_restart_ack" {
+  description = "Explicit acknowledgement of Vault restart, verified storage backup (or fresh empty setup), and readiness to unseal under the current seal"
+  type        = bool
+  default     = false
+}
+
+variable "vault_github_organization" {
+  type    = string
+  default = "Agrovesto"
+}
+
+variable "vault_github_team_slug" {
+  description = "Only members of this GitHub team receive the scoped Vault KV operator policy"
+  type        = string
+  default     = "infrastructure"
 }
 
 # -----------------------------------------------------------------------------
@@ -295,7 +376,7 @@ variable "sonarqube" {
 
     Resource caps are small on purpose: SonarSource's own guidance is 4 GB of
     RAM for a small installation, and this host is a t3.large (8 GiB) that also
-    runs SQL Server, five APIs and the logging stack. See README for the
+    runs SQL Server, seven APIs and the logging stack. See README for the
     trade-off; raise instance_type before raising these numbers.
   EOT
 
@@ -310,6 +391,12 @@ variable "sonarqube" {
     # init-dbs.sql and included in the nightly backup loop without being listed
     # in var.mssql_databases as well (listing it there is harmless: the union is
     # deduplicated).
+    # "postgres" runs a dedicated postgres container (sonarqube-db) for
+    # SonarQube, with its data on the SonarQube EBS volume; "mssql" uses the
+    # shared SQL Server container. Postgres is SonarSource's recommended engine
+    # and the only way to restore a pg_dump from an existing SonarQube.
+    database_engine    = optional(string, "mssql")
+    postgres_image     = optional(string, "postgres:17-alpine")
     database_name      = optional(string, "sonar")
     database_collation = optional(string, "SQL_Latin1_General_CP1_CS_AS")
 
@@ -373,6 +460,11 @@ variable "sonarqube" {
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.sonarqube.subdomain))
     error_message = "sonarqube.subdomain must be a single DNS label (lowercase letters, digits and dashes)."
+  }
+
+  validation {
+    condition     = contains(["mssql", "postgres"], var.sonarqube.database_engine)
+    error_message = "sonarqube.database_engine must be \"mssql\" or \"postgres\"."
   }
 
   validation {
@@ -508,13 +600,14 @@ variable "amplify_apps" {
   type = map(object({
     name                  = optional(string) # defaults to the map key; set to an adopted app's real name
     platform              = optional(string, "WEB")
-    repository            = string
+    repository            = optional(string) # null creates a manual Amplify placeholder until a repo is ready
     branch                = optional(string, "main")
     subdomain             = string
     framework             = optional(string, "React")
     build_spec            = optional(string)
     environment_variables = optional(map(string), {})
     enable_auto_build     = optional(bool, true)
+    publish_dns           = optional(bool, true) # keep unbuilt placeholders out of DNS
   }))
 }
 
@@ -580,7 +673,7 @@ variable "extra_alias_records" {
 }
 
 # -----------------------------------------------------------------------------
-# Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+# Logging, metrics & traces on the host (Loki + Tempo + Alloy + Grafana + Prometheus)
 #
 # The whole stack runs as docker containers on the app EC2 instance: it is
 # rendered into user_data by dev/locals.tf, so there is no separate host, no
@@ -590,10 +683,11 @@ variable "extra_alias_records" {
 
 variable "logging" {
   description = <<-EOT
-    On-host logging and metrics: Loki stores the logs and answers LogQL, Alloy
-    collects them (docker containers + journald + an optional push endpoint),
-    Grafana visualises and queries them, and Prometheus/cAdvisor/node-exporter
-    add the host and per-container metrics the dashboards sit on top of.
+    On-host logging, metrics and traces: Loki stores the logs and answers
+    LogQL, Tempo keeps the OTLP traces, Alloy collects both (docker containers
+    + journald + an optional push endpoint + OTLP from the APIs), Grafana
+    visualises and queries them, and Prometheus/cAdvisor/node-exporter add the
+    host and per-container metrics the dashboards sit on top of.
   EOT
 
   type = object({
@@ -603,6 +697,7 @@ variable "logging" {
     # that works here works there. No :latest — a rebuilt container must not
     # change what the dev logs look like.
     loki_image          = optional(string, "grafana/loki:3.4.2")
+    tempo_image         = optional(string, "grafana/tempo:2.7.1")
     alloy_image         = optional(string, "grafana/alloy:v1.6.1")
     grafana_image       = optional(string, "grafana/grafana-oss:11.5.2")
     prometheus_image    = optional(string, "prom/prometheus:v3.1.0")
@@ -610,20 +705,37 @@ variable "logging" {
     node_exporter_image = optional(string, "prom/node-exporter:v1.9.1")
     alertmanager_image  = optional(string, "prom/alertmanager:v0.28.1")
 
+    # The SQL Server collector runs the very script the prod DMV task runs
+    # (monitoring/scripts/mssql_metrics.py, serve mode) on the same base image
+    # family prod pins; python-tds installs into it at container start, exactly
+    # like the prod task installs it at task start.
+    mssql_exporter_image = optional(string, "python:3.12-slim")
+
     # Published on 127.0.0.1 on the host only, and the security group has no
     # ingress for any of them: this is an SSH-tunnel or nginx-only surface.
-    loki_port          = optional(number, 3100)
-    alloy_port         = optional(number, 12345)
-    alloy_push_port    = optional(number, 3101)
-    grafana_port       = optional(number, 3000)
-    prometheus_port    = optional(number, 9090)
-    cadvisor_port      = optional(number, 8080)
-    node_exporter_port = optional(number, 9100)
-    alertmanager_port  = optional(number, 9093)
+    # The OTLP ports are Alloy's: apps on the compose network reach them as
+    # alloy:4317/4318 without the publish; the loopback mapping is for a host
+    # process or a tunnel.
+    loki_port            = optional(number, 3100)
+    tempo_port           = optional(number, 3200)
+    alloy_port           = optional(number, 12345)
+    alloy_push_port      = optional(number, 3101)
+    alloy_otlp_grpc_port = optional(number, 4317)
+    alloy_otlp_http_port = optional(number, 4318)
+    grafana_port         = optional(number, 3000)
+    prometheus_port      = optional(number, 9090)
+    cadvisor_port        = optional(number, 8080)
+    node_exporter_port   = optional(number, 9100)
+    alertmanager_port    = optional(number, 9093)
+
+    # The SQL Server collector is scraped by Prometheus on the compose network
+    # only — unlike every port above it is never published on the host, so it
+    # joins none of the loopback lists.
+    mssql_exporter_port = optional(number, 9399)
 
     # --- reaching the UI ------------------------------------------------------
     expose_via_nginx  = optional(bool, true)
-    grafana_subdomain = optional(string, "dev-logs")
+    grafana_subdomain = optional(string, "dev-grafana")
 
     # Sources allowed to reach the Grafana vhost through nginx. Empty means
     # 127.0.0.1 only — the UI is then reachable over an SSH tunnel and from
@@ -632,10 +744,13 @@ variable "logging" {
     allowed_cidrs = optional(list(string), [])
 
     # --- retention ------------------------------------------------------------
-    # Loki's compactor and Prometheus' TSDB delete on these numbers; the volume
-    # they live on is small on purpose (see volume_size_gb).
+    # Loki's compactor, Prometheus' TSDB and Tempo's compactor delete on these
+    # numbers; the volume they live on is small on purpose (see
+    # volume_size_gb). Traces keep the prod monitoring stack's 14 days so a
+    # query answered here is answered there.
     loki_retention_days       = optional(number, 14)
     system_retention_days     = optional(number, 5)
+    traces_retention_hours    = optional(number, 336)
     prometheus_retention      = optional(string, "14d")
     prometheus_retention_size = optional(string, "3GB")
 
@@ -665,23 +780,32 @@ variable "logging" {
 
     # Per-container caps, one entry per observability container. These are the
     # difference between "the logging stack is cheap to run" and "the box died".
+    # Tempo joins the list with a dev-sized cap; the compose file reads it with
+    # lookup() like Alertmanager, so an override written before it existed
+    # still renders.
     cpu_limits = optional(map(string), {
       loki          = "0.50"
+      tempo         = "0.25"
       alloy         = "0.25"
       grafana       = "0.50"
       prometheus    = "0.50"
       cadvisor      = "0.25"
       node-exporter = "0.10"
       alertmanager  = "0.10"
+      # The collector: a handful of DMV queries per scrape, mostly waiting.
+      mssql-exporter = "0.10"
     })
     memory_limits_mb = optional(map(number), {
       loki          = 384
+      tempo         = 384
       alloy         = 192
       grafana       = 192
       prometheus    = 384
       cadvisor      = 128
       node-exporter = 48
       alertmanager  = 64
+      # python-tds plus the interpreter; the queries return few rows.
+      mssql-exporter = 96
     })
 
     # --- the containers' own logs ---------------------------------------------
@@ -819,11 +943,25 @@ variable "alarm_cpu_percent" {
 }
 
 variable "alert_rules" {
-  description = "Thresholds for the dev host's Prometheus alert rules (Alertmanager -> SNS alerts topic)"
+  description = "Thresholds for the dev host's Prometheus and Loki alert rules (Alertmanager -> SNS alerts topic)"
   type = object({
+    # Host, from node_exporter.
     cpu_percent       = optional(number, 90)
     memory_percent    = optional(number, 90)
     disk_free_percent = optional(number, 10)
+
+    # Containers, from cAdvisor, each measured against its own compose limit:
+    # a container can be pinned at mem_limit while the host still has memory
+    # free, and that container is the one the kernel kills.
+    container_memory_percent    = optional(number, 90)
+    container_cpu_percent       = optional(number, 90)
+    container_throttled_percent = optional(number, 25)
+
+    # Log-based, from the Loki ruler: lines or responses per second, measured
+    # over log_rule_window.
+    log_error_rate  = optional(number, 1)
+    nginx_5xx_rate  = optional(number, 0.1)
+    log_rule_window = optional(string, "10m")
   })
   default = {}
 }
@@ -849,4 +987,33 @@ variable "s3_access_log_retention_days" {
   description = "Days to keep S3 server access logs for the dev buckets"
   type        = number
   default     = 90
+}
+# Transport security is independent of optional GitHub login credentials.
+variable "ui_https_enabled" {
+  description = "Serve exposed SonarQube and Grafana hosts through Caddy HTTPS even without OAuth credentials. Does not enable SSO or change nginx IP allowlists."
+  type        = bool
+  default     = false
+}
+
+variable "rabbitmq" {
+  description = "Single-node dev RabbitMQ. Password is provisioned out of band in SSM /<project>-<environment>/rabbitmq_password; never stored in host config. UI is HTTPS and deny-by-default."
+  type = object({
+    enabled         = optional(bool, false)
+    image           = optional(string, "rabbitmq:4.2-management-alpine")
+    subdomain       = optional(string, "dev-rabbitmq")
+    allowed_cidrs   = optional(list(string), [])
+    data_dir        = optional(string, "/data/rabbitmq")
+    memory_limit_mb = optional(number, 768)
+    cpu_limit       = optional(string, "0.50")
+  })
+  default = {}
+
+  validation {
+    condition     = alltrue([for cidr in var.rabbitmq.allowed_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")])
+    error_message = "RabbitMQ management requires explicit trusted CIDRs, not a world-open /0."
+  }
+  validation {
+    condition     = var.rabbitmq.memory_limit_mb >= 512
+    error_message = "RabbitMQ requires at least 512 MiB of container memory."
+  }
 }

@@ -54,12 +54,15 @@ override_data {
 }
 
 variables {
-  import_existing = false
+  ui_https_enabled   = false
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
 
   apis = {
     nomaos = {
@@ -67,13 +70,36 @@ variables {
       host_port = 5000
       subdomain = "dev-noma-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      blue_green = {
+        blue_port  = 5007
+        green_port = 5008
+      }
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5001
       subdomain = "dev-wallet-api"
       env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      blue_green = {
+        blue_port  = 5009
+        green_port = 5010
+      }
     }
+  }
+
+  # Mirrors terraform.auto.tfvars except for the engine: most runs below pin the
+  # SQL Server path; "sonar_on_postgres" covers the postgres one.
+  sonarqube = {
+    subdomain       = "sonar"
+    database_engine = "mssql"
+    allowed_cidrs   = ["0.0.0.0/0"]
+    es_java_opts    = "-Xms512m -Xmx1g"
+    web_java_opts   = "-Xms256m -Xmx512m"
+    ce_java_opts    = "-Xms256m -Xmx512m"
+    memory_limit_mb = 3072
+    cpu_limit       = "1.00"
+    volume_size_gb  = 20
+    scheme          = "http"
   }
 
   amplify_apps = {
@@ -146,11 +172,11 @@ run "sonar_database_idempotent" {
   command = plan
 
   variables {
-    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar", "nomaos"]
+    mssql_databases = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "sonar"]
   }
 
   assert {
-    condition     = length(local.mssql_all_databases) == 7 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
+    condition     = length(local.mssql_all_databases) == 6 && length(regexall("CREATE DATABASE \\[sonar\\]", local.init_sql)) == 1
     error_message = "Listing the sonar database in mssql_databases as well must not create it twice, or create it without the collation."
   }
 }
@@ -202,6 +228,23 @@ run "service_passwords" {
   }
 
   assert {
+    condition = (
+      aws_ssm_parameter.mssql_sa_password.name == "/${local.name}/mssql_sa_password" &&
+      aws_ssm_parameter.mssql_sa_password.type == "SecureString"
+    )
+    error_message = "SQL Server's sa password is a SecureString under this stack's path, read at boot instead of being rendered into user data."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.grafana_admin_password) == 1 &&
+      aws_ssm_parameter.grafana_admin_password[0].name == "/${local.name}/grafana_admin_password" &&
+      aws_ssm_parameter.grafana_admin_password[0].type == "SecureString"
+    )
+    error_message = "With logging on, Grafana's admin password is stored the same way and appended to compose/.env by the bootstrap."
+  }
+
+  assert {
     condition     = aws_kms_key.host_passwords.enable_key_rotation == true
     error_message = "Host passwords KMS key has key rotation enabled."
   }
@@ -212,8 +255,8 @@ run "service_passwords" {
   }
 
   assert {
-    condition     = length(local.host_password_param_arns) == 10
-    error_message = "The instance role is scoped to the host password and SSO parameters: SA, Grafana, SonarQube, Redis, plus GitHub credentials for SonarQube and Grafana."
+    condition     = length(local.host_password_param_arns) == 14
+    error_message = "The instance role is scoped to SA, Grafana, SonarQube, Redis, and the GitHub SSO parameters for SonarQube, Grafana, and Vault (three additional Vault parameters)."
   }
 
   assert {
@@ -317,6 +360,29 @@ run "compose_persistence" {
 }
 
 # -----------------------------------------------------------------------------
+# nginx: Vault stays internal even when the API vhosts are publicly routable
+# -----------------------------------------------------------------------------
+
+run "vault_nginx_internal" {
+  command = plan
+
+  variables {
+    vault = { subdomain = "dev-vault" }
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name ${var.vault.subdomain}.${var.domain_name};") &&
+      strcontains(local.nginx_conf, "allow 127.0.0.1;\n    allow 172.16.0.0/12;\n    deny all;") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$vault_backend;") &&
+      strcontains(local.docker_compose, "127.0.0.1:${var.vault.host_port}:8200") &&
+      !contains(keys(local.a_records), var.vault.subdomain)
+    )
+    error_message = "Vault must be proxied through an internal-only nginx vhost, remain loopback-published, and have no public DNS."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # nginx: the sonar vhost, IP-gated like Grafana's
 # -----------------------------------------------------------------------------
 
@@ -333,8 +399,12 @@ run "nginx_vhost" {
   }
 
   assert {
-    condition     = strcontains(local.nginx_conf, "proxy_pass http://sonarqube:${local.sonarqube_nginx.port};")
-    error_message = "The vhost proxies to the container port on the compose network, not to the published host port."
+    condition = (
+      strcontains(local.nginx_conf, "set $sonar_backend sonarqube:${local.sonarqube_nginx.port};") &&
+      strcontains(local.nginx_conf, "proxy_pass http://$sonar_backend;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://sonarqube:")
+    )
+    error_message = "The vhost proxies to the container port on the compose network, resolved at request time through a variable: an absent SonarQube must 502 its vhost, never keep nginx from starting."
   }
 
   assert {
@@ -354,7 +424,91 @@ run "nginx_vhost" {
 
   assert {
     condition     = strcontains(local.docker_compose, "      - sonarqube\n")
-    error_message = "nginx depends_on sonarqube: nginx resolves a static proxy_pass hostname at start-up, so an absent container fails nginx instead of 502ing."
+    error_message = "nginx depends_on sonarqube for start ordering on a cold boot; the vhost resolves at request time, so a later SonarQube restart only 502s its vhost."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# nginx: the NomaOS API blue/green vhosts and the slot files they include
+#
+# Terraform owns the vhosts and ships the default slot (blue) per API; the
+# deploy pipeline owns /etc/nginx/upstreams and rewrites each file to flip
+# slots. What has to hold here is the wiring: the include, one vhost and one
+# shipped slot file per opted-in API, and the bind mount that puts the files
+# where the wildcard include reads them.
+# -----------------------------------------------------------------------------
+
+run "nomaos_blue_green_vhost" {
+  command = plan
+
+  assert {
+    condition     = length(local.blue_green_apis) == 2
+    error_message = "The fixture opts in nomaos and wallet; both must be picked up as blue/green APIs."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "include /etc/nginx/upstreams/*.conf;") &&
+      strcontains(local.nginx_conf, format("server_name %s.%s;", var.apis.nomaos.subdomain, var.domain_name)) &&
+      strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", "nomaos_api"))
+    )
+    error_message = "The blue/green vhost must be the API's own hostname, include the upstream directory, and proxy to the slot through the map variable so DNS is resolved at request time."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.nginx_conf, "dev-api-test") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://nomaos:5000;") &&
+      !strcontains(local.nginx_conf, "proxy_pass http://wallet:5001;")
+    )
+    error_message = "An opted-in API has no separate deployment subdomain and no direct vhost to the compose service: its one hostname routes to the slots."
+  }
+
+  assert {
+    condition = alltrue([
+      for bg in local.blue_green_apis :
+      strcontains(local.nginx_conf, format("location /health {\n      proxy_pass http://$%s_backend;", bg.upstream_name))
+    ])
+    error_message = "Every blue/green health location must open a block before proxy_pass; a missing brace prevents the entire nginx edge from starting."
+  }
+
+  assert {
+    condition     = strcontains(local.nginx_conf, "resolver 127.0.0.11")
+    error_message = "Resolving the slot at request time requires Docker's embedded DNS resolver in nginx.conf; without it the variable proxy_pass cannot resolve."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content, "map '' $nomaos_api_backend {") &&
+      strcontains(local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content, "default nomaos-api-blue:5007;") &&
+      local.host_config_files["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content &&
+      aws_s3_object.host_config["nginx/nomaos_api-active.conf"].content == local.blue_green_slot_confs["nginx/nomaos_api-active.conf"].content
+    )
+    error_message = "The default blue slot must be rendered as the map the include expects and uploaded under nginx/nomaos_api-active.conf with the expected backend."
+  }
+
+  # Every opted-in API needs its vhost, its backend variable and its own
+  # shipped slot file — the nomaos asserts above pin the concrete nomaos
+  # values; this one proves the pattern generalised to all of them.
+  assert {
+    condition = alltrue([
+      for bg in local.blue_green_apis :
+      strcontains(local.nginx_conf, "server_name ${bg.subdomain}.${var.domain_name};") &&
+      strcontains(local.nginx_conf, format("proxy_pass http://$%s_backend;", bg.upstream_name)) &&
+      aws_s3_object.host_config["nginx/${bg.upstream_name}-active.conf"].content == local.blue_green_slot_confs["nginx/${bg.upstream_name}-active.conf"].content
+    ])
+    error_message = "Every blue/green API must have its vhost, its backend variable and its shipped default slot file."
+  }
+  assert {
+    condition     = strcontains(local.blue_green_slot_confs["nginx/wallet_api-active.conf"].content, "default wallet-api-blue:5009;")
+    error_message = "Each API's slot file must name its own containers and its own port pair — the pairs never overlap."
+  }
+  assert {
+    condition = strcontains(
+      local.docker_compose,
+      "/opt/nomaos/nginx/upstreams:/etc/nginx/upstreams"
+    )
+    error_message = "The nginx container must mount the Nomaos upstream directory at the path used by the wildcard include."
   }
 }
 
@@ -391,9 +545,9 @@ run "github_sso_uses_https_and_ssm_credentials" {
   assert {
     condition = alltrue([
       local.sonar_web_baseurl == "https://sonar.nomaos.com",
-      local.logging_runtime.grafana_root_url == "https://dev-logs.nomaos.com",
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com",
       strcontains(local.caddyfile, "sonar.nomaos.com"),
-      strcontains(local.caddyfile, "dev-logs.nomaos.com"),
+      strcontains(local.caddyfile, "dev-grafana.nomaos.com"),
       strcontains(local.docker_compose, "container_name: agrovesto-edge"),
       strcontains(local.docker_compose, "80:80"),
       strcontains(local.docker_compose, "443:443"),
@@ -440,13 +594,12 @@ run "github_sso_uses_https_and_ssm_credentials" {
 
   assert {
     condition = (
-      length(aws_s3_object.host_config) == 14 &&
+      length(aws_s3_object.host_config) == 28 &&
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script."
+    error_message = "SSO ships the Caddy config and SonarQube team-role bootstrap script alongside five core files, five per-service Vault access assets, and sixteen logging assets."
   }
-
   assert {
     condition = alltrue([
       strcontains(aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content, "Agrovesto/Infrastructure"),
@@ -462,10 +615,65 @@ run "github_sso_uses_https_and_ssm_credentials" {
       strcontains(local.nginx_conf, "real_ip_header X-Forwarded-For"),
       strcontains(local.nginx_conf, "geo $realip_remote_addr $trusted_reverse_proxy"),
       strcontains(local.nginx_conf, "X-Forwarded-Proto $forwarded_proto"),
-      aws_instance.app.user_data_replace_on_change,
+      !aws_instance.app.user_data_replace_on_change,
       strcontains(file("${path.module}/user_data.sh.tftpl"), "sso_credential_versions"),
     ])
-    error_message = "nginx must trust forwarded client data only from Caddy, and SSM credential rotation must replace the host."
+    error_message = "nginx must trust forwarded client data only from Caddy, and the host must not be replaced on user_data changes (config is refreshed via SSM)."
+  }
+}
+
+# The TLS edge is not only for SSO callbacks: any API vhost can opt into HTTPS
+# with apis.<name>.tls_via_caddy (the agx API does). Dex belongs to the Vault
+# OIDC feature — "vault_oidc_staged" above pins its Caddy route — so without
+# Vault OIDC neither Dex nor the Vault host appears on the edge.
+run "caddy_edge_serves_opted_in_api_hosts" {
+  command = plan
+
+  variables {
+    apis = {
+      wallet = {
+        image     = "public.ecr.aws/nginx/nginx:alpine"
+        host_port = 5001
+        subdomain = "dev-wallet-api"
+        env       = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+      }
+      agx = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5006
+        subdomain     = "dev-agx-api"
+        env           = { REDIS_HOST = "redis", REDIS_PORT = "6379" }
+        tls_via_caddy = true
+      }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      local.tls_proxy_enabled,
+      local.api_tls_domains == ["dev-agx-api.nomaos.com"],
+      strcontains(local.caddyfile, "dev-agx-api.nomaos.com"),
+      strcontains(local.docker_compose, "container_name: agrovesto-edge"),
+      strcontains(local.docker_compose, "80:80"),
+      strcontains(local.docker_compose, "443:443"),
+    ])
+    error_message = "The Caddy TLS edge must serve the agx API over HTTPS."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
+      !strcontains(local.caddyfile, "dev-vault.nomaos.com")
+    )
+    error_message = "Dex is Vault's login broker: its Caddy route ships with Vault OIDC (vault_oidc_enabled), not with the edge at large."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name dev-agx-api.nomaos.com;") &&
+      strcontains(local.nginx_conf, "proxy_pass http://agx:5006;") &&
+      !strcontains(local.caddyfile, "dev-wallet-api.nomaos.com")
+    )
+    error_message = "Caddy stays a narrow TLS edge: nginx keeps routing the API vhosts, and only opted-in hosts move to HTTPS."
   }
 }
 
@@ -543,13 +751,13 @@ run "disabled" {
   }
 
   assert {
-    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 6
-    error_message = "Disabling SonarQube removes its database from the bootstrap; the six application databases are untouched."
+    condition     = !strcontains(local.init_sql, "COLLATE") && !contains(local.mssql_all_databases, "sonar") && length(local.mssql_all_databases) == 5
+    error_message = "Disabling SonarQube removes its database from the bootstrap; the five application databases are untouched."
   }
 
   assert {
-    condition     = length(regexall("mem_limit:", local.docker_compose)) == 7
-    error_message = "Only the seven observability containers remain capped."
+    condition     = length(regexall("mem_limit:", local.docker_compose)) == 9
+    error_message = "Only the eight observability containers remain capped."
   }
 }
 
@@ -575,4 +783,350 @@ run "rejects_partial_grafana_github_credentials" {
   }
 
   expect_failures = [aws_instance.app]
+}
+run "sonar_on_postgres" {
+  command = plan
+
+  variables {
+    sonarqube = {
+      database_engine = "postgres"
+      allowed_cidrs   = ["0.0.0.0/0"]
+    }
+  }
+
+  assert {
+    condition     = local.sonar_jdbc_url == "jdbc:postgresql://sonarqube-db:5432/sonar"
+    error_message = "With database_engine = postgres SonarQube must use its own postgres container."
+  }
+
+  assert {
+    condition     = !contains(local.mssql_all_databases, "sonar") && !strcontains(local.init_sql, "COLLATE")
+    error_message = "The sonar database must not be created in SQL Server when SonarQube runs on postgres."
+  }
+
+  assert {
+    condition     = strcontains(local.docker_compose, "sonarqube-db:") && strcontains(local.docker_compose, "POSTGRES_PASSWORD: \"$${SONAR_DB_PASSWORD}\"")
+    error_message = "The compose project must include the sonarqube-db service with the password from .env."
+  }
+}
+
+# Provisioning the KMS prerequisite does not perform the seal migration.
+# The module default is false, although terraform.auto.tfvars opts dev in.
+run "vault_kms_preparation_explicitly_disabled" {
+  command = plan
+
+  variables {
+    prepare_vault_kms_auto_unseal = false
+  }
+
+  assert {
+    condition     = length(aws_kms_key.vault_unseal) == 0 && length(aws_kms_alias.vault_unseal) == 0 && output.vault_auto_unseal_key_arn == ""
+    error_message = "Plans with Vault KMS preparation disabled must not create a Vault KMS key."
+  }
+}
+
+run "vault_kms_preparation_does_not_restart_vault" {
+  command = plan
+
+  variables {
+    prepare_vault_kms_auto_unseal = true
+  }
+
+  assert {
+    condition = (
+      length(aws_kms_key.vault_unseal) == 1 &&
+      length(aws_kms_alias.vault_unseal) == 1 &&
+      aws_kms_key.vault_unseal[0].enable_key_rotation &&
+      aws_kms_key.vault_unseal[0].deletion_window_in_days == 30
+    )
+    error_message = "The opt-in preparation creates one dedicated rotating KMS key and alias."
+  }
+
+  assert {
+    condition = (
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
+      !strcontains(local.docker_compose, "seal \"awskms\"") &&
+      !contains(keys(local.host_config_files), "vault/config/vault.hcl") &&
+      !strcontains(file("${path.module}/user_data.sh.tftpl"), "operator unseal -migrate")
+    )
+    error_message = "Preparing the key must not rewrite Vault config, restart Vault, or attempt a seal migration."
+  }
+}
+
+run "vault_existing_file_backend" {
+  command = plan
+
+  assert {
+    condition = (
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
+      (strcontains(local.docker_compose, "source: /data/vault/config/vault.hcl") && strcontains(local.docker_compose, "target: /vault/config/vault.hcl")) &&
+      !strcontains(local.docker_compose, "server -dev") &&
+      !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID")
+    )
+    error_message = "Default Compose must preserve the initialized file-storage Vault from the latest dev branch."
+  }
+}
+
+# OIDC is opt-in on the initialized file-storage Vault, not a fresh Raft server.
+# Credential strings must never enter S3/user_data.
+run "vault_oidc_staged" {
+  command = plan
+
+  variables {
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack     = true
+    vault_github_client_id     = "test-client-id"
+    vault_github_client_secret = "test-github-secret"
+    vault_oidc_client_secret   = "test-oidc-secret"
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.vault_github_client_secret) == 1 &&
+      yamldecode(local.docker_compose).services.vault.command == "server" &&
+      (strcontains(local.docker_compose, "source: /data/vault/data") && strcontains(local.docker_compose, "target: /vault/file")) &&
+      strcontains(local.docker_compose, "agrovesto-dex") &&
+      strcontains(local.caddyfile, "reverse_proxy dex:5556") &&
+      strcontains(local.caddyfile, "dev-vault.nomaos.com") &&
+      output.vault_browser_login_url == "https://dev-vault.nomaos.com/ui/vault/auth?with=oidc" &&
+      strcontains(local.nginx_conf, "allow all;") &&
+      strcontains(local.nginx_conf, "limit_except GET { deny all; }") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "issuer: https://dev-vault.nomaos.com/dex") &&
+      strcontains(local.host_config_files["vault/dex.yml"].content, "redirectURI: https://dev-vault.nomaos.com/dex/callback") &&
+      # The association's commands depend on S3 object etags and are unknown
+      # during a mocked plan; check the selected command's source instead.
+      strcontains(file("${path.module}/ec2.tf"), "bash /opt/agrovesto/scripts/refresh-vault-oidc.sh") &&
+      strcontains(local.host_config_files["scripts/refresh-vault-oidc.sh"].content, "VAULT_OIDC_CLIENT_SECRET")
+    )
+    error_message = "OIDC reuses the initialized file-storage Vault, with Dex, HTTPS and the Vault nginx route."
+  }
+
+  assert {
+    # The association's commands are etag-dependent and unknown during a
+    # mocked plan, so pin the source: the OIDC refresh branch bypasses
+    # agrovesto-sync.service and runs compose directly, so it must seed the
+    # blue/green slot files itself — between refresh-vault-oidc.sh and the
+    # compose up. An API opted in after the host booted otherwise leaves
+    # nginx.conf including an undefined $<app>_api_backend map, and nginx
+    # exits at config load (the 2026-10-12 whole-edge outage).
+    condition = can(regex(
+      "refresh-vault-oidc\\.sh\",\\n[\\s\\S]*?_api-active\\.conf[\\s\\S]*?up -d --remove-orphans",
+      file("${path.module}/ec2.tf"),
+    ))
+    error_message = "The Vault-OIDC refresh branch must seed absent slot files from nginx/*_api-active.conf before compose up, like agrovesto-sync.service does."
+  }
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.vault_github_client_id) == 1 &&
+      length(aws_ssm_parameter.vault_oidc_client_secret) == 1 &&
+      alltrue([
+        for p in [
+          aws_ssm_parameter.vault_github_client_id[0],
+          aws_ssm_parameter.vault_github_client_secret[0],
+          aws_ssm_parameter.vault_oidc_client_secret[0],
+        ] :
+        p.type == "SecureString" && startswith(p.name, "/${local.name}/vault_")
+      ])
+    )
+    error_message = "Each Vault OIDC credential is its own SecureString under this stack's path; the host pulls them from SSM at boot."
+  }
+
+  assert {
+    condition = (
+      !strcontains(local.docker_compose, "server -dev") &&
+      !strcontains(local.docker_compose, "VAULT_DEV_ROOT_TOKEN_ID") &&
+      !strcontains(local.docker_compose, "test-github-secret") &&
+      !strcontains(local.docker_compose, "test-oidc-secret") &&
+      !strcontains(local.host_config_files["vault/dex.yml"].content, "test-github-secret") &&
+      !strcontains(local.host_config_files["scripts/configure-vault-oidc.sh"].content, "test-oidc-secret")
+    )
+    error_message = "Existing Vault has no dev root token; secrets go to SSM and host .env, not S3."
+  }
+}
+
+run "vault_oidc_requires_backup_and_unseal_ack" {
+  command = plan
+
+  variables {
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_github_client_id     = "test-client-id"
+    vault_github_client_secret = "test-github-secret"
+    vault_oidc_client_secret   = "test-oidc-secret"
+    # Override TF_VAR_vault_oidc_restart_ack from an operator's local shell.
+    vault_oidc_restart_ack = false
+  }
+
+  expect_failures = [aws_instance.app]
+}
+
+run "vault_oidc_missing_credentials_fails_closed" {
+  command = plan
+  variables {
+    vault                      = { subdomain = "dev-vault", oidc_enabled = true }
+    vault_oidc_restart_ack     = true
+    vault_github_client_id     = ""
+    vault_github_client_secret = ""
+    vault_oidc_client_secret   = ""
+  }
+  expect_failures = [aws_instance.app]
+}
+
+run "ui_https_without_oauth" {
+  command = plan
+  variables {
+    ui_https_enabled               = true
+    sonarqube                      = { enabled = true, expose_via_nginx = true }
+    logging                        = { enabled = true, expose_via_nginx = true, grafana_subdomain = "dev-grafana" }
+    grafana_github_client_id       = ""
+    grafana_github_client_secret   = ""
+    sonarqube_github_client_id     = ""
+    sonarqube_github_client_secret = ""
+    sonarqube_github_app_id        = ""
+    sonarqube_github_private_key   = ""
+  }
+  assert {
+    condition = (
+      local.tls_proxy_enabled &&
+      !local.grafana_github_sso_enabled && !local.sonarqube_github_sso_enabled &&
+      contains(local.github_sso_proxy.domains, "sonar.nomaos.com") &&
+      contains(local.github_sso_proxy.domains, "dev-grafana.nomaos.com") &&
+      local.sonar_web_baseurl == "https://sonar.nomaos.com" &&
+      local.logging_runtime.grafana_root_url == "https://dev-grafana.nomaos.com"
+    )
+    error_message = "UI HTTPS must not depend on optional OAuth credentials."
+  }
+  assert {
+    condition     = yamldecode(local.docker_compose).services.edge.labels["com.agrovesto.caddy-config-sha256"] == sha256(local.caddyfile)
+    error_message = "Caddy must be recreated when its rendered config changes."
+  }
+}
+
+run "rabbitmq_private_broker_https_management" {
+  command = plan
+  variables {
+    rabbitmq = {
+      enabled       = true
+      allowed_cidrs = ["203.0.113.10/32"]
+    }
+  }
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "hostname: rabbitmq") &&
+      strcontains(local.docker_compose, "RABBITMQ_NODENAME: rabbit@rabbitmq") &&
+      strcontains(local.docker_compose, "- /data/rabbitmq:/var/lib/rabbitmq") &&
+      strcontains(local.docker_compose, "- nomaos_data") &&
+      !strcontains(local.docker_compose, ":5672:5672") &&
+      !strcontains(local.docker_compose, ":15672:15672")
+    )
+    error_message = "RabbitMQ must have stable identity, persisted data and private networking without published ports."
+  }
+  assert {
+    condition = (
+      strcontains(local.nginx_conf, "server_name dev-rabbitmq.nomaos.com;") &&
+      strcontains(local.nginx_conf, "allow 203.0.113.10/32;") &&
+      strcontains(local.nginx_conf, "set $rabbitmq_backend rabbitmq:15672;") &&
+      contains(local.github_sso_proxy.domains, "dev-rabbitmq.nomaos.com") &&
+      local.tls_proxy_enabled &&
+      contains(keys(local.a_records), "dev-rabbitmq")
+    )
+    error_message = "RabbitMQ management must use the HTTPS edge, allowlisted nginx vhost and DNS record wiring."
+  }
+}
+
+run "rabbitmq_disabled" {
+  command = plan
+  variables {
+    rabbitmq = { enabled = false }
+  }
+  assert {
+    condition = (
+      !strcontains(local.docker_compose, "agrovesto-rabbitmq") &&
+      !strcontains(local.nginx_conf, "rabbitmq_backend") &&
+      !contains(local.github_sso_proxy.domains, "dev-rabbitmq.nomaos.com")
+    )
+    error_message = "Disabling RabbitMQ must remove the broker and management route."
+  }
+}
+
+run "caddy_https_covers_all_enabled_api_hosts" {
+  command = plan
+  variables {
+    apis = {
+      nomaos = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5000
+        subdomain     = "dev-noma-api"
+        tls_via_caddy = true
+        blue_green = {
+          blue_port  = 5007
+          green_port = 5008
+        }
+      }
+      wallet = {
+        image         = "public.ecr.aws/nginx/nginx:alpine"
+        host_port     = 5001
+        subdomain     = "dev-wallet-api"
+        tls_via_caddy = true
+      }
+    }
+  }
+  assert {
+    condition = (
+      local.tls_proxy_enabled &&
+      length(local.api_tls_domains) == length(var.apis) &&
+      alltrue([for api in var.apis :
+        contains(local.github_sso_proxy.domains, "${api.subdomain}.${var.domain_name}") &&
+        strcontains(local.caddyfile, "${api.subdomain}.${var.domain_name}") &&
+        strcontains(local.nginx_conf, "server_name ${api.subdomain}.${var.domain_name};")
+      ]) &&
+      strcontains(local.caddyfile, "redir @tls_hosts https://{host}{uri} 308")
+    )
+    error_message = "Every TLS-enabled API, blue/green or direct, must have a Caddy certificate hostname, HTTP redirect and nginx route."
+  }
+}
+
+run "per_service_vault_policies_and_env_files" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for service in keys(var.apis) :
+      contains(keys(local.host_config_files), "vault/service-policies/${service}.hcl") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\"") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\" {\n  capabilities = [\"read\"]") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings/*\" {\n  capabilities = [\"read\"]") &&
+      !strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"kv/data/${service}/staging/appsettings\" {\n  capabilities = [\"update\"]") &&
+      !strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "\"list\"") &&
+      strcontains(local.host_config_files["vault/service-policies/${service}.hcl"].content, "path \"auth/token/renew-self\"") &&
+      strcontains(local.docker_compose, "path: /data/vault/services/${service}.env")
+    ])
+    error_message = "Each API must receive a unique read-only KV v2 policy and a matching optional host env file."
+  }
+
+  assert {
+    condition = (
+      contains(keys(local.host_config_files), "scripts/configure-vault-services.sh") &&
+      contains(keys(local.host_config_files), "scripts/write-vault-service-secret.sh") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "auth/approle/role/") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "secret_id_ttl=8760h") &&
+      strcontains(local.host_config_files["scripts/configure-vault-services.sh"].content, "secret-id-accessor/destroy") &&
+      strcontains(local.host_config_files["scripts/write-vault-service-secret.sh"].content, "vault write -format=json") &&
+      !strcontains(local.host_config_files["scripts/write-vault-service-secret.sh"].content, nonsensitive(var.mssql_sa_password))
+    )
+    error_message = "The host scripts must set up per-service AppRoles, rotate SecretIDs, and accept payloads without placing secrets in rendered config."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.docker_compose, "required: false") &&
+      strcontains(local.host_config_files["scripts/connect-vault-network.sh"].content, "docker network connect --alias vault") &&
+      strcontains(file("${path.module}/user_data.sh.tftpl"), "connect-vault-network.sh") &&
+      strcontains(file("${path.module}/prepare-vault.sh.tftpl"), "connect-vault-network.sh") &&
+      strcontains(file("${path.module}/ec2.tf"), "bash /opt/agrovesto/scripts/connect-vault-network.sh")
+    )
+    error_message = "Vault must gain an internal DNS route to blue/green APIs after Compose starts, without changing its Compose network definition."
+  }
 }

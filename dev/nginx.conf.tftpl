@@ -12,20 +12,18 @@
 events {
   worker_connections 1024;
 }
-
 http {
   resolver 127.0.0.11 valid=10s ipv6=off;
-
-  # When GitHub SSO is configured, Caddy terminates TLS and forwards to this
+  # When the Caddy TLS edge runs (GitHub SSO, Vault OIDC, or an API vhost with
+  # apis.<name>.tls_via_caddy), Caddy terminates TLS and forwards to this
   # container over the private compose network. Trust proxy headers only from
-  # RFC1918 addresses so a direct internet client cannot spoof its source IP and
-  # bypass the Grafana/SonarQube allow lists below.
+  # RFC1918 addresses so a direct internet client cannot spoof its source IP
+  # and bypass the Grafana/SonarQube/Vault allow lists below.
   set_real_ip_from 10.0.0.0/8;
   set_real_ip_from 172.16.0.0/12;
   set_real_ip_from 192.168.0.0/16;
   real_ip_header X-Forwarded-For;
   real_ip_recursive on;
-
   # Preserve the browser-facing scheme after TLS termination. Only a private
   # compose-network peer may supply it; a direct client-provided header is
   # ignored. $realip_remote_addr retains Caddy's address after $remote_addr is
@@ -36,12 +34,10 @@ http {
     172.16.0.0/12  1;
     192.168.0.0/16 1;
   }
-
   map "$trusted_reverse_proxy:$http_x_forwarded_proto" $forwarded_proto {
     default          $scheme;
     ~^1:(https?)$    $1;
   }
-
   # One JSON object per request, so the access log is queryable instead of
   # grep fodder: status/uri/method/request_time become Loki labels or filters.
   log_format agrovesto_json escape=json
@@ -59,22 +55,18 @@ http {
     '"body_bytes":"$body_bytes_sent",'
     '"remote_addr":"$remote_addr",'
     '"http_user_agent":"$http_user_agent"}';
-
   access_log /var/log/nginx/access.log agrovesto_json;
-  error_log  /var/log/nginx/error.log  warn;
-
+  error_log /var/log/nginx/error.log warn;
   # Grafana opens websockets (live streaming, alerting); everything else is
   # ordinary request/response.
   map $http_upgrade $connection_upgrade {
     default upgrade;
     ''      close;
   }
-
 %{ for u in upstreams ~}
   server {
     listen 80;
     server_name ${u.subdomain}.${domain};
-
     location / {
       proxy_pass http://${u.name}:${u.port};
       proxy_http_version 1.1;
@@ -84,8 +76,137 @@ http {
       proxy_set_header X-Forwarded-Proto $forwarded_proto;
     }
   }
-
 %{ endfor ~}
+  # ── NomaOS APIs — blue/green deployments ───────────────────────────────────
+  # Terraform ships one default slot file (blue) per API as
+  # nginx/<app>_api-active.conf in the config bucket, named for the deploy
+  # pipeline's UPSTREAM_NAME. Boot copies each to
+  # /opt/nomaos/nginx/upstreams/<app>_api.conf when that file does not exist
+  # yet (see user_data.sh.tftpl), and the compose file bind-mounts the
+  # directory at the path the include below reads. The deploy pipeline owns
+  # each file from then on: rewriting its default target flips slots, followed
+  # by an nginx reload.
+  #
+  # Each file must express the active slot as a single map over the empty
+  # string — for the nomaos API, say:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-blue:5007;
+  #   }
+  # or, with green active:
+  #   map '' $nomaos_api_backend {
+  #     default nomaos-api-green:5008;
+  #   }
+  # The proxy_pass directives in the vhosts below use those variables, so
+  # Docker's DNS (the resolver at the top of this file) resolves the slot
+  # hostname at request time and caches it for 10s. A slot container that is
+  # down or absent then only 502s its own vhost; a static `upstream` block
+  # would instead make nginx resolve the name once at start-up and exit with
+  # "host not found in upstream" — taking the whole edge down, as the nomaos
+  # green-slot outage of 2026-10-09 did. See docs/blue-green-deployments.md.
+  include /etc/nginx/upstreams/*.conf;
+
+%{ for bg in blue_green_apis ~}
+  # ── ${bg.key} API (deploy.sh --app ${bg.app_name}) — blue/green on its own hostname
+  server {
+    listen 80;
+    server_name ${bg.subdomain}.${domain};
+
+    location = /__edge_health {
+      access_log off;
+      return 200 "edge-ok\n";
+    }
+
+    # The backend variable comes from the included slot file above (its name
+    # is this API's upstream: $<key>_api_backend). With a variable in
+    # proxy_pass nginx resolves it per request (resolver above) instead of at
+    # start-up, so a missing slot is 502, not a crash. format() composes the
+    # literal-$ + variable name, which a template cannot spell directly.
+
+    location /health {
+      proxy_pass ${format("http://$%s_backend", bg.upstream_name)};
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 10s;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location / {
+      proxy_pass ${format("http://$%s_backend", bg.upstream_name)};
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header X-Forwarded-Host $host;
+    }
+  }
+%{ endfor ~}
+%{ if rabbitmq.enabled ~}
+  # HTTPS is terminated by Caddy. Real client IP restoration above makes this
+  # allowlist apply to the browser, not to the Caddy container.
+  server {
+    listen 80;
+    server_name ${rabbitmq.subdomain}.${domain};
+    allow 127.0.0.1;
+%{ for cidr in rabbitmq.allowed_cidrs ~}
+    allow ${cidr};
+%{ endfor ~}
+    deny all;
+    location / {
+      set $rabbitmq_backend rabbitmq:15672;
+      proxy_pass http://$rabbitmq_backend;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_read_timeout 60s;
+    }
+  }
+%{ endif ~}
+  # ── Vault: dev-mode secrets UI/API ──────────────────────────────────────────
+  # Before OIDC this remains internal even if DNS points here: do not send
+  # Vault tokens over public HTTP. With OIDC enabled, Caddy owns public 80/443
+  # and enforces HTTPS before proxying to nginx (and serves Dex at /dex).
+  server {
+    listen 80;
+    server_name ${vault.subdomain}.${domain};
+%{ if vault.oidc_enabled ~}
+    # Caddy owns public 80/443 and enforces HTTPS for this host. This nginx
+    # server is reachable only on the private Compose network in OIDC mode.
+    allow all;
+%{ else ~}
+    allow 127.0.0.1;
+    allow 172.16.0.0/12;
+    deny all;
+%{ endif ~}
+    # Initialization is a private, one-time operator action through Docker/SSM.
+    # Never allow someone on the public HTTPS endpoint to initialize fresh Vault.
+    location ~ ^/v1/sys/init/?$ {
+      limit_except GET { deny all; }
+      set $vault_backend vault:8200;
+      proxy_pass http://$vault_backend;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    }
+    location / {
+      # Resolve at request time so a Vault container restart does not leave
+      # nginx pinned to a stale Docker IP.
+      set $vault_backend vault:8200;
+      proxy_pass http://$vault_backend;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+    }
+  }
 %{ if grafana.enabled ~}
   # ── Grafana: the logging UI ───────────────────────────────────────────────
   # Served here so there is one open port on the box, but gated by source IP:
@@ -98,14 +219,19 @@ http {
   server {
     listen 80;
     server_name ${grafana.subdomain}.${domain};
-
 %{ for cidr in grafana.cidrs ~}
     allow ${cidr};
 %{ endfor ~}
     deny all;
-
     location / {
-      proxy_pass http://grafana:${grafana.port};  # the container port, not the published one
+      # Variable proxy_pass like the vault vhost: nginx resolves the name
+      # through the Docker resolver at request time instead of once at
+      # start-up, so a Grafana that is recreating or gone only 502s this
+      # vhost. A literal hostname in proxy_pass is a start-up dependency — an
+      # absent grafana container kept the whole edge from starting ("host not
+      # found in upstream", 2026-10-12).
+      set $grafana_backend grafana:${grafana.port};
+      proxy_pass http://$grafana_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
@@ -113,13 +239,11 @@ http {
       proxy_set_header X-Forwarded-Proto $forwarded_proto;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
-      # A LogQL query over a week of logs is not fast; do not kill it at 60s.
       proxy_read_timeout 300s;
       proxy_send_timeout 300s;
       client_max_body_size 10m;
     }
   }
-
 %{ endif ~}
 %{ if sonar.enabled ~}
   # ── SonarQube: the code-quality UI and the scanner endpoint ───────────────
@@ -127,9 +251,6 @@ http {
   # source IP, with the application's own login behind it — with one difference
   # that matters: this vhost is also where the CI scanner POSTs its reports, so
   # `sonarqube.allowed_cidrs` has to admit the runners as well as the humans.
-  # GitHub-hosted runner addresses are not a fixed set, so the workable options
-  # are a self-hosted runner inside the allow list, an allowlisted NAT egress, or
-  # (not recommended) 0.0.0.0/0 with SonarQube's own auth as the only gate.
   #
   # nginx still listens on the private HTTP hop. When GitHub SSO is configured,
   # Caddy owns public ports 80/443, obtains the certificate and forwards this
@@ -138,14 +259,17 @@ http {
   server {
     listen 80;
     server_name ${sonar.subdomain}.${domain};
-
 %{ for cidr in sonar.cidrs ~}
     allow ${cidr};
 %{ endfor ~}
     deny all;
-
     location / {
-      proxy_pass http://sonarqube:${sonar.port};  # the container port, not the published one
+      # Variable form as in the Grafana vhost above: SonarQube is the slowest
+      # thing on this box to come up, and a literal hostname in proxy_pass is
+      # resolved at start-up — an absent or recreating container would keep
+      # the whole edge from starting instead of 502ing this vhost.
+      set $sonar_backend sonarqube:${sonar.port};
+      proxy_pass http://$sonar_backend;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
@@ -153,16 +277,12 @@ http {
       proxy_set_header X-Forwarded-Proto $forwarded_proto;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
-      # A report upload is a multi-megabyte POST and the compute engine then
-      # spends minutes processing it. The 60s/1m defaults cut both off mid-flight,
-      # which surfaces as a scanner timeout rather than an nginx error.
       proxy_read_timeout 600s;
       proxy_send_timeout 600s;
       proxy_connect_timeout 60s;
       client_max_body_size 100m;
     }
   }
-
 %{ endif ~}
   server {
     listen 80 default_server;

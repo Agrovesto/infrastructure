@@ -176,14 +176,26 @@
    }
   },
   {
-   "id": 6,
-   "type": "stat",
-   "title": "Log shipper age",
+   "id": 15,
+   "type": "row",
+   "title": "CPU and memory per service",
    "gridPos": {
-    "h": 5,
-    "w": 4,
-    "x": 20,
-    "y": 0
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 5
+   }
+  },
+  {
+   "id": 16,
+   "type": "timeseries",
+   "title": "CPU utilisation per service",
+   "description": "Average and peak CPUUtilization of the service's tasks, as a percentage of the CPU the task definition asks for.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 6
    },
    "datasource": {
     "type": "prometheus",
@@ -191,14 +203,63 @@
    },
    "targets": [
     {
-     "expr": "time() - ecs_logs_scrape_timestamp_seconds",
-     "legendFormat": ""
+     "refId": "A",
+     "expr": "ecs_service_cpu_utilization_percent{service=~\"$service\"}",
+     "legendFormat": "{{service}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "ecs_service_cpu_utilization_percent_max{service=~\"$service\"}",
+     "legendFormat": "{{service}} peak"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "s",
-     "decimals": 0
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 0,
+      "lineWidth": 2
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 17,
+   "type": "timeseries",
+   "title": "Memory utilisation per service",
+   "description": "Percentage of the task's memory limit. Fargate kills a task that goes past 100%, so a service sitting above 85% needs a bigger task definition.",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "ecs_service_memory_utilization_percent{service=~\"$service\"}",
+     "legendFormat": "{{service}} average"
+    },
+    {
+     "refId": "B",
+     "expr": "ecs_service_memory_utilization_percent_max{service=~\"$service\"}",
+     "legendFormat": "{{service}} peak"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "drawStyle": "line",
+      "fillOpacity": 0,
+      "lineWidth": 2
+     }
     },
     "overrides": []
    }
@@ -211,7 +272,7 @@
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 5
+    "y": 14
    },
    "datasource": {
     "type": "prometheus",
@@ -240,7 +301,7 @@
     "h": 9,
     "w": 12,
     "x": 12,
-    "y": 5
+    "y": 14
    },
    "datasource": {
     "type": "prometheus",
@@ -265,7 +326,7 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 14
+    "y": 23
    },
    "datasource": {
     "type": "prometheus",
@@ -290,7 +351,7 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 14
+    "y": 23
    },
    "datasource": {
     "type": "prometheus",
@@ -316,12 +377,62 @@
      "expr": "ecs_service_deployment_failed",
      "format": "table",
      "instant": true
+    },
+    {
+     "refId": "E",
+     "expr": "ecs_service_cpu_utilization_percent",
+     "format": "table",
+     "instant": true
+    },
+    {
+     "refId": "F",
+     "expr": "ecs_service_memory_utilization_percent",
+     "format": "table",
+     "instant": true
     }
    ],
    "fieldConfig": {
-    "defaults": {},
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
     "overrides": []
-   }
+   },
+   "description": "Task state and resource use per service. CPU and memory are percentages of what the task definition asks for.",
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "service",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "cluster": true,
+       "job": true,
+       "instance": true
+      },
+      "indexByName": {},
+      "renameByName": {
+       "Value #A": "Desired tasks",
+       "Value #B": "Running tasks",
+       "Value #C": "Pending tasks",
+       "Value #D": "Deployment failed",
+       "Value #E": "CPU %",
+       "Value #F": "Memory %"
+      }
+     }
+    }
+   ]
   },
   {
    "id": 11,
@@ -331,7 +442,7 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 22
+    "y": 31
    },
    "datasource": {
     "type": "loki",
@@ -339,8 +450,8 @@
    },
    "targets": [
     {
-     "expr": "sum by (service) (rate({source=\"app\"} |= \"\" [5m]))",
-     "legendFormat": "{{service}}"
+     "expr": "sum by (service_name) (rate({source=\"app\", service_name=~\"$service\"}[5m]))",
+     "legendFormat": "{{service_name}}"
     }
    ],
    "fieldConfig": {
@@ -356,7 +467,7 @@
     "h": 8,
     "w": 12,
     "x": 12,
-    "y": 22
+    "y": 31
    },
    "datasource": {
     "type": "loki",
@@ -364,7 +475,7 @@
    },
    "targets": [
     {
-     "expr": "{source=\"app\"} |~ \"(?i)error|exception|fail\""
+     "expr": "{source=\"app\", service_name=~\"$service\"}"
     }
    ],
    "options": {
@@ -372,58 +483,7 @@
     "wrapLogMessage": true,
     "sortOrder": "Descending"
    }
-  },
-  {
-   "id": 13,
-   "type": "timeseries",
-   "title": "Log lines shipped per group",
-   "gridPos": {
-    "h": 7,
-    "w": 12,
-    "x": 0,
-    "y": 30
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "targets": [
-    {
-     "expr": "ecs_logs_shipped_total",
-     "legendFormat": "{{service}}"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   }
-  },
-  {
-   "id": 14,
-   "type": "timeseries",
-   "title": "Newest shipped log event age",
-   "gridPos": {
-    "h": 7,
-    "w": 12,
-    "x": 12,
-    "y": 30
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "targets": [
-    {
-     "expr": "time() - ecs_logs_last_event_timestamp_seconds",
-     "legendFormat": "{{service}}"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s"
-    },
-    "overrides": []
-   }
   }
- ]
+ ],
+ "description": "ECS platform state from the ECS API collector and per-service CPU/memory from basic CloudWatch metrics. Application logs are sent over OTLP to Alloy and stored in Loki; the API tasks have no CloudWatch Logs driver."
 }

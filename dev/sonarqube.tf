@@ -12,7 +12,7 @@
 #     Elasticsearch indices survive the replacement;
 #   * Elasticsearch's index writes do not share IOPS with SQL Server's data
 #     files, which matters more than usual here because an analysis is a burst
-#     of heavy I/O against a box that is also serving five APIs.
+#     of heavy I/O against a box that is also serving seven APIs.
 #
 # Nothing else in this file talks to AWS: no CodeBuild, no managed SonarQube, no
 # S3 for the reports. CI reaches the server over HTTP(S) like any other scanner

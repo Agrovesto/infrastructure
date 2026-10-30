@@ -80,6 +80,8 @@ locals {
   ))
 
   github_sso_proxy_enabled = local.sonarqube_github_sso_enabled || local.grafana_github_sso_enabled
+  ui_tls_enabled           = local.github_sso_proxy_enabled || var.ui_https_enabled
+  ui_tls_hosts_enabled     = local.ui_tls_enabled && ((var.sonarqube.enabled && var.sonarqube.expose_via_nginx) || (var.logging.enabled && var.logging.expose_via_nginx))
 
   sonarqube_github_parameter_names = {
     client_id     = "/${local.name}/sonarqube_github_client_id"
@@ -96,7 +98,10 @@ locals {
   # Secret parameters the host reads at boot (dev/host_config.tf). Spelled as
   # deterministic ARNs so the instance policy does not depend on unknown resource
   # attributes or indexed counts at plan time.
+  rabbitmq_password_parameter = "/${local.name}/rabbitmq_password"
+
   host_password_param_arns = [
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/rabbitmq_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/mssql_sa_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_admin_password",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_db_password",
@@ -107,6 +112,9 @@ locals {
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/sonarqube_github_private_key",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_id",
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/grafana_github_client_secret",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_github_client_id",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_github_client_secret",
+    "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/vault_oidc_client_secret",
   ]
 
   # ---------------------------------------------------------------------------
@@ -123,9 +131,12 @@ locals {
   # Listing it twice is harmless — the union is deduplicated — but forgetting to
   # add it to mssql_databases would otherwise mean a database that is created and
   # never backed up, or the reverse.
+  sonarqube_on_mssql    = var.sonarqube.enabled && var.sonarqube.database_engine == "mssql"
+  sonarqube_on_postgres = var.sonarqube.enabled && var.sonarqube.database_engine == "postgres"
+
   mssql_all_databases = distinct(concat(
     var.mssql_databases,
-    var.sonarqube.enabled ? [var.sonarqube.database_name] : [],
+    local.sonarqube_on_mssql ? [var.sonarqube.database_name] : [],
   ))
 
   # 1433 is the container port, not var.mssql_host_port: that one is the host
@@ -136,7 +147,7 @@ locals {
   # self-signed certificate; without it the JDBC driver refuses the connection.
   # Encryption stays on — it is loopback-adjacent, but there is no reason to send
   # credentials in the clear.
-  sonar_jdbc_url = join(";", concat(
+  sonar_jdbc_url = local.sonarqube_on_postgres ? "jdbc:postgresql://sonarqube-db:5432/${var.sonarqube.database_name}" : join(";", concat(
     [
       "jdbc:sqlserver://mssql:1433",
       "databaseName=${var.sonarqube.database_name}",
@@ -160,7 +171,9 @@ locals {
   # GitHub refuses an HTTP SonarQube callback. When credentials are present, the
   # Caddy edge container obtains and renews a public certificate and this becomes
   # the canonical URL regardless of the legacy `sonarqube.scheme` value.
-  sonar_public_scheme = local.sonarqube_github_sso_enabled ? "https" : var.sonarqube.scheme
+  # Once Caddy is running (any SSO enabled) it serves HTTPS for every exposed UI,
+  # not only the SSO ones, so the public scheme follows the proxy.
+  sonar_public_scheme = local.ui_tls_enabled && var.sonarqube.enabled && var.sonarqube.expose_via_nginx ? "https" : var.sonarqube.scheme
 
   # SONAR_WEB_BASEURL. Has to be the URL a browser actually arrives on, not the
   # container's own address: SonarQube builds absolute links from it and compares
@@ -169,22 +182,52 @@ locals {
   sonar_web_baseurl = var.sonarqube.expose_via_nginx ? "${local.sonar_public_scheme}://${local.sonar_fqdn}" : "http://127.0.0.1:${var.sonarqube.host_port}"
 
   sonarqube_runtime = merge(var.sonarqube, {
+    on_postgres               = local.sonarqube_on_postgres
     github_sso_enabled        = local.sonarqube_github_sso_enabled
     github_organizations      = join(",", var.sonarqube_github_organizations)
     github_allow_sign_up      = var.sonarqube_github_allow_sign_up
     github_synchronize_groups = var.sonarqube_github_synchronize_groups
   })
 
+  # Direct vhosts exist only for APIs NOT on blue/green: an opted-in API's
+  # vhost is rendered by the blue/green loop below (same subdomain, routed to
+  # the active slot instead of the compose service).
   nginx_upstreams = [
     for k, api in var.apis : {
       name      = k
       subdomain = api.subdomain
       port      = api.host_port
-    }
+    } if api.blue_green == null
   ]
 
+  # File-storage Vault remains internal; only the opt-in OIDC deployment
+  # allows requests from Caddy's public HTTPS edge to reach this vhost.
+  vault_nginx = {
+    subdomain    = var.vault.subdomain
+    oidc_enabled = var.vault.oidc_enabled
+  }
+  vault_fqdn_for_oidc = "${var.vault.subdomain}.${var.domain_name}"
+  vault_oidc_credentials_set = [
+    var.vault_github_client_id != "",
+    nonsensitive(var.vault_github_client_secret != ""),
+    nonsensitive(var.vault_oidc_client_secret != ""),
+  ]
+  vault_oidc_credentials_valid = alltrue(local.vault_oidc_credentials_set)
+
+  # API vhosts that opted into HTTPS with apis.<name>.tls_via_caddy (the agx
+  # API). Each one gets a public certificate on the Caddy edge and a 308 from
+  # plain HTTP; nginx keeps routing the vhost underneath.
+  api_tls_domains = [
+    for name, api in var.apis : "${api.subdomain}.${var.domain_name}" if api.tls_via_caddy
+  ]
+
+  # The TLS edge runs whenever something needs public HTTPS: GitHub SSO for the
+  # dev UIs, Vault OIDC (whose Dex login broker serves at the Vault host's
+  # /dex path), or an opted-in API vhost.
+  tls_proxy_enabled = var.rabbitmq.enabled || local.ui_tls_hosts_enabled || var.vault.oidc_enabled || length(local.api_tls_domains) > 0
+
   # ---------------------------------------------------------------------------
-  # Logging & metrics on the host (Loki + Alloy + Grafana + Prometheus)
+  # Logging, metrics & traces on the host (Loki + Tempo + Alloy + Grafana + Prometheus)
   #
   # Every file below is rendered at plan time and written by cloud-init, which is
   # how the compose and nginx configs already work. That has one consequence worth
@@ -202,8 +245,9 @@ locals {
   # the logs of the thing that writes its logs is an unbounded loop that ends with
   # a full disk. See the drop rule in alloy-config.alloy.tftpl.
   logging_own_services = concat(
-    ["loki", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
-    local.github_sso_proxy_enabled ? ["edge"] : [],
+    ["loki", "tempo", "alloy", "grafana", "prometheus", "cadvisor", "node-exporter", "alertmanager"],
+    local.tls_proxy_enabled ? ["edge"] : [],
+    var.vault.oidc_enabled ? ["dex"] : [],
   )
 
   # nginx is always parsed as JSON (its access log format is), plus whatever the
@@ -232,7 +276,7 @@ locals {
   }
 
   grafana_fqdn          = "${var.logging.grafana_subdomain}.${var.domain_name}"
-  grafana_public_scheme = local.grafana_github_sso_enabled ? "https" : "http"
+  grafana_public_scheme = local.ui_tls_enabled && var.logging.enabled && var.logging.expose_via_nginx ? "https" : "http"
 
   logging_runtime = merge(var.logging, {
     grafana_root_url             = "${local.grafana_public_scheme}://${local.grafana_fqdn}"
@@ -242,27 +286,46 @@ locals {
     github_role_attribute_path   = local.grafana_github_role_attribute_path
   })
 
-  # Caddy is a narrow TLS edge in front of the existing nginx router. It only
-  # obtains certificates for SSO-enabled hosts; all source-IP checks remain in
-  # nginx, which restores the client address from Caddy's X-Forwarded-For header.
-  # Certificate state lives on one of the persistent service volumes, so an EC2
-  # replacement does not repeatedly consume ACME issuance limits.
+  # Caddy is a narrow TLS edge in front of the existing nginx router. It serves
+  # the SSO-enabled UI hosts, the Vault OIDC host (Dex for Vault's GitHub login)
+  # and API vhosts that opted in with apis.<name>.tls_via_caddy; all source-IP
+  # checks remain in nginx, which restores the client address from Caddy's
+  # X-Forwarded-For header. Certificate state lives on one of the persistent
+  # service volumes, so an EC2 replacement does not repeatedly consume ACME
+  # issuance limits.
   github_sso_proxy = {
-    enabled         = local.github_sso_proxy_enabled
+    enabled         = local.tls_proxy_enabled
     image           = "caddy:2.11.4-alpine"
     acme_email      = "tech@agrovesto.com"
     cpu_limit       = "0.10"
     memory_limit_mb = 128
-    data_dir        = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : "${local.logging_root}/caddy"
-    domains = compact([
-      local.sonarqube_github_sso_enabled ? local.sonar_fqdn : "",
-      local.grafana_github_sso_enabled ? local.grafana_fqdn : "",
-    ])
+    # Certificate state must outlive the root volume, so it goes on the
+    # SonarQube or logging EBS volume whenever one of those stacks exists. A
+    # host with neither has no persistent volume of its own and falls back to
+    # /data/vault/caddy on the root disk. The SSO cases keep their historical
+    # paths so an existing ACME account/certificates are not orphaned.
+    data_dir = local.sonarqube_github_sso_enabled ? "${var.sonarqube.data_dir}/caddy" : local.grafana_github_sso_enabled ? "${local.logging_root}/caddy" : var.logging.enabled ? "${local.logging_root}/caddy" : "/data/vault/caddy"
+    # The Vault host joins the edge only for Vault OIDC, where Dex serves at
+    # its /dex path (the canonical issuer URL); the Vault UI itself stays
+    # behind nginx's source-IP allow list until that same feature opens it.
+    # The UI hosts join when ui_https_enabled or GitHub SSO is configured; API
+    # vhosts when they set apis.<name>.tls_via_caddy.
+    domains = compact(concat(
+      [
+        var.sonarqube.enabled && var.sonarqube.expose_via_nginx && local.ui_tls_enabled ? local.sonar_fqdn : "",
+        var.logging.enabled && var.logging.expose_via_nginx && local.ui_tls_enabled ? local.grafana_fqdn : "",
+        var.vault.oidc_enabled ? local.vault_fqdn_for_oidc : "",
+        var.rabbitmq.enabled ? "${var.rabbitmq.subdomain}.${var.domain_name}" : "",
+      ],
+      local.api_tls_domains,
+    ))
   }
 
-  caddyfile = local.github_sso_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
-    email   = local.github_sso_proxy.acme_email
-    domains = local.github_sso_proxy.domains
+  caddyfile = local.tls_proxy_enabled ? templatefile("${path.module}/Caddyfile.tftpl", {
+    email              = local.github_sso_proxy.acme_email
+    domains            = local.github_sso_proxy.domains
+    vault_oidc_enabled = var.vault.oidc_enabled
+    vault_domain       = local.vault_fqdn_for_oidc
   }) : ""
 
   loki_config = templatefile("${path.module}/loki-config.yml.tftpl", {
@@ -275,6 +338,23 @@ locals {
     max_query_length_hours = local.logging_retention_hours
     querier_max_concurrent = var.logging.querier_max_concurrent
     retention_streams      = local.logging_retention_streams
+    alertmanager_port      = var.logging.alertmanager_port
+  })
+
+  # LogQL alerts Loki evaluates itself (the ruler block in loki-config.yml.tftpl)
+  # and hands to the same Alertmanager the Prometheus rules use. Published under
+  # the "fake" tenant directory: that is the tenant Loki ingests under when
+  # auth_enabled is false, and the ruler only reads rules from a tenant
+  # directory, so a file one level higher is silently never loaded.
+  loki_rules = templatefile("${path.module}/loki-rules.yml.tftpl", {
+    window         = var.alert_rules.log_rule_window
+    app_error_rate = var.alert_rules.log_error_rate
+    nginx_5xx_rate = var.alert_rules.nginx_5xx_rate
+  })
+
+  tempo_config = templatefile("${path.module}/tempo-config.yml.tftpl", {
+    retention_hours = var.logging.traces_retention_hours
+    hostname        = local.name
   })
 
   alloy_config = templatefile("${path.module}/alloy-config.alloy.tftpl", {
@@ -297,6 +377,9 @@ locals {
     grafana_port       = var.logging.grafana_port
     metrics_port       = var.logging.alloy_port
     alertmanager_port  = var.logging.alertmanager_port
+    tempo_port         = var.logging.tempo_port
+    # Ninth scrape target: the SQL Server collector container.
+    mssql_exporter_port = var.logging.mssql_exporter_port
   })
 
   # Alert rules evaluated by the host's Prometheus; Alertmanager routes them to
@@ -305,6 +388,10 @@ locals {
     cpu_percent       = var.alert_rules.cpu_percent
     memory_percent    = var.alert_rules.memory_percent
     disk_free_percent = var.alert_rules.disk_free_percent
+    # Per-container thresholds, each measured against the container's own limit.
+    container_memory_percent    = var.alert_rules.container_memory_percent
+    container_cpu_percent       = var.alert_rules.container_cpu_percent
+    container_throttled_percent = var.alert_rules.container_throttled_percent
     # The containers that should always be up. Redis and SonarQube join the list
     # only when they exist, otherwise ContainerDown fires for a service that was
     # deliberately turned off.
@@ -312,8 +399,10 @@ locals {
       keys(var.apis),
       ["nginx", "mssql", "vault"],
       var.redis.enabled ? ["redis"] : [],
+      var.rabbitmq.enabled ? ["rabbitmq"] : [],
       var.sonarqube.enabled ? ["sonarqube"] : [],
-      local.github_sso_proxy_enabled ? ["edge"] : [],
+      local.tls_proxy_enabled ? ["edge"] : [],
+      var.vault.oidc_enabled ? ["dex"] : [],
     )
   })
 
@@ -335,6 +424,55 @@ locals {
   grafana_dashboards_provider = file("${path.module}/grafana-dashboards.yml")
   grafana_dashboard_logs      = file("${path.module}/grafana/dashboards/dev-logs.json")
   grafana_dashboard_host      = file("${path.module}/grafana/dashboards/dev-host.json")
+  grafana_dashboard_services  = file("${path.module}/grafana/dashboards/dev-services.json")
+  grafana_dashboard_traffic   = file("${path.module}/grafana/dashboards/dev-traffic.json")
+  grafana_dashboard_infra     = file("${path.module}/grafana/dashboards/dev-infra.json")
+
+  # The SQL Server deep dive: trends from the mssql-exporter container, live
+  # DMV panels through the provisioned MSSQL datasource.
+  grafana_dashboard_database = file("${path.module}/grafana/dashboards/dev-database.json")
+
+  # OpenTelemetry ----------------------------------------------------------------
+  #
+  # The same standard OTEL_* block prod's ECS tasks carry (prod/locals.tf
+  # otel_environment), pointed at Alloy on the compose network instead of the
+  # Cloud Map name. Inert until an image loads an OTel SDK — the env vars cost
+  # nothing, and the day the real images land traces start flowing with no
+  # further change (the same bet prod made in prod/ecs.tf).
+  #
+  # OTEL_SERVICE_NAME is what makes a span attributable: it is added per API
+  # below and is the same string as the compose service name, the database
+  # name and the Route53 subdomain prefix. api.env merges last, so a service
+  # can override any of it.
+  otel_environment = {
+    "OTEL_EXPORTER_OTLP_ENDPOINT" = "http://alloy:4317"
+    "OTEL_EXPORTER_OTLP_PROTOCOL" = "grpc"
+    "OTEL_TRACES_EXPORTER"        = "otlp"
+    "OTEL_METRICS_EXPORTER"       = "otlp"
+    # Logs stay on the stdout path Alloy already tails; OTLP-ing them would
+    # store every line twice for no benefit. Same call as prod's var.otel.
+    "OTEL_LOGS_EXPORTER"      = "none"
+    "OTEL_TRACES_SAMPLER"     = "parentbased_traceidratio"
+    "OTEL_TRACES_SAMPLER_ARG" = "1.0"
+    "OTEL_PROPAGATORS"        = "tracecontext,baggage"
+    "OTEL_RESOURCE_ATTRIBUTES" = join(",", [
+      "deployment.environment=${var.environment}",
+      "service.namespace=${var.project}",
+      "cloud.provider=aws",
+      "cloud.region=${var.aws_region}",
+      "host.name=${local.name}",
+    ])
+  }
+
+  # The compose project's view of the APIs: with the stack on, every compose
+  # API carries the block above. With logging.enabled = false there is no
+  # Alloy to receive the spans, so the APIs keep exactly their own env.
+  apis_with_otel = var.logging.enabled ? {
+    for name, api in var.apis :
+    name => merge(api, {
+      env = merge(local.otel_environment, { OTEL_SERVICE_NAME = name }, api.env)
+    })
+  } : var.apis
 
   # Host config in S3 ------------------------------------------------------------
   #
@@ -347,7 +485,84 @@ locals {
   # ./docker-compose.yml and nginx's bind mount still finds ./nginx.conf.
   host_config_bucket = "${local.name}-host-config"
 
+  # Application API credentials are created after Vault is initialized. Only
+  # non-secret policies and helper scripts enter the config bucket; generated
+  # AppRole IDs and service env files stay on the persistent Vault EBS volume.
+  vault_kv_mount         = "kv"
+  vault_path_environment = "staging"
+  vault_service_env_dir  = "/data/vault/services"
+  vault_service_names    = sort(keys(var.apis))
+
+  vault_service_policy_files = {
+    for service in local.vault_service_names :
+    "vault/service-policies/${service}.hcl" => {
+      content_type = "text/plain"
+      content = templatefile("${path.module}/vault-service-policy.hcl.tftpl", {
+        kv_mount         = local.vault_kv_mount
+        path_environment = local.vault_path_environment
+        service          = service
+      })
+    }
+  }
+
+  vault_service_bootstrap_files = {
+    "scripts/connect-vault-network.sh" = {
+      content      = file("${path.module}/connect-vault-network.sh")
+      content_type = "text/x-shellscript"
+    }
+    "scripts/configure-vault-services.sh" = {
+      content_type = "text/x-shellscript"
+      content = templatefile("${path.module}/configure-vault-services.sh.tftpl", {
+        environment      = var.environment
+        kv_mount         = local.vault_kv_mount
+        path_environment = local.vault_path_environment
+        env_dir          = local.vault_service_env_dir
+        services         = local.vault_service_names
+      })
+    }
+    "scripts/write-vault-service-secret.sh" = {
+      content_type = "text/x-shellscript"
+      content = templatefile("${path.module}/write-vault-service-secret.sh.tftpl", {
+        path_environment = local.vault_path_environment
+        kv_mount         = local.vault_kv_mount
+        services         = local.vault_service_names
+      })
+    }
+  }
+
   host_config_files = merge(
+    var.manage_fresh_vault ? {
+      "vault/managed-vault.hcl" = {
+        content_type = "text/plain"
+        content      = <<-HCL
+          ui = true
+          disable_mlock = true
+          storage "file" {
+            path = "/vault/file"
+          }
+          listener "tcp" {
+            address = "0.0.0.0:8200"
+            tls_disable = true
+          }
+          seal "awskms" {
+            region = "${var.aws_region}"
+            kms_key_id = "${aws_kms_key.vault_unseal[0].arn}"
+          }
+        HCL
+      }
+      "scripts/prepare-vault.sh" = {
+        content_type = "text/x-shellscript"
+        content = templatefile("${path.module}/prepare-vault.sh.tftpl", {
+          volume_serial = replace(aws_ebs_volume.vault[0].id, "-", "")
+          image         = var.vault.image
+          bucket        = local.host_config_bucket
+          region        = var.aws_region
+          oidc_exec     = var.vault.oidc_enabled ? "ExecStart=/bin/bash /opt/agrovesto/scripts/refresh-vault-oidc.sh\n" : ""
+        })
+      }
+    } : {},
+    local.vault_service_policy_files,
+    local.vault_service_bootstrap_files,
     {
       "compose/docker-compose.yml" = {
         content      = local.docker_compose
@@ -362,6 +577,8 @@ locals {
         content_type = "text/plain"
       }
     },
+    # One default (blue) slot file per blue/green API.
+    local.blue_green_slot_confs,
     local.sonarqube_github_sso_enabled ? {
       "scripts/configure-sonarqube-team-permissions.sh" = {
         content      = file("${path.module}/configure-sonarqube-team-permissions.sh")
@@ -371,6 +588,17 @@ locals {
     var.logging.enabled ? {
       "logging/loki/config.yml" = {
         content      = local.loki_config
+        content_type = "text/yaml"
+      }
+      # The tenant directory in this key is load-bearing: Loki's ruler reads
+      # <directory>/<tenant>/<namespace>, and "fake" is the tenant it ingests
+      # under when auth_enabled is false. One level higher and no rule loads.
+      "logging/loki/rules/fake/application.yml" = {
+        content      = local.loki_rules
+        content_type = "text/yaml"
+      }
+      "logging/tempo/config.yml" = {
+        content      = local.tempo_config
         content_type = "text/yaml"
       }
       "logging/alloy/config.alloy" = {
@@ -405,8 +633,64 @@ locals {
         content      = local.grafana_dashboard_host
         content_type = "application/json"
       }
+      "logging/grafana/dashboards/dev-services.json" = {
+        content      = local.grafana_dashboard_services
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-traffic.json" = {
+        content      = local.grafana_dashboard_traffic
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-infra.json" = {
+        content      = local.grafana_dashboard_infra
+        content_type = "application/json"
+      }
+      "logging/grafana/dashboards/dev-database.json" = {
+        content      = local.grafana_dashboard_database
+        content_type = "application/json"
+      }
+      # One collector, two stacks: the dev host ships the exact script the prod
+      # monitoring task runs, read across the stack boundary so a fix lands in
+      # both runtimes at once. The mssql-exporter container mounts it at
+      # /rds/mssql_metrics.py.
+      "logging/rds/mssql_metrics.py" = {
+        content      = file("${path.module}/../monitoring/scripts/mssql_metrics.py")
+        content_type = "text/plain"
+      }
     } : {},
-    local.github_sso_proxy_enabled ? {
+    var.vault.oidc_enabled ? {
+      "vault/operator.hcl" = {
+        content      = file("${path.module}/vault-operator.hcl")
+        content_type = "text/plain"
+      }
+      "scripts/configure-vault-oidc.sh" = {
+        content = templatefile("${path.module}/configure-vault-oidc.sh", {
+          vault_fqdn  = local.vault_fqdn_for_oidc
+          github_org  = var.vault_github_organization
+          github_team = var.vault_github_team_slug
+        })
+        content_type = "text/x-shellscript"
+      }
+      "scripts/refresh-vault-oidc.sh" = {
+        content = templatefile("${path.module}/refresh-vault-oidc.sh.tftpl", {
+          github_client_id_parameter     = aws_ssm_parameter.vault_github_client_id[0].name
+          github_client_secret_parameter = aws_ssm_parameter.vault_github_client_secret[0].name
+          oidc_secret_parameter          = aws_ssm_parameter.vault_oidc_client_secret[0].name
+          aws_region                     = var.aws_region
+          caddy_dir                      = local.github_sso_proxy.data_dir
+        })
+        content_type = "text/x-shellscript"
+      }
+      "vault/dex.yml" = {
+        content = templatefile("${path.module}/dex.yml.tftpl", {
+          fqdn = local.vault_fqdn_for_oidc
+          org  = var.vault_github_organization
+          team = var.vault_github_team_slug
+        })
+        content_type = "text/yaml"
+      }
+    } : {},
+    local.tls_proxy_enabled ? {
       "edge/Caddyfile" = {
         content      = local.caddyfile
         content_type = "text/plain"
@@ -415,9 +699,11 @@ locals {
   )
 
   docker_compose = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    apis              = var.apis
+    apis              = local.apis_with_otel
     mssql             = local.mssql
     vault             = var.vault
+    domain            = var.domain_name
+    rabbitmq          = var.rabbitmq
     redis             = var.redis
     sonarqube         = local.sonarqube_runtime
     sonar_jdbc_url    = local.sonar_jdbc_url
@@ -425,15 +711,65 @@ locals {
     backup_bucket     = aws_s3_bucket.backup.bucket
     logging           = local.logging_runtime
     logging_root      = local.logging_root
-    sso_proxy         = local.github_sso_proxy
+    sso_proxy = merge(local.github_sso_proxy, {
+      config_hash = sha256(local.caddyfile)
+    })
   })
 
   nginx_conf = templatefile("${path.module}/nginx.conf.tftpl", {
-    domain    = var.domain_name
-    upstreams = local.nginx_upstreams
-    grafana   = local.logging_grafana
-    sonar     = local.sonarqube_nginx
+    domain          = var.domain_name
+    upstreams       = local.nginx_upstreams
+    grafana         = local.logging_grafana
+    sonar           = local.sonarqube_nginx
+    vault           = local.vault_nginx
+    blue_green_apis = local.blue_green_apis
+    rabbitmq        = var.rabbitmq
   })
+
+  # ── NomaOS blue/green deployments ──────────────────────────────────────────
+  #
+  # Every API in var.apis that sets blue_green serves its deploys on its OWN
+  # hostname — the vhost nginx already had — instead of spinning up a separate
+  # deployment subdomain, so no DNS changes are needed beyond what the direct
+  # vhosts already required. The deploy pipeline in the app repo runs
+  # deploy.sh --app <key>-api, which derives UPSTREAM_NAME <key>_api and owns
+  # /opt/nomaos/nginx/upstreams/<upstream_name>.conf from then on. Boot seeds
+  # that file from the objects below only while it is absent, so a slot flip
+  # survives every reboot and an instance replacement falls back to blue. Note
+  # neither slot exists until the pipeline's first deploy — blue is the
+  # convention, not a compose service, and until that first deploy the vhost
+  # 502s (the compose placeholder no longer answers for this name). The
+  # map-over-empty-string form (instead of a static upstream block) is what
+  # keeps that gap from taking nginx down — see the Nomaos section in
+  # nginx.conf.tftpl and docs/blue-green-deployments.md.
+  blue_green_apis = [
+    for k in sort(keys(var.apis)) : {
+      key           = k
+      app_name      = "${k}-api"                    # deploy.sh --app value
+      upstream_name = "${replace(k, "-", "_")}_api" # deploy.sh UPSTREAM_NAME
+      subdomain     = var.apis[k].subdomain         # the API's own hostname
+      blue_port     = var.apis[k].blue_green.blue_port
+      green_port    = var.apis[k].blue_green.green_port
+    } if var.apis[k].blue_green != null
+  ]
+
+  blue_green_slot_confs = {
+    for bg in local.blue_green_apis :
+    "nginx/${bg.upstream_name}-active.conf" => {
+      # The header comment marks the file as Terraform-shipped (deploy.sh
+      # replaces the whole file when it flips slots). Being content, it also
+      # re-uploads every slot object whenever this format changes — which is
+      # how the bucket recovers an object that state lists but S3 is missing
+      # (2026-10-12: nginx/agx_api-active.conf absent while nginx.conf already
+      # referenced $agx_api_backend, so the seeders had no source to copy and
+      # the edge crash-looped on the undefined variable).
+      content = format(
+        "# Terraform-shipped default (blue); deploy.sh rewrites the live file when it flips slots.\nmap '' $%s_backend {\n  default %s-api-blue:%d;\n}\n",
+        bg.upstream_name, bg.key, bg.blue_port,
+      )
+      content_type = "text/plain"
+    }
+  }
 
   # The boot-time SQL script (scripts/init-dbs.sql in the config bucket).
   #
@@ -450,9 +786,9 @@ locals {
   init_sql = join("\n", concat(
     [
       for db in local.mssql_all_databases :
-      (var.sonarqube.enabled && db == var.sonarqube.database_name) ? "" : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
+      (local.sonarqube_on_mssql && db == var.sonarqube.database_name) ? "" : "IF DB_ID(N'${db}') IS NULL CREATE DATABASE [${db}];"
     ],
-    var.sonarqube.enabled ? [
+    local.sonarqube_on_mssql ? [
       "-- SonarQube: CS_AS collation is mandatory; the SQL Server default is not.",
       "IF DB_ID(N'${var.sonarqube.database_name}') IS NULL CREATE DATABASE [${var.sonarqube.database_name}] COLLATE ${var.sonarqube.database_collation};",
       "GO",
@@ -462,7 +798,7 @@ locals {
       "  ALTER DATABASE [${var.sonarqube.database_name}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;",
       "GO",
       "-- A login scoped to this one database instead of `sa`, which would be",
-      "-- sysadmin over the server and owner of the five application databases.",
+      "-- sysadmin over the server and owner of the five managed application databases.",
       "IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'${var.sonarqube.database_username}')",
       "  CREATE LOGIN [${var.sonarqube.database_username}] WITH PASSWORD = N'$(sonar_db_password)', CHECK_POLICY = ON;",
       "GO",
@@ -503,6 +839,7 @@ locals {
     local.sonarqube_nginx.enabled ? {
       (var.sonarqube.subdomain) = local.ec2_public_ip
     } : {},
+    var.rabbitmq.enabled ? { (var.rabbitmq.subdomain) = local.ec2_public_ip } : {},
     var.extra_a_records
   )
 
@@ -512,6 +849,7 @@ locals {
     {
       for k, app in var.amplify_apps :
       app.subdomain => "${app.branch}.${aws_amplify_app.this[k].id}.amplifyapp.com"
+      if app.publish_dns
     },
     var.extra_cname_records
   )

@@ -4,12 +4,14 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::=--force-confold
-apt-get install -y docker.io git xfsprogs curl
+apt-get install -y docker.io git xfsprogs curl python3
 apt-get install -y unzip
 curl -sSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
 unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
 systemctl enable --now docker
 usermod -aG docker ubuntu
+id ssm-user >/dev/null 2>&1 || useradd -m -s /bin/bash ssm-user
+usermod -aG docker ssm-user
 
 # Container logs are bounded at the daemon level: json-file with rotation keeps
 # ${logging.docker_log_max_files} x ${logging.docker_log_max_size} per container, so an app that
@@ -129,7 +131,7 @@ format_and_mount "${logging_root}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_St
 # files. uid 1000 is what the sonarqube image runs as, and Elasticsearch refuses
 # to run as root, so the mount has to be handed over before compose starts.
 format_and_mount "${sonarqube.data_dir}" "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${sonarqube_volume_id}" /dev/xvdh
-mkdir -p "${sonarqube.data_dir}"/{data,extensions,logs}
+mkdir -p "${sonarqube.data_dir}"/{data,logs}
 chown -R 1000:1000 "${sonarqube.data_dir}"
 %{ endif ~}
 %{ if sso_proxy.enabled ~}
@@ -165,6 +167,28 @@ chown -R 999:999 "${redis.data_dir}"
 mkdir -p /opt/agrovesto
 aws s3 sync "s3://${host_config_bucket}/" /opt/agrovesto --region "${aws_region}" --only-show-errors
 
+# Blue/green slot files for the NomaOS APIs (one per API with a blue_green
+# block in terraform.auto.tfvars): ship Terraform's default (blue) only while
+# the deploy pipeline has not laid down its own, so a slot flip survives every
+# reboot while an instance replacement falls back to blue. nginx includes
+# whatever sits in this directory (dev/nginx.conf.tftpl).
+# Ignore legacy names such as nomaos-active.conf left behind by S3 sync.
+# Both nginx and independently deployed slots join this external edge network.
+docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge
+%{ if rabbitmq.enabled ~}
+docker network inspect nomaos_data >/dev/null 2>&1 || docker network create nomaos_data
+mkdir -p "${rabbitmq.data_dir}"
+%{ endif ~}
+mkdir -p /opt/nomaos/nginx/upstreams
+for f in /opt/agrovesto/nginx/*_api-active.conf; do
+  [ -e "$f" ] || continue
+  slot="/opt/nomaos/nginx/upstreams/$(basename "$f" -active.conf).conf"
+  test -f "$slot" || cp "$f" "$slot"
+done
+if [ -f /opt/agrovesto/scripts/prepare-vault.sh ]; then
+  bash /opt/agrovesto/scripts/prepare-vault.sh
+fi
+
 cat >/etc/systemd/system/agrovesto-sync.service <<'UNIT'
 [Unit]
 Description=Refresh host configuration and start Agrovesto containers
@@ -175,7 +199,15 @@ ConditionPathExists=/opt/agrovesto/compose/docker-compose.yml
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/aws s3 sync s3://${host_config_bucket}/ /opt/agrovesto --region ${aws_region} --only-show-errors
+# Restore the default Nomaos slots (blue) only when the deploy pipeline's slot
+# files are absent — never overwrite its blue/green choices on a running host.
+ExecStart=/bin/bash -c 'docker network inspect nomaos_edge >/dev/null 2>&1 || docker network create nomaos_edge'
+%{ if rabbitmq.enabled ~}
+ExecStart=/bin/bash -c 'docker network inspect nomaos_data >/dev/null 2>&1 || docker network create nomaos_data'
+%{ endif ~}
+ExecStart=/bin/bash -ec 'mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e $f ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename $f -active.conf).conf; test -f $s || cp $f $s; done'
 ExecStart=/usr/bin/docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans
+ExecStart=/bin/bash /opt/agrovesto/scripts/connect-vault-network.sh
 
 [Install]
 WantedBy=multi-user.target
@@ -192,14 +224,16 @@ chmod 700 /opt/agrovesto/scripts/configure-sonarqube-team-permissions.sh
 %{ if logging.enabled ~}
 
 # Every directory a compose bind mount points at, so docker never has to create
-# one as root:config.yml lands in loki/, the WAL and TSDB next to it; alloy/ holds
-# config.alloy plus its positions/state; the grafana/ tree is what the container
-# mounts read-only except for its sqlite data dir.
-mkdir -p "${logging_root}"/{loki,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}
+# one as root: config.yml lands in loki/ and tempo/, the WALs and blocks beside
+# them, and Loki's ruler reads its rules from loki/rules/fake (the "fake" tenant
+# it uses when auth_enabled is false); alloy/ holds config.alloy plus its
+# positions/state; the grafana/ tree is what the container mounts read-only
+# except for its sqlite data dir.
+mkdir -p "${logging_root}"/{loki/rules/fake,tempo,alloy/data,prometheus/data,prometheus/rules,alertmanager/data,grafana/data,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/provisioning/plugins,grafana/provisioning/alerting,grafana/dashboards}
 
 # The images run as their own users, and a bind mount keeps host ownership, so
 # each store has to be handed to the uid its image drops to.
-chown -R 10001:10001 "${logging_root}/loki"
+chown -R 10001:10001 "${logging_root}/loki" "${logging_root}/tempo"
 chown -R 65534:65534 "${logging_root}/prometheus" "${logging_root}/alertmanager"
 chown -R 472:472 "${logging_root}/grafana"
 %{ endif ~}
@@ -211,7 +245,12 @@ mkdir -p /opt/agrovesto/{compose,scripts}
 SA_PW=$(aws ssm get-parameter --with-decryption --name "${mssql_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 {
 printf 'MSSQL_SA_PASSWORD=%s\n' "$SA_PW"
-printf 'VAULT_DEV_ROOT_TOKEN=%s\n' "$(openssl rand -hex 32)"
+%{ if vault.oidc_enabled ~}
+VAULT_GITHUB_ID=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.client_id}" --query Parameter.Value --output text --region "${aws_region}")
+VAULT_GITHUB_SECRET=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.client_secret}" --query Parameter.Value --output text --region "${aws_region}")
+VAULT_OIDC_SECRET=$(aws ssm get-parameter --with-decryption --name "${vault_github_parameters.oidc_secret}" --query Parameter.Value --output text --region "${aws_region}")
+printf 'VAULT_GITHUB_CLIENT_ID=%s\nVAULT_GITHUB_CLIENT_SECRET=%s\nVAULT_OIDC_CLIENT_SECRET=%s\n' "$VAULT_GITHUB_ID" "$VAULT_GITHUB_SECRET" "$VAULT_OIDC_SECRET"
+%{ endif ~}
 printf 'BACKUP_BUCKET=%s\nAWS_REGION=%s\n' "${backup_bucket}" "${aws_region}"
 %{ if logging.enabled ~}
 GRAFANA_PW=$(aws ssm get-parameter --with-decryption --name "${grafana_parameter}" --query Parameter.Value --output text --region "${aws_region}")
@@ -226,6 +265,13 @@ printf 'GRAFANA_GITHUB_CLIENT_SECRET=%s\n' "$GRAFANA_GITHUB_CLIENT_SECRET"
 %{ if sonarqube.enabled ~}
 SONAR_DB_PW=$(aws ssm get-parameter --with-decryption --name "${sonarqube_parameter}" --query Parameter.Value --output text --region "${aws_region}")
 printf 'SONAR_DB_PASSWORD=%s\n' "$SONAR_DB_PW"
+%{ endif ~}
+%{ if rabbitmq.enabled ~}
+RABBITMQ_PW=$(aws ssm get-parameter --with-decryption --name "${rabbitmq_parameter}" --query Parameter.Value --output text --region "${aws_region}")
+# Hex avoids Compose .env interpolation/escaping and gives >=128 bits entropy.
+[[ "$RABBITMQ_PW" =~ ^[a-fA-F0-9]{32,128}$ ]] || { echo "RabbitMQ password must be 32-128 hex characters" >&2; exit 1; }
+printf 'RABBITMQ_PASSWORD=%s\n' "$RABBITMQ_PW"
+unset RABBITMQ_PW
 %{ endif ~}
 %{ if redis_parameter != "" ~}
 REDIS_PW=$(aws ssm get-parameter --with-decryption --name "${redis_parameter}" --query Parameter.Value --output text --region "${aws_region}")
@@ -258,6 +304,9 @@ def java_property(value: str) -> str:
 
 
 properties = {
+    # The public URL SonarQube builds its OAuth redirect_uri from. Without it,
+    # SonarQube sends GitHub http://localhost:9000/oauth2/callback/github.
+    "sonar.core.serverBaseURL": "${sonar_web_baseurl}",
     "sonar.auth.github.enabled": "true",
     "sonar.auth.github.clientId.secured": os.environ["SONAR_GITHUB_CLIENT_ID"],
     "sonar.auth.github.clientSecret.secured": os.environ["SONAR_GITHUB_CLIENT_SECRET"],
@@ -275,7 +324,7 @@ PY
 chown 1000:1000 /opt/agrovesto/sonarqube/sonar-sso.properties
 chmod 600 /opt/agrovesto/sonarqube/sonar-sso.properties
 %{ endif ~}
-unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW \
+unset SA_PW GRAFANA_PW SONAR_DB_PW REDIS_PW VAULT_GITHUB_ID VAULT_GITHUB_SECRET VAULT_OIDC_SECRET \
   GRAFANA_GITHUB_CLIENT_ID GRAFANA_GITHUB_CLIENT_SECRET \
   SONAR_GITHUB_CLIENT_ID SONAR_GITHUB_CLIENT_SECRET SONAR_GITHUB_APP_ID SONAR_GITHUB_PRIVATE_KEY
 
@@ -305,13 +354,16 @@ cat >/opt/agrovesto/scripts/backup-mssql.sh <<'BKP'
 set -euo pipefail
 source /opt/agrovesto/compose/.env
 STAMP=$(date +%Y%m%d-%H%M)
-mkdir -p /data/mssql/backups
 mkdir -p /data/mssql/backup
 # Backup each DB via sqlcmd inside the mssql container
 for db in ${db_list}; do
   docker exec agrovesto-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
     -Q "BACKUP DATABASE [$db] TO DISK = N'/var/opt/mssql/backup/$db-$STAMP.bak' WITH COMPRESSION, INIT"
 done
+%{ if sonarqube.on_postgres ~}
+# SonarQube's PostgreSQL (custom-format dump, restorable with pg_restore)
+docker exec agrovesto-sonarqube-db pg_dump -U ${sonarqube.database_username} -Fc ${sonarqube.database_name} >"/data/mssql/backup/sonarqube-pg-$STAMP.dump"
+%{ endif ~}
 aws s3 sync /data/mssql/backup "s3://$BACKUP_BUCKET/mssql/$STAMP/" --region "$AWS_REGION"
 find /data/mssql/backup -type f -mtime +3 -delete || true
 BKP
@@ -323,6 +375,7 @@ cd /opt/agrovesto/compose
 aws ecr get-login-password --region "${aws_region}" \
 | docker login --username AWS --password-stdin "${ecr_registry}"
 docker compose up -d
+bash /opt/agrovesto/scripts/connect-vault-network.sh
 
 # wait then init DBs
 sleep 40

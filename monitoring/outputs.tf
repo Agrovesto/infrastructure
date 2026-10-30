@@ -45,11 +45,16 @@ output "internal_endpoints" {
 }
 
 output "dashboard_uids" {
-  value = {
+  description = "UIDs of the provisioned dashboards, including the ones the collectors add"
+  value = merge({
     platform = "agrovesto-platform"
     services = "agrovesto-services"
     cost     = "agrovesto-cost"
-  }
+    }, local.collector_enabled ? { ecs = "agrovesto-ecs" } : {},
+    local.cloudwatch_metrics_enabled ? { resources = "agrovesto-resources" } : {},
+    local.alb_log_shipping_enabled ? { traffic = "agrovesto-traffic" } : {},
+    local.mssql_enabled ? { database = "agrovesto-database" } : {}
+  )
 }
 
 output "config_parameter_prefix" {

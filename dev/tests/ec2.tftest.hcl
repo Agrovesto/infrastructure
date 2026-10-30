@@ -1,5 +1,5 @@
 # =============================================================================
-# DEV — EC2 app host (nginx + docker compose: 5 APIs, Vault, SQL Server)
+# DEV — EC2 app host (nginx + docker compose: 7 APIs, Vault, SQL Server)
 #
 # Run with:  terraform -chdir=dev init && terraform -chdir=dev test
 # =============================================================================
@@ -57,19 +57,22 @@ override_data {
 }
 
 variables {
-  import_existing = false
+  ui_https_enabled   = false
+  vault              = { subdomain = "dev-vault", oidc_enabled = false }
+  manage_fresh_vault = false
+  import_existing    = false
 
   ami_id            = "ami-0123456789abcdef0"
   domain_name       = "nomaos.com"
   mssql_sa_password = "Str0ng!TestOnly" # ggignore - test fixture, not a credential
-  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider", "nomaos"]
+  mssql_databases   = ["wallet", "onboarding", "input", "moneval", "serviceprovider"]
   instance_type     = "t3.large"
 
   apis = {
     nomaos = {
-    image     = "public.ecr.aws/nginx/nginx:alpine"
-    host_port = 5000
-    subdomain = "dev-noma-api"
+      image     = "public.ecr.aws/nginx/nginx:alpine"
+      host_port = 5000
+      subdomain = "dev-noma-api"
     }
     wallet = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
@@ -94,7 +97,7 @@ variables {
     serviceprovider = {
       image     = "public.ecr.aws/nginx/nginx:alpine"
       host_port = 5005
-      subdomain = "dev-serviceprovider-api"
+      subdomain = "dev-service-api"
     }
   }
 
@@ -128,12 +131,40 @@ run "instance" {
 
   assert {
     condition     = aws_instance.app.associate_public_ip_address == false
-    error_message = "The host uses an Elastic IP, not an auto-assigned public IP."
+    error_message = "Fresh hosts should use the Elastic IP rather than request an auto-assigned public IP."
+  }
+
+  assert {
+    condition = (
+      strcontains(file("${path.module}/ec2.tf"), "prevent_destroy = true") &&
+      # Tolerate terraform fmt reflowing the list across lines: what matters is
+      # the three retained attributes, not the layout.
+      can(regex("ignore_changes\\s*=\\s*\\[\\s*ami,\\s*user_data,\\s*associate_public_ip_address,?\\s*\\]", file("${path.module}/ec2.tf")))
+    )
+    error_message = "The already-running root-backed Vault host must not be replaced to change its legacy public-IP flag."
   }
 
   assert {
     condition     = [for m in aws_instance.app.metadata_options : m.http_tokens] == ["required"]
     error_message = "IMDSv2 must be required."
+  }
+
+  # The bootstrap is ~18 KB of shell before interpolation, and EC2 caps user data
+  # at 16 KB: unzipped, the plan dies with "expected length of user_data to be in
+  # the range (0 - 16384)" (run #139). gzip keeps it at ~8 KB.
+  #
+  # aws_instance.app.user_data itself cannot be asserted on — it interpolates the
+  # data volume's id, which is unknown during a mocked plan — so the template
+  # stands in for the rendered script: its placeholders are about as long as the
+  # values they interpolate.
+  assert {
+    condition     = length(base64gzip(file("${path.module}/user_data.sh.tftpl"))) <= 16384
+    error_message = "The bootstrap must fit inside EC2's 16 KB user data cap once gzipped; it is over the cap raw."
+  }
+
+  assert {
+    condition     = can(regex("(?:user_data|user_data_base64)\\s*=\\s*base64gzip\\(\\s*templatefile\\(", file("${path.module}/ec2.tf")))
+    error_message = "ec2.tf must pass the rendered bootstrap through base64gzip; handing user_data the raw template fails the plan at 16 KB."
   }
 
   assert {

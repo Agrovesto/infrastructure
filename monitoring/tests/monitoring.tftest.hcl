@@ -136,11 +136,10 @@ override_data {
   values = {
     address = "migration-prod.abc123.eu-west-1.rds.amazonaws.com"
     port    = 1433
-    master_user_secret = [{
-      secret_arn    = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:rds!db-mock-AbCdEf"
-      secret_status = "active"
-      kms_key_id    = ""
-    }]
+    # The adopted migration-prod has no RDS-managed master secret
+    # (mssql_manage_master_user_password stays false in prod/), so the data
+    # source returns none and var.mssql_secret_name below carries the secret.
+    master_user_secret = []
   }
 }
 
@@ -156,6 +155,7 @@ variables {
   domain_name            = "nomaos.com"
   monthly_budget_usd     = 250
   enable_cost_monitoring = true
+  mssql_secret_name      = "arn:aws:secretsmanager:eu-west-1:221434544570:secret:nomaosDBcredentials-TEST01" # ggignore - test fixture, not a credential
 }
 
 run "components_run_on_fargate_with_their_own_state" {
@@ -371,8 +371,11 @@ run "database_metrics_are_scheduled" {
   }
 
   assert {
-    condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "pytds")
-    error_message = "The metrics task must install the pure-Python TDS client."
+    # The distribution is python-tds; a PyPI project called "pytds" exists but
+    # ships no files, so installing it fails and the task never reaches the
+    # collector — the failure this pin now prevents.
+    condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "python-tds")
+    error_message = "The metrics task must install the pure-Python TDS client under its real distribution name."
   }
 
   assert {
@@ -396,13 +399,67 @@ run "database_metrics_are_scheduled" {
   }
 
   assert {
-    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "secret:rds!db-mock-AbCdEf")
-    error_message = "The secret policy must be scoped to the adopted instance's RDS-managed secret (data.aws_db_instance.mssql)."
+    condition     = strcontains(aws_iam_role_policy.task_database_secret[0].policy, "secret:nomaosDBcredentials-TEST01")
+    error_message = "The secret policy must be scoped to var.mssql_secret_name — the adopted instance's existing master secret; it has no RDS-managed one."
   }
 
   assert {
     condition     = strcontains(jsonencode(aws_ecs_task_definition.mssql_metrics[0].container_definitions), "migration-prod.abc123.eu-west-1.rds.amazonaws.com")
     error_message = "DB_HOST must come from the RDS instance data source (managed secrets carry no host)."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.grafana_datasources, "uid: mssql") &&
+      strcontains(local.grafana_datasources, "type: mssql") &&
+      strcontains(local.grafana_datasources, "migration-prod.abc123.eu-west-1.rds.amazonaws.com:1433") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_USER}") &&
+      strcontains(local.grafana_datasources, "$${MSSQL_PASSWORD}")
+    )
+    error_message = "Grafana provisions an MSSQL datasource pointing at the RDS endpoint, with credentials left as environment placeholders ECS fills from the managed secret."
+  }
+
+  assert {
+    condition = (
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), "MSSQL_USER") &&
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), ":username::") &&
+      strcontains(jsonencode(aws_ecs_task_definition.grafana.container_definitions), ":password::")
+    )
+    error_message = "The Grafana task resolves the secret's username and password keys at start (valueFrom with the :key:: suffix)."
+  }
+
+  assert {
+    condition     = contains(aws_ecs_service.grafana.network_configuration[0].security_groups, aws_security_group.internal.id)
+    error_message = "While the MSSQL datasource is on, Grafana joins the internal SG — the path the RDS instance admits the monitoring stack through."
+  }
+
+  assert {
+    condition = (
+      length(aws_iam_role_policy.execution_database_secret) == 1 &&
+      strcontains(aws_iam_role_policy.execution_database_secret[0].policy, "secret:nomaosDBcredentials-TEST01")
+    )
+    error_message = "Secret resolution for valueFrom runs under the execution role, scoped to the database master secret."
+  }
+
+  assert {
+    condition = (
+      contains(keys(aws_s3_object.config), "grafana/dashboards/database.json") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "agrovesto-database") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "mssql_wait_time_seconds_total") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "mssql_io_read_bytes_total") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "client_net_address") &&
+      strcontains(aws_s3_object.config["grafana/dashboards/database.json"].content, "dm_exec_query_stats") &&
+      output.dashboard_uids.database == "agrovesto-database"
+    )
+    error_message = "The per-database deep-dive dashboard ships with the DMV task that feeds it, including the Performance-Insights-style workload row and the who-is-connected / top-queries live tables."
+  }
+
+  assert {
+    condition = (
+      strcontains(local.prometheus_rds_rules, "MssqlLogSpaceHigh") &&
+      strcontains(local.prometheus_rds_rules, "mssql_log_used_bytes / mssql_log_size_bytes > 0.90")
+    )
+    error_message = "A database using over 90% of its transaction log alerts: a full log stalls every write."
   }
 
   assert {
@@ -425,8 +482,8 @@ run "ecs_collector_is_scheduled" {
   }
 
   assert {
-    condition     = strcontains(local.collector_command, "ecs_metrics.py") && strcontains(local.collector_command, "ecs_logs.py")
-    error_message = "The collector must run the ECS metrics script and the log shipper."
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && !strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "The ECS collector reads ECS state only; application logs now arrive through OTLP to Alloy."
   }
 
   assert {
@@ -445,8 +502,230 @@ run "ecs_collector_is_scheduled" {
   }
 
   assert {
-    condition     = strcontains(local.prometheus_ecs_rules, "EcsServiceShortOfTasks") && strcontains(local.prometheus_ecs_rules, "EcsLogShipperStalled")
-    error_message = "The ECS rules must cover task shortfall and stalled log shipping."
+    condition     = strcontains(local.prometheus_ecs_rules, "EcsServiceShortOfTasks") && !strcontains(local.prometheus_ecs_rules, "EcsLogShipperStalled")
+    error_message = "ECS rules cover platform state and no longer alert on the removed CloudWatch log shipper."
+  }
+
+  assert {
+    condition = (
+      !strcontains(jsonencode(aws_iam_role_policy.task.policy), "logs:FilterLogEvents") &&
+      !strcontains(jsonencode(aws_iam_role_policy.task.policy), "logs:GetLogEvents") &&
+      !contains(keys(aws_s3_object.config), "collector/ecs_logs.py")
+    )
+    error_message = "The monitoring collector no longer receives CloudWatch Logs read access or an ECS log-shipping script."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# The two extra collectors: basic CloudWatch metrics and the ALB access logs
+# -----------------------------------------------------------------------------
+
+run "cloudwatch_basic_metrics_are_collected" {
+  command = plan
+
+  assert {
+    condition     = strcontains(local.collector_command, "cw_metrics.py")
+    error_message = "The CloudWatch metric collector rides the existing ECS collector task: same schedule, same checkpoint volume, no second task to run."
+  }
+
+  assert {
+    condition     = strcontains(aws_s3_object.config["collector/cw_metrics.py"].content, "cloudwatch_collector_up")
+    error_message = "The collector script must be published for the init container to sync, and must report its own failure as a metric."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ALB_ARN_SUFFIX"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "METRIC_DELAY_SECONDS"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "SERVICE_PREFIX"),
+    ])
+    error_message = "The task hands the collector the prod load balancer, the CloudWatch delivery delay and the service name prefix."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:GetMetricData"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:ListMetrics"),
+    ])
+    error_message = "Basic metrics need two CloudWatch actions; discovering dimensions with ListMetrics is what keeps every service describe permission out."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_cloudwatch_rules, "EcsServiceHighCpu"),
+      strcontains(local.prometheus_cloudwatch_rules, "EcsServiceHighMemory"),
+      strcontains(local.prometheus_cloudwatch_rules, "AlbUnhealthyTargets"),
+      strcontains(local.prometheus_cloudwatch_rules, "AlbRejectingConnections"),
+      strcontains(local.prometheus_cloudwatch_rules, "RdsLowDiskSpace"),
+      strcontains(local.prometheus_cloudwatch_rules, "NatGatewayPortExhaustion"),
+      strcontains(local.prometheus_cloudwatch_rules, "CloudwatchMetricsStale"),
+    ])
+    error_message = "Everything the collector publishes must be alertable: service CPU and memory, unhealthy targets, database resources, NAT ports, and the collector itself going quiet."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_object.config["grafana/dashboards/resources.json"].content_type == "application/json",
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "rds_free_storage_space_bytes"),
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "alb_unhealthy_hosts"),
+      strcontains(aws_s3_object.config["grafana/dashboards/resources.json"].content, "nat_gateway_bytes_out_to_destination"),
+    ])
+    error_message = "The cloud resources dashboard is provisioned with the others and queries what the collector publishes."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.config["grafana/dashboards/ecs.json"].content, "ecs_service_cpu_utilization_percent"),
+      strcontains(aws_s3_object.config["grafana/dashboards/ecs.json"].content, "ecs_service_memory_utilization_percent"),
+    ])
+    error_message = "Per-service CPU and memory belong on the ECS platform dashboard, next to the task counts."
+  }
+
+  assert {
+    condition     = output.dashboard_uids.resources == "agrovesto-resources"
+    error_message = "The new dashboard uid is published with the others."
+  }
+}
+
+run "alb_access_logs_are_shipped" {
+  command = plan
+
+  assert {
+    condition     = strcontains(local.collector_command, "alb_logs.py")
+    error_message = "The ALB access log shipper runs in the collector task too."
+  }
+
+  assert {
+    condition     = startswith(local.alb_logs_bucket, "agrovesto-prod-alb-logs-")
+    error_message = "With no explicit bucket the name prod/alb.tf creates is derived, so shipping works with no new variable value."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ALB_LOGS_BUCKET"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "ACCOUNT_ID"),
+      strcontains(jsonencode(aws_ecs_task_definition.collector[0].container_definitions), "MAX_OBJECTS_PER_RUN"),
+    ])
+    error_message = "The task tells the shipper which bucket to read, whose account the key paths belong to and how much one run may take."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "s3:ListBucket"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "arn:aws:s3:::${local.alb_logs_bucket}"),
+      strcontains(jsonencode(aws_iam_role_policy.task.policy), "arn:aws:s3:::${local.alb_logs_bucket}/${var.alb_access_logs_prefix}*"),
+    ])
+    error_message = "The shipper reads the access log bucket and nothing else: list on the bucket, get on the prefix."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_s3_object.config["collector/alb_logs.py"].content, "alb_logs_shipper_up"),
+      strcontains(aws_s3_object.config["collector/alb_logs.py"].content, "ELB-HealthChecker"),
+    ])
+    error_message = "The shipper reports its own state as a metric and keeps health checks distinguishable from client requests."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(local.prometheus_alb_rules, "AlbLogShipperFailing"),
+      strcontains(local.prometheus_alb_rules, "AlbLogShipperStalled"),
+      strcontains(local.prometheus_alb_rules, "AlbAccessLogsMissing"),
+      strcontains(local.prometheus_alb_rules, "AlbLogParseErrors"),
+      strcontains(local.loki_rules, "AlbRequestErrorSpike"),
+      strcontains(local.loki_rules, "AlbClientErrorFlood"),
+    ])
+    error_message = "A shipper that stops, a bucket that stops receiving and a log format that changes are all alertable, and the shipped lines drive the traffic alerts."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_object.config["grafana/dashboards/traffic.json"].content_type == "application/json",
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "count_over_time"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "client_ip"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "user_agent"),
+      strcontains(aws_s3_object.config["grafana/dashboards/traffic.json"].content, "alb_logs_shipped_total"),
+    ])
+    error_message = "The traffic dashboard counts requests per day per service and breaks them down by client IP, URI and user agent, and watches the shipper."
+  }
+
+  assert {
+    condition     = output.dashboard_uids.traffic == "agrovesto-traffic"
+    error_message = "The traffic dashboard uid is published with the others."
+  }
+}
+
+run "loki_rules_are_published_under_the_tenant_directory" {
+  command = plan
+
+  # Loki's local rule storage reads <directory>/<tenant>/<namespace>, and with
+  # auth_enabled false the tenant every line is ingested under is literally
+  # "fake". A rule file one level higher is never loaded, and the ruler does not
+  # complain: the alerts simply never evaluate.
+  assert {
+    condition     = contains(keys(aws_s3_object.config), "loki/rules/fake/application.yml")
+    error_message = "The Loki rules must be published under the fake tenant directory or the ruler loads nothing."
+  }
+
+  assert {
+    condition     = aws_s3_object.config["loki/rules/fake/application.yml"].key == "config/loki/rules/fake/application.yml"
+    error_message = "The init container syncs config/loki into the task, so the rules land at /loki/config/rules/fake/application.yml."
+  }
+
+  assert {
+    condition     = strcontains(local.loki_config, "directory: /loki/config/rules")
+    error_message = "The ruler's local storage directory must be the directory the rules are synced into."
+  }
+}
+
+run "extra_collectors_can_be_turned_off" {
+  command = plan
+
+  variables {
+    enable_cloudwatch_metrics = false
+    enable_alb_log_shipping   = false
+  }
+
+  assert {
+    condition     = !strcontains(local.collector_command, "cw_metrics.py") && !strcontains(local.collector_command, "alb_logs.py")
+    error_message = "Both extra collectors are optional."
+  }
+
+  assert {
+    condition     = strcontains(local.collector_command, "ecs_metrics.py") && !strcontains(local.collector_command, "ecs_logs.py")
+    error_message = "Turning the optional extras off leaves ECS state collection on, without a CloudWatch application-log shipper."
+  }
+
+  assert {
+    condition = alltrue([
+      !contains(keys(aws_s3_object.config), "collector/cw_metrics.py"),
+      !contains(keys(aws_s3_object.config), "collector/alb_logs.py"),
+      !contains(keys(aws_s3_object.config), "prometheus/rules/cloudwatch.yml"),
+      !contains(keys(aws_s3_object.config), "prometheus/rules/alb.yml"),
+      !contains(keys(aws_s3_object.config), "grafana/dashboards/resources.json"),
+      !contains(keys(aws_s3_object.config), "grafana/dashboards/traffic.json"),
+    ])
+    error_message = "Nothing that reads those metrics or logs is published when they are switched off."
+  }
+
+  assert {
+    condition     = length(aws_s3_object.config) == 20
+    error_message = "Config publication contains ECS state/metrics files but no CloudWatch ECS log shipper."
+  }
+
+  assert {
+    condition     = !strcontains(jsonencode(aws_iam_role_policy.task.policy), "cloudwatch:GetMetricData")
+    error_message = "Without the CloudWatch collector the task role keeps no CloudWatch read."
+  }
+
+  assert {
+    condition     = !strcontains(jsonencode(aws_iam_role_policy.task.policy), local.alb_logs_bucket)
+    error_message = "When ALB log shipping is disabled, the task role keeps no access to the access-log bucket."
+  }
+
+  assert {
+    condition     = !contains(keys(output.dashboard_uids), "resources") && !contains(keys(output.dashboard_uids), "traffic")
+    error_message = "The dashboard uids follow the collectors that fill them."
   }
 }
 
@@ -479,7 +758,16 @@ run "scheduled_tasks_can_be_turned_off" {
   }
 
   assert {
-    condition     = length(aws_s3_object.config) == 18
+    condition = (
+      length(aws_iam_role_policy.execution_database_secret) == 0 &&
+      !strcontains(local.grafana_datasources, "type: mssql") &&
+      !contains(keys(output.dashboard_uids), "database")
+    )
+    error_message = "Without RDS monitoring the Grafana MSSQL datasource, its execution-role secret policy and the Database dashboard all stay off."
+  }
+
+  assert {
+    condition     = length(aws_s3_object.config) == 24
     error_message = "Without RDS monitoring the database script and rules are not published."
   }
 }

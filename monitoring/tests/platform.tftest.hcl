@@ -241,7 +241,7 @@ run "config_is_published_for_the_init_container" {
   command = plan
 
   assert {
-    condition     = length(aws_s3_object.config) == 20
+    condition     = length(aws_s3_object.config) == 27
     error_message = "Every config file, rule file, script and dashboard must be published for the init container."
   }
 

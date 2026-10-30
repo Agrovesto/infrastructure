@@ -1,33 +1,32 @@
-# =============================================================================
-# Grafana Alloy — the collector on the dev EC2 host
-#
-# Rendered by Terraform (dev/locals.tf), uploaded as the object
-# logging/alloy/config.alloy in the host config bucket (dev/host_config.tf) and
-# synced by user_data to /opt/agrovesto/logging/alloy/config.alloy on every boot.
-#
-# Do not edit on the host: the next boot re-syncs the Terraform copy over it.
-# Iterate there instead - `docker compose restart alloy` after editing the file
-# makes a change visible without a Terraform run, and apply makes it final.
-#
-# Three inputs, one output:
-#
-#   docker containers (the 5 APIs, Vault, SQL Server, nginx access log)
-#   journald         (sshd, kernel, cloud-init, unit failures)
-#   Loki push API    (an app that logs straight to Alloy, port ${push_port})
-#                            -> loki.process -> Loki on 127.0.0.1:3100
-# =============================================================================
+// =============================================================================
+// Grafana Alloy — the collector on the dev EC2 host
+//
+// Rendered by Terraform (dev/locals.tf), uploaded as the object
+// logging/alloy/config.alloy in the host config bucket (dev/host_config.tf) and
+// synced by user_data to /opt/agrovesto/logging/alloy/config.alloy on every boot.
+//
+// Do not edit on the host: the next boot re-syncs the Terraform copy over it.
+// Iterate there instead - `docker compose restart alloy` after editing the file
+// makes a change visible without a Terraform run, and apply makes it final.
+//
+// Four inputs, three destinations (Loki, Prometheus, Tempo):
+//
+//   docker containers (the 7 APIs, Vault, SQL Server, nginx access log)
+//   journald         (sshd, kernel, cloud-init, unit failures)
+//   Loki push API    (an app that logs straight to Alloy, port ${push_port})
+//                            -> loki.process -> Loki on 127.0.0.1:3100
+//   OTLP gRPC/HTTP   (the APIs' OTEL_* env block, ports 4317/4318)
+//                            -> Tempo (traces) | Prometheus (metrics) | Loki
+// =============================================================================
 
 logging {
   level = "warn"
 }
 
-// Serving on 0.0.0.0 is harmless: the port is published on 127.0.0.1 only and
-// the security group has no ingress for it. Prometheus scrapes it from inside
-// the docker network.
-http {
-  listen_address = "0.0.0.0"
-  listen_port    = ${metrics_port}
-}
+// Alloy's own HTTP server (UI + /metrics) is configured with the
+// --server.http.listen-addr flag in docker-compose, not in this file. Serving on
+// 0.0.0.0 is harmless: the port is published on 127.0.0.1 only and the security
+// group has no ingress for it. Prometheus scrapes it from the docker network.
 
 // -----------------------------------------------------------------------------
 // 1. Container logs
@@ -42,7 +41,7 @@ discovery.docker "host" {
 }
 
 discovery.relabel "containers" {
-  targets = discovery.docker.host.output
+  targets = discovery.docker.host.targets
 
   // agrovesto-wallet -> wallet, so a dashboard can group by `service`.
   rule {
@@ -134,19 +133,19 @@ loki.process "lines" {
 
     stage.json {
       expressions = {
-        component = "component"
-        level     = "level"
-        status    = "status"
-        method    = "method"
+        component = "component",
+        level     = "level",
+        status    = "status",
+        method    = "method",
       }
     }
 
     stage.labels {
       values = {
-        component = ""
-        level     = ""
-        status    = ""
-        method    = ""
+        component = "",
+        level     = "",
+        status    = "",
+        method    = "",
       }
     }
   }
@@ -190,4 +189,60 @@ loki.source.api "push" {
 
   labels     = { job = "loki-push", host = "${hostname}" }
   forward_to = [loki.process.lines.receiver]
+}
+
+// -----------------------------------------------------------------------------
+// 5. OTLP: spans (and any OTLP metrics/logs) from the apps
+//
+// The receiving end of the OTEL_* env block Terraform puts on every compose
+// API — the same receiver shape the prod monitoring stack's Alloy runs
+// (monitoring/locals.tf). Traces go to Tempo beside this container, metrics
+// remote-write to the host Prometheus (the span metrics Tempo produces take
+// the same road), and OTLP logs — if a service ever turns them on — land in
+// Loki next to the docker-tailed lines.
+//
+// Containers on this network send to http://alloy:4317; a host process or an
+// SSH tunnel uses the loopback publishes in docker-compose.yml.
+// -----------------------------------------------------------------------------
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    // The compose service name, not localhost: this container has its own
+    // network namespace. No TLS — the docker network is private to the host.
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.loki.receiver]
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
 }

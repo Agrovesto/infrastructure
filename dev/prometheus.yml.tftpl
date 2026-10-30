@@ -11,9 +11,10 @@
 # file makes a change visible without a Terraform run, and apply makes it final.
 #
 #
-# Seven scrape targets, all on the docker network. There is no service discovery
-# and no remote write: this is a single box and the TSDB on the logging volume
-# is the store.
+# Nine scrape targets, all on the docker network. There is no service
+# discovery: this is a single box, the TSDB on the logging volume is the store,
+# and the remote-write receiver (enabled in docker-compose) is what Tempo's
+# span metrics and Alloy's OTLP metrics arrive on.
 # =============================================================================
 
 global:
@@ -50,11 +51,16 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:${cadvisor_port}"]
 
-  # Loki and Alloy report their own ingest, drop and query counters here, so
-  # "are my logs still flowing" is a graph and not a guess.
+  # Loki, Alloy and Tempo report their own ingest, drop, query and compaction
+  # counters here, so "are my logs/traces still flowing" is a graph and not a
+  # guess. Tempo's span metrics arrive by remote write, not by scrape.
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]
+
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:${tempo_port}"]
 
   - job_name: alloy
     static_configs:
@@ -67,3 +73,10 @@ scrape_configs:
   - job_name: alertmanager
     static_configs:
       - targets: ["alertmanager:${alertmanager_port}"]
+
+  # SQL Server DMVs: the mssql-exporter container re-runs the queries on every
+  # scrape (serve mode of the script the prod monitoring task pushes from), so
+  # these series are as fresh as everything else on this box.
+  - job_name: mssql
+    static_configs:
+      - targets: ["mssql-exporter:${mssql_exporter_port}"]

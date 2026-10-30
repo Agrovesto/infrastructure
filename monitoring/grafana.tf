@@ -83,6 +83,20 @@ resource "aws_ecs_task_definition" "grafana" {
             name      = "GF_AUTH_GITHUB_CLIENT_SECRET"
             valueFrom = aws_ssm_parameter.grafana_github_client_secret[0].arn
           },
+        ] : [],
+        local.mssql_grafana_enabled ? [
+          # ECS resolves these two keys of the database master secret at
+          # task start; Grafana expands them into the provisioned MSSQL
+          # datasource (local.grafana_datasources). The URL is interpolated
+          # at render time, so host/port need no environment of their own.
+          {
+            name      = "MSSQL_USER"
+            valueFrom = "${local.mssql_secret_id}:username::"
+          },
+          {
+            name      = "MSSQL_PASSWORD"
+            valueFrom = "${local.mssql_secret_id}:password::"
+          },
         ] : []
       )
 
@@ -134,8 +148,11 @@ resource "aws_ecs_service" "grafana" {
   }
 
   network_configuration {
-    subnets          = [local.monitor_subnet_id]
-    security_groups  = [aws_security_group.grafana.id]
+    subnets = [local.monitor_subnet_id]
+    # The internal SG joins while the MSSQL datasource is on: the RDS
+    # instance admits the monitoring stack through it (the DMV metrics
+    # task's path), and the grafana SG alone only faces the ALB.
+    security_groups  = local.mssql_grafana_enabled ? [aws_security_group.grafana.id, aws_security_group.internal.id] : [aws_security_group.grafana.id]
     assign_public_ip = false
   }
 

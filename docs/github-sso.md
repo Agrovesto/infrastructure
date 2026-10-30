@@ -1,5 +1,20 @@
 # GitHub login for Grafana and SonarQube
 
+## HTTPS is independent of login
+
+The checked-in dev settings enable `ui_https_enabled = true`: exposed UI hosts
+are `https://sonar.nomaos.com` and `https://dev-grafana.nomaos.com`, whether or
+not GitHub SSO is configured. DNS must point to the dev EIP and inbound 80/443
+must be reachable. nginx IP allowlists still apply. A Caddy configuration hash
+in Compose triggers edge recreation on route changes (brief proxy interruption).
+
+For local Terraform applies, continue supplying the existing Grafana and
+SonarQube OAuth credentials as well as Vault credentials. GitHub Actions secrets
+are not automatically loaded locally. This HTTPS setting does not preserve or
+enable SSO when its credential variables are omitted: inspect the plan for
+unexpected SSM-parameter deletion or auth changes before applying.
+
+
 The infrastructure supports GitHub login without removing the local administrator
 accounts. GitHub login is for people using the web UIs; scanners still use
 `SONAR_TOKEN` and `SONAR_HOST_URL`.
@@ -10,7 +25,7 @@ accounts. GitHub login is for people using the web UIs; scanners still use
 | --- | --- | --- |
 | SonarQube Community Build | `http://sonar.nomaos.com` (or the SSH tunnel) | On a fresh database, `admin` / `admin`; SonarQube immediately requires a password change. The changed password is held by SonarQube, not Terraform or SSM. |
 | Production Grafana | `https://grafana.nomaos.com` | Configured admin user (default `admin`); generated password in SSM SecureString `/agrovesto-monitoring/grafana/admin-password`. |
-| Dev Grafana | `http://dev-logs.nomaos.com` (or the SSH tunnel) | Configured admin user (default `admin`); password in SSM SecureString `/agrovesto-dev/grafana_admin_password` (the dev-only default is `agrovesto-dev` unless overridden). |
+| Dev Grafana | `http://dev-grafana.nomaos.com` (or the SSH tunnel) | Configured admin user (default `admin`); password in SSM SecureString `/agrovesto-dev/grafana_admin_password` (the dev-only default is `agrovesto-dev` unless overridden). |
 
 Retrieve a Grafana break-glass password with an authenticated AWS CLI in the
 corresponding account:
@@ -102,8 +117,8 @@ Use separate OAuth Apps because prod and dev have different callback URLs.
 
 ### Dev Grafana
 
-- Homepage URL: `https://dev-logs.nomaos.com`
-- Authorization callback URL: `https://dev-logs.nomaos.com/login/github`
+- Homepage URL: `https://dev-grafana.nomaos.com`
+- Authorization callback URL: `https://dev-grafana.nomaos.com/login/github`
 - Secrets:
   - `DEV_GRAFANA_GITHUB_CLIENT_ID`
   - `DEV_GRAFANA_GITHUB_CLIENT_SECRET`
@@ -161,7 +176,7 @@ GitHub SSO does not bypass either service's network allowlist.
 - Set `dev.logging.allowed_cidrs` and `dev.sonarqube.allowed_cidrs` to the
   office/VPN egress CIDRs before supplying dev SSO credentials. Terraform rejects
   dev SSO with an empty allowlist.
-- Ensure `grafana.nomaos.com`, `dev-logs.nomaos.com`, and `sonar.nomaos.com`
+- Ensure `grafana.nomaos.com`, `dev-grafana.nomaos.com`, and `sonar.nomaos.com`
   resolve to the endpoints documented in the stack outputs. Caddy needs the two
   dev records to reach the dev Elastic IP before ACME can issue certificates.
 - Ports 80 and 443 are already present in the dev security group. Do not add
