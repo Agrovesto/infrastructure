@@ -87,6 +87,11 @@ variable "services" {
     health_check_path = optional(string, "/")
     environment       = optional(map(string), {})
   }))
+
+  validation {
+    condition     = alltrue([for service in keys(var.services) : can(regex("^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$", service))])
+    error_message = "ECS service keys must be lowercase, path-safe identifiers (letters, numbers and internal hyphens)."
+  }
 }
 
 variable "enable_container_insights" {
@@ -163,7 +168,7 @@ variable "ecs_autoscaling_scale_out_cooldown" {
 }
 
 variable "log_retention_days" {
-  description = "CloudWatch log retention for service logs and VPC flow logs (prod baseline: 1 year, CKV_AWS_338)"
+  description = "CloudWatch retention for operational task logs and VPC flow logs (module default 365 days; prod auto.tfvars sets 30 days)"
   type        = number
   default     = 365
 }
@@ -213,13 +218,10 @@ variable "otel" {
 
     traces_exporter  = optional(string, "otlp")
     metrics_exporter = optional(string, "otlp")
-    # none, deliberately: service logs already reach CloudWatch Logs through the
-    # awslogs driver on the task definition. Exporting them a second time over
-    # OTLP would store every line twice (CloudWatch *and* Loki) and double the
-    # ingest on a stack that is sized for one copy. Flip to "otlp" if the apps
-    # start emitting structured logs that Loki is a better home for, and drop the
-    # awslogs driver at the same time rather than paying for both.
-    logs_exporter = optional(string, "none")
+    # Application service logs use OTLP to the Alloy receiver and then Loki.
+    # The API task definitions have no awslogs driver; the app image must include
+    # and configure an OpenTelemetry logs SDK/exporter for records to be emitted.
+    logs_exporter = optional(string, "otlp")
 
     # Sample everything: five services at one task each is not enough volume for
     # tail sampling to earn its keep, and a dropped trace is one you cannot go
@@ -449,7 +451,7 @@ variable "enable_vault" {
 }
 
 variable "vault_secrets_enabled" {
-  description = "true: services read DB creds from Vault (no Secrets Manager injection). Enable AFTER Vault is initialized and the kv paths populated — see vault.tf"
+  description = "true: services read DB creds from their per-service Vault KV path, authenticating with AppRole credentials from AWS Secrets Manager. Enable only after Vault is initialized, paths are populated, and credentials are provisioned."
   type        = bool
   default     = false
 }

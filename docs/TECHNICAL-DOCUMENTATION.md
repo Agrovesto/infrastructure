@@ -202,14 +202,14 @@ Runs on ECS Fargate in the prod VPC (discovered through data sources). Storage i
 | Alloy | Collection agent | n/a |
 | Blackbox exporter | HTTPS uptime probes: the 5 APIs, Vault `/v1/sys/health`, Grafana `/api/health` | n/a |
 | Pushgateway | Metrics from batch jobs | n/a |
-| ECS collector | Scheduled ECS service and task state, failed rollouts, stopped-task reasons; ships application logs from CloudWatch Logs into Loki | every 2 min |
+| ECS collector | Scheduled ECS service/task state, failed rollouts and stopped-task reasons; no CloudWatch application-log reads (API logs use OTLP to Alloy/Loki) | every 2 min |
 | CloudWatch collector | The always-free basic metrics: ECS service CPU and memory, RDS CPU/memory/free storage/connections, ALB requests/latency/5xx, NAT bytes, EFS burst credits | every 2 min |
 | ALB log shipper | Reads new access-log objects from S3 into Loki: request counts, status classes, latency, client IPs, user agents | every 2 min |
 | RDS collector | Scheduled SQL Server size metrics for `migration-prod` | hourly |
 | Cost | CUR bucket, AWS Budget $250/month (alert at 80%) | n/a |
 | Monthly report | PDF emailed through SES to `tech@agrovesto.com` | monthly |
 
-The three collectors above run as scripts inside the **one** existing collector task (`sh -c` over the enabled scripts, `monitoring/collector.tf`), so enabling them adds no Fargate spend. Each is behind its own toggle: `enable_ecs_monitoring`, `enable_ecs_log_shipping`, `cloudwatch_metrics_enabled`, `alb_log_shipping_enabled`. Container Insights and X-Ray stay off — the basic CloudWatch metrics are $0 and answer the same questions.
+The three collectors above run as scripts inside the **one** existing collector task (`sh -c` over the enabled scripts, `monitoring/collector.tf`), so enabling them adds no Fargate spend. Each is behind its own toggle: `enable_ecs_monitoring`, `cloudwatch_metrics_enabled`, `alb_log_shipping_enabled`. Application logs no longer use a CloudWatch shipper; Container Insights and X-Ray stay off.
 
 ---
 
@@ -263,7 +263,7 @@ Settings: `var.rekognition` (`collections`, `liveness_identity_pool`, `liveness_
 | Area | Control |
 |---|---|
 | CI access to AWS | GitHub OIDC → deploy role. No long-lived keys |
-| Secrets | Secrets Manager (`nomaosDBcredentials`), GitHub secrets (`TF_VAR_MSSQL_SA_PASSWORD_DEV`), compose `.env` on the host. Never in `.tf` files |
+| Secrets | Prod bootstraps from the RDS-managed Secrets Manager secret, then can switch to per-service Vault AppRoles/paths (`kv/<service>/prod/appsettings`); Dev uses per-service Vault AppRoles/host env files (`kv/<service>/staging/appsettings`). GitHub deploy credentials stay in GitHub secrets. Never put secret values in `.tf` files |
 | Encryption | KMS CMKs for SNS, Vault and monitoring (EFS/S3); SSE on all buckets. RDS `migration-prod` is unencrypted (known gap, see §16) |
 | Buckets | Public access blocked and TLS-only policies on every bucket |
 | Instances | IMDSv2 required; SSH restricted to `allowed_ssh_cidrs`; monitoring UIs on loopback or VPC only |

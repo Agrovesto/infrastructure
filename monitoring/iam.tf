@@ -157,20 +157,6 @@ resource "aws_iam_role_policy" "task" {
           ]
         }
       ] : [],
-      var.enable_ecs_log_shipping ? [
-        {
-          Sid      = "ListLogGroups"
-          Effect   = "Allow"
-          Action   = ["logs:DescribeLogGroups"]
-          Resource = ["*"]
-        },
-        {
-          Sid      = "ReadServiceLogs"
-          Effect   = "Allow"
-          Action   = ["logs:FilterLogEvents", "logs:GetLogEvents"]
-          Resource = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.ecs_log_prefix}*:*"]
-        }
-      ] : [],
       local.cloudwatch_metrics_enabled ? [
         {
           # The two read actions the free basic metrics need. Dimension sets are

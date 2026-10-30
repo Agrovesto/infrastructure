@@ -485,6 +485,51 @@ locals {
   # ./docker-compose.yml and nginx's bind mount still finds ./nginx.conf.
   host_config_bucket = "${local.name}-host-config"
 
+  # Application API credentials are created after Vault is initialized. Only
+  # non-secret policies and helper scripts enter the config bucket; generated
+  # AppRole IDs and service env files stay on the persistent Vault EBS volume.
+  vault_kv_mount         = "kv"
+  vault_path_environment = "staging"
+  vault_service_env_dir  = "/data/vault/services"
+  vault_service_names    = sort(keys(var.apis))
+
+  vault_service_policy_files = {
+    for service in local.vault_service_names :
+    "vault/service-policies/${service}.hcl" => {
+      content_type = "text/plain"
+      content = templatefile("${path.module}/vault-service-policy.hcl.tftpl", {
+        kv_mount         = local.vault_kv_mount
+        path_environment = local.vault_path_environment
+        service          = service
+      })
+    }
+  }
+
+  vault_service_bootstrap_files = {
+    "scripts/connect-vault-network.sh" = {
+      content      = file("${path.module}/connect-vault-network.sh")
+      content_type = "text/x-shellscript"
+    }
+    "scripts/configure-vault-services.sh" = {
+      content_type = "text/x-shellscript"
+      content = templatefile("${path.module}/configure-vault-services.sh.tftpl", {
+        environment      = var.environment
+        kv_mount         = local.vault_kv_mount
+        path_environment = local.vault_path_environment
+        env_dir          = local.vault_service_env_dir
+        services         = local.vault_service_names
+      })
+    }
+    "scripts/write-vault-service-secret.sh" = {
+      content_type = "text/x-shellscript"
+      content = templatefile("${path.module}/write-vault-service-secret.sh.tftpl", {
+        path_environment = local.vault_path_environment
+        kv_mount         = local.vault_kv_mount
+        services         = local.vault_service_names
+      })
+    }
+  }
+
   host_config_files = merge(
     var.manage_fresh_vault ? {
       "vault/managed-vault.hcl" = {
@@ -516,6 +561,8 @@ locals {
         })
       }
     } : {},
+    local.vault_service_policy_files,
+    local.vault_service_bootstrap_files,
     {
       "compose/docker-compose.yml" = {
         content      = local.docker_compose

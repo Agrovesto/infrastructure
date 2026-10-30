@@ -176,34 +176,6 @@
    }
   },
   {
-   "id": 6,
-   "type": "stat",
-   "title": "Log shipper age",
-   "gridPos": {
-    "h": 5,
-    "w": 4,
-    "x": 20,
-    "y": 0
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "targets": [
-    {
-     "expr": "time() - ecs_logs_scrape_timestamp_seconds",
-     "legendFormat": ""
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s",
-     "decimals": 0
-    },
-    "overrides": []
-   }
-  },
-  {
    "id": 15,
    "type": "row",
    "title": "CPU and memory per service",
@@ -478,8 +450,8 @@
    },
    "targets": [
     {
-     "expr": "sum by (service) (rate({source=\"app\"} |= \"\" [5m]))",
-     "legendFormat": "{{service}}"
+     "expr": "sum by (service_name) (rate({source=\"app\", service_name=~\"$service\"}[5m]))",
+     "legendFormat": "{{service_name}}"
     }
    ],
    "fieldConfig": {
@@ -503,7 +475,7 @@
    },
    "targets": [
     {
-     "expr": "{source=\"app\"} |~ \"(?i)error|exception|fail\""
+     "expr": "{source=\"app\", service_name=~\"$service\"}"
     }
    ],
    "options": {
@@ -511,59 +483,7 @@
     "wrapLogMessage": true,
     "sortOrder": "Descending"
    }
-  },
-  {
-   "id": 13,
-   "type": "timeseries",
-   "title": "Log lines shipped per group",
-   "gridPos": {
-    "h": 7,
-    "w": 12,
-    "x": 0,
-    "y": 39
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "targets": [
-    {
-     "expr": "ecs_logs_shipped_total",
-     "legendFormat": "{{service}}"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {},
-    "overrides": []
-   }
-  },
-  {
-   "id": 14,
-   "type": "timeseries",
-   "title": "Newest shipped log event age",
-   "gridPos": {
-    "h": 7,
-    "w": 12,
-    "x": 12,
-    "y": 39
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   },
-   "targets": [
-    {
-     "expr": "time() - ecs_logs_last_event_timestamp_seconds",
-     "legendFormat": "{{service}}"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "s"
-    },
-    "overrides": []
-   }
   }
  ],
- "description": "ECS platform state from the collector's ECS API reads, plus per-service CPU and memory from the basic CloudWatch metrics it republishes. No Container Insights, no CloudWatch dashboards."
+ "description": "ECS platform state from the ECS API collector and per-service CPU/memory from basic CloudWatch metrics. Application logs are sent over OTLP to Alloy and stored in Loki; the API tasks have no CloudWatch Logs driver."
 }

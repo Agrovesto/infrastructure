@@ -23,6 +23,11 @@ variable "project" {
 variable "environment" {
   type    = string
   default = "dev"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$", var.environment))
+    error_message = "environment must be a lowercase path-safe identifier (letters, numbers and internal hyphens)."
+  }
 }
 
 variable "domain_name" {
@@ -169,6 +174,11 @@ variable "apis" {
       green_port = number
     }))
   }))
+
+  validation {
+    condition     = alltrue([for service in keys(var.apis) : can(regex("^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$", service))])
+    error_message = "API service keys must be lowercase, path-safe identifiers (letters, numbers and internal hyphens)."
+  }
 }
 
 # -----------------------------------------------------------------------------

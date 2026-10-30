@@ -19,7 +19,7 @@ flowchart LR
     cur["Cost and Usage Report<br/>daily, Parquet, us-east-1"]
     s3cur["S3 bucket cur"]
     s3cfg["S3 bucket config<br/>dashboards, rule files, probe config, scripts"]
-    cwl["CloudWatch Logs<br/>service log groups"]
+    cwl["CloudWatch Logs<br/>platform/support task diagnostics"]
     cwapi["CloudWatch metrics API<br/>ListMetrics and GetMetricData"]
     s3alb["S3 bucket alb access logs"]
     ses["SES<br/>domain identity + DKIM"]
@@ -28,7 +28,7 @@ flowchart LR
 
   subgraph collect["Scheduled Fargate tasks"]
     direction TB
-    collector["collector<br/>rate 2 min<br/>ecs metrics, log shipper,<br/>cloudwatch metrics, alb shipper"]
+    collector["collector<br/>rate 2 min<br/>ecs metrics/state,<br/>cloudwatch metrics, alb shipper"]
     mssqljob["mssql-metrics<br/>rate 1 h"]
     budgetjob["budget<br/>cron 15 6 daily"]
     reportjob["report<br/>cron 0 8 1st of month"]
@@ -56,9 +56,9 @@ flowchart LR
   end
 
   %% ── ingest paths ─────────────────────────────────────────────────
-  apis -->|"OTLP 4317 traces and logs"| alloy
-  apis -->|"HTTP 3100 Loki push"| alloy
+  apis -->|"OTLP 4317/4318 traces, metrics and logs"| alloy
   vaultapp -->|"HTTP 12345 scrape"| prom
+  vaultapp -->|"awslogs task diagnostics"| cwl
   alloy -->|"OTLP 4317 to tempo"| tempo
   alloy -->|"HTTP 3100 push"| loki
   tempo -->|"remote write metrics-generator"| prom
@@ -84,9 +84,8 @@ flowchart LR
   %% ── batch job paths, control plane ───────────────────────────────
   collector -->|"HTTPS DescribeServices and DescribeTasks"| ecsapi
   ecsapi -->|"task and service metrics"| collector
+  collector -->|"awslogs task diagnostics"| cwl
   collector -->|"HTTP 9091 push"| pushgw
-  collector -->|"HTTPS FilterLogEvents, cursor on EFS"| cwl
-  collector -->|"HTTP 3100 push app logs"| loki
   collector -->|"HTTPS GetMetricData, basic metrics only"| cwapi
   collector -->|"S3 ListBucket and GetObject"| s3alb
   collector -->|"HTTP 3100 push access logs"| loki

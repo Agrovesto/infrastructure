@@ -133,6 +133,16 @@ run "every_task_definition_is_complete" {
   }
 
   assert {
+    condition = (
+      strcontains(local.alloy_config, "otelcol.processor.transform \"logs_to_loki\"") &&
+      strcontains(local.alloy_config, "loki.attribute.labels") &&
+      strcontains(local.alloy_config, "loki.resource.labels") &&
+      strcontains(local.alloy_config, "service.name, service.namespace")
+    )
+    error_message = "OTLP application logs must be normalized and labelled before Alloy forwards them to Loki."
+  }
+
+  assert {
     condition     = strcontains(jsonencode(aws_ecs_task_definition.loki[*].container_definitions), "3100")
     error_message = "Loki must expose its push and query API."
   }

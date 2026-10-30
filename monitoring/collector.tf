@@ -1,7 +1,8 @@
 # ECS platform monitoring without Container Insights or CloudWatch dashboards:
-# a scheduled Fargate task reads the ECS API, ships service logs into Loki,
-# republishes the free basic CloudWatch metrics as Prometheus series and parses
-# the ALB access logs out of S3, pushing its own state to Pushgateway.
+# a scheduled Fargate task reads the ECS API, republishes the free basic
+# CloudWatch metrics as Prometheus series and parses ALB access logs out of S3,
+# pushing its own state to Pushgateway. Application logs arrive through OTLP to
+# Alloy; this collector no longer reads CloudWatch Logs.
 
 locals {
   collector_enabled = var.enable_ecs_monitoring
@@ -11,8 +12,7 @@ locals {
   cloudwatch_metrics_enabled = local.collector_enabled && var.enable_cloudwatch_metrics
   alb_log_shipping_enabled   = local.collector_enabled && var.enable_alb_log_shipping
 
-  ecs_cluster    = var.ecs_cluster_name != "" ? var.ecs_cluster_name : "${var.project}-${var.environment}"
-  ecs_log_prefix = var.ecs_log_group_prefix != "" ? var.ecs_log_group_prefix : "/ecs/${var.project}-${var.environment}"
+  ecs_cluster = var.ecs_cluster_name != "" ? var.ecs_cluster_name : "${var.project}-${var.environment}"
 
   # prod/alb.tf names the access log bucket <project>-<environment>-alb-logs-<account id>.
   alb_logs_bucket = var.alb_access_logs_bucket != "" ? var.alb_access_logs_bucket : "${var.project}-${var.environment}-alb-logs-${data.aws_caller_identity.current.account_id}"
@@ -24,7 +24,6 @@ locals {
 
   collector_scripts = concat(
     ["python /collector/config/ecs_metrics.py"],
-    var.enable_ecs_log_shipping ? ["python /collector/config/ecs_logs.py"] : [],
     local.cloudwatch_metrics_enabled ? ["python /collector/config/cw_metrics.py"] : [],
     local.alb_log_shipping_enabled ? ["python /collector/config/alb_logs.py"] : [],
   )
@@ -86,15 +85,12 @@ resource "aws_ecs_task_definition" "collector" {
       environment = concat([
         { name = "AWS_REGION", value = var.aws_region },
         { name = "ECS_CLUSTER", value = local.ecs_cluster },
-        { name = "LOG_GROUP_PREFIX", value = local.ecs_log_prefix },
         { name = "LOKI_URL", value = local.endpoints.loki },
         { name = "PUSHGATEWAY_URL", value = local.endpoints.pushgateway },
-        { name = "STATE_FILE", value = "/collector/state/ecs_logs.json" },
-        { name = "LOOKBACK_MINUTES", value = tostring(var.ecs_log_lookback_minutes) },
         { name = "SERVICE_PREFIX", value = local.service_prefix },
         ], local.cloudwatch_metrics_enabled ? [
-        # cw_metrics.py checkpoints to CW_STATE_FILE (its default is fine, the
-        # STATE_FILE above belongs to the ECS log shipper).
+        # cw_metrics.py checkpoints to its own CW_STATE_FILE; it does not share
+        # state with the ECS metrics collector.
         { name = "ALB_ARN_SUFFIX", value = data.aws_lb.main.arn_suffix },
         { name = "METRIC_DELAY_SECONDS", value = tostring(var.cloudwatch_metric_delay_seconds) },
         { name = "MAX_WINDOW_MINUTES", value = tostring(var.cloudwatch_max_window_minutes) },

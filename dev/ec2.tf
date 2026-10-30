@@ -241,6 +241,10 @@ resource "aws_ssm_association" "host_config_refresh" {
       "mkdir -p /opt/nomaos/nginx/upstreams; for f in /opt/agrovesto/nginx/*_api-active.conf; do [ -e \"$f\" ] || continue; s=/opt/nomaos/nginx/upstreams/$(basename \"$f\" -active.conf).conf; test -f \"$s\" || cp \"$f\" \"$s\"; done",
       "docker compose --project-directory /opt/agrovesto/compose -f /opt/agrovesto/compose/docker-compose.yml up -d --remove-orphans",
       ] : ["systemctl start agrovesto-sync.service"],
+      # The Vault service itself stays on the Compose default network so a
+      # policy/config refresh does not recreate and potentially reseal it. Add
+      # a stable DNS alias on the shared API edge network after Compose starts.
+      ["bash /opt/agrovesto/scripts/connect-vault-network.sh"],
       ["AGROVESTO_HOST_REFRESH_BASH"],
     ))
   }

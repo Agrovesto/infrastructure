@@ -6,7 +6,8 @@
 #   PORT          - the container port (contract for the app image)
 #   DB_HOST/DB_PORT/DB_NAME - the RDS SQL Server endpoint + its own database
 #                        (service name == database name, like dev)
-#   DB_USER/DB_PASSWORD   - injected from Secrets Manager (RDS master secret)
+# Bootstrap mode injects DB_USER/DB_PASSWORD from the RDS master secret;
+# Vault mode injects that API's AppRole bundle and expects DB credentials in KV.
 # =============================================================================
 
 resource "aws_ecs_cluster" "main" {
@@ -17,18 +18,14 @@ resource "aws_ecs_cluster" "main" {
     value = var.enable_container_insights ? "enabled" : "disabled"
   }
 
+  lifecycle {
+    precondition {
+      condition     = !var.vault_secrets_enabled || var.enable_vault
+      error_message = "vault_secrets_enabled requires enable_vault = true."
+    }
+  }
+
   tags = local.tags
-}
-
-# CloudWatch default encryption (AWS-owned key) is enough for service logs - mirrors checkov CKV_AWS_158 skip.
-#trivy:ignore:AVD-AWS-0017
-resource "aws_cloudwatch_log_group" "services" {
-  for_each = var.services
-
-  name              = "/ecs/${local.name}/${each.key}"
-  retention_in_days = var.log_retention_days
-
-  tags = merge(local.tags, { Service = each.key })
 }
 
 resource "aws_ecs_task_definition" "services" {
@@ -73,43 +70,59 @@ resource "aws_ecs_task_definition" "services" {
         ],
         # Services always know where Vault lives once it exists; they only
         # *need* it after var.vault_secrets_enabled flips the creds source.
-        var.enable_vault ? [{ name = "VAULT_ADDR", value = "https://${var.vault_subdomain}.${var.domain_name}" }] : [],
+        var.enable_vault ? [
+          { name = "VAULT_ADDR", value = "https://${var.vault_subdomain}.${var.domain_name}" }
+        ] : [],
+        var.vault_secrets_enabled ? [
+          { name = "VAULT_KV_MOUNT", value = local.vault_kv_mount },
+          { name = "VAULT_SECRET_PATH", value = local.vault_service_paths[each.key] },
+          { name = "VAULT_AUTH_METHOD", value = "approle" },
+          # .NET configuration mapping for { "Vault": { "SecretPath": "..." } }.
+          { name = "Vault__SecretPath", value = local.vault_service_paths[each.key] }
+        ] : [],
         # OpenTelemetry, sent to Alloy in the monitoring stack's edge task and
-        # fanned out from there to Tempo (traces) and Prometheus (metrics).
+        # fanned out to Tempo (traces), Prometheus (metrics) and Loki (logs).
         # Everything but the service name is shared, so it lives in
         # local.otel_environment; OTEL_SERVICE_NAME is what makes a span
         # attributable, and it is the service key — the same string as DB_NAME
         # and as the Route53 subdomain prefix, so a trace, a log line and a
         # database all carry one name.
         #
-        # Inert until the image loads an OTel SDK (see var.otel). Worth having
-        # here anyway: the service images are still placeholders, and this way
-        # the day the real ASP.NET images land, traces start flowing with no
-        # infrastructure change and no redeploy of the monitoring stack.
+        # Inert until the image loads/configures an OTel SDK and logging
+        # provider (see var.otel). The images are still placeholders; once real
+        # ASP.NET images land, traces, metrics and logs can flow without a
+        # further infrastructure change or monitoring-stack redeploy.
         var.otel.enabled ? concat(
           [{ name = "OTEL_SERVICE_NAME", value = each.key }],
           local.otel_environment,
         ) : []
       )
 
-      # Bootstrap mode: DB creds injected from Secrets Manager. Once Vault is
-      # initialized (see vault.tf) set vault_secrets_enabled = true and these
-      # go away — the app reads kv/<service> from Vault instead.
-      secrets = var.vault_secrets_enabled ? [] : [
+      # Bootstrap mode injects the RDS master fields. Once the per-service KV
+      # payloads and AppRole credentials are ready, vault_secrets_enabled swaps
+      # these for only that API's AppRole credentials from Secrets Manager.
+      secrets = var.vault_secrets_enabled && var.enable_vault ? [
+        {
+          name      = "VAULT_ROLE_ID"
+          valueFrom = "${aws_secretsmanager_secret.vault_service_credentials[each.key].arn}:role_id::"
+        },
+        {
+          name      = "VAULT_SECRET_ID"
+          valueFrom = "${aws_secretsmanager_secret.vault_service_credentials[each.key].arn}:secret_id::"
+        }
+      ] : [
         { name = "DB_USER", valueFrom = "${local.mssql_master_secret_arn}:username::" },
         { name = "DB_PASSWORD", valueFrom = "${local.mssql_master_secret_arn}:password::" }
       ]
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.services[each.key].name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "ecs"
-        }
-      }
+      # API logs use the in-VPC OTLP receiver on Alloy and are forwarded to Loki.
+      # These app containers deliberately have no awslogs logConfiguration.
     }
   ])
+
+  # The ECS agent needs this policy before it can resolve the per-service
+  # Secrets Manager AppRole fields at task startup.
+  depends_on = [aws_iam_role_policy.ecs_execution_secrets]
 
   tags = merge(local.tags, { Service = each.key })
 }
@@ -122,6 +135,10 @@ resource "aws_ecs_service" "services" {
   task_definition = aws_ecs_task_definition.services[each.key].arn
   desired_count   = each.value.desired_count
   launch_type     = "FARGATE"
+
+  deployment_controller {
+    type = "ECS"
+  }
 
   # Roll failed deployments back automatically (prod).
   deployment_circuit_breaker {
