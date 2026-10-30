@@ -598,7 +598,7 @@ run "github_sso_uses_https_and_ssm_credentials" {
       aws_s3_object.host_config["edge/Caddyfile"].content == local.caddyfile &&
       aws_s3_object.host_config["scripts/configure-sonarqube-team-permissions.sh"].content == file("${path.module}/configure-sonarqube-team-permissions.sh")
     )
-    error_message = "SSO must ship the non-secret Caddy config and idempotent SonarQube team-role bootstrap script, on top of the five always-needed (compose, nginx.conf, one slot file per opted-in API, init-dbs.sql) and the sixteen logging objects including the SQL Server collector script and six dashboards (21 total)."
+    error_message = "SSO ships the Caddy config and SonarQube team-role bootstrap script alongside five core files, five per-service Vault access assets, and sixteen logging assets."
   }
   assert {
     condition = alltrue([
