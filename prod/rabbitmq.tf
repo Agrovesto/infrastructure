@@ -28,18 +28,22 @@ resource "aws_security_group" "rabbitmq" {
   description = "Private RabbitMQ: TLS AMQP and HTTPS from authorized ECS services only"
   vpc_id      = aws_vpc.main.id
   ingress {
-    description     = "TLS AMQP from ECS apps"
-    from_port       = 5671
-    to_port         = 5671
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rabbitmq_clients[0].id]
+    description      = "TLS AMQP from ECS apps"
+    from_port        = 5671
+    to_port          = 5671
+    protocol         = "tcp"
+    cidr_blocks      = []
+    ipv6_cidr_blocks = []
+    security_groups  = [aws_security_group.rabbitmq_clients[0].id]
   }
   ingress {
-    description     = "Management HTTPS from authorized ECS services"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rabbitmq_clients[0].id]
+    description      = "Management HTTPS from authorized ECS services"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = []
+    ipv6_cidr_blocks = []
+    security_groups  = [aws_security_group.rabbitmq_clients[0].id]
   }
   tags = local.tags
 }
